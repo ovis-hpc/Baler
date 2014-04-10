@@ -70,12 +70,11 @@ int bout_sos_msg_process_output(struct boutplugin *this,
 	if (!sos)
 		return EBADFD;
 	sos_obj_t obj = sos_obj_new(sos);
-	sos_obj_attr_set(sos, 0, obj, &odata->tv.tv_sec);
-	sos_obj_attr_set(sos, 1, obj, &odata->tv.tv_usec);
-	sos_obj_attr_set(sos, 2, obj, &odata->comp_id);
-	sos_obj_attr_set(sos, 3, obj, &(struct sos_blob_arg_s) {
-				sizeof(struct bmsg) +
-				odata->msg->argc * sizeof(odata->msg->argv[0]),
+	sos_obj_attr_set(sos, SOS_MSG_SEC, obj, &odata->tv.tv_sec);
+	sos_obj_attr_set(sos, SOS_MSG_USEC, obj, &odata->tv.tv_usec);
+	sos_obj_attr_set(sos, SOS_MSG_COMP_ID, obj, &odata->comp_id);
+	sos_obj_attr_set(sos, SOS_MSG_MSG, obj, &(struct sos_blob_arg_s) {
+				BMSG_SZ(odata->msg),
 				odata->msg
 			});
 	if (sos_obj_add(sos, obj))
