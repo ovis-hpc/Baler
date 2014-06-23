@@ -67,10 +67,12 @@
 #include "bout_sos.h"
 
 struct bout_sos_msg_plugin {
-	struct bout_sos_plugin base; /** base structure. */
-	sos_iter_t sos_iter; /** Iterator for seeking objects. */
-	uint32_t delta_ts; /** ts granularity */
-	uint32_t delta_node; /** node granularity */
+	struct bout_sos_plugin base; /**< base structure. */
+	sos_iter_t sos_iter; /**< Iterator for seeking objects. */
+	uint32_t delta_ts; /**< ts granularity */
+	uint32_t delta_node; /**< node granularity */
+	sos_blob_obj_t blob; /**< blob buffer */
+	size_t blob_sz; /**< size of pre-allocated blob buffer */
 };
 
 /**
