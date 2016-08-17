@@ -75,8 +75,6 @@
 #include "btypes.h"
 #include <sys/queue.h>
 
-struct bplugin; /* Real definition is declared later in this file */
-
 /**
  * Baler Plugin Instance Interface.
  */
@@ -133,6 +131,31 @@ struct bplugin {
 	 */
 	int (*free)(struct bplugin *this);
 };
+
+typedef enum binp_result {
+	/** The buffer was parsed and the result is in the bwq_entry ** parameter */
+	BINP_OK = 0,
+	/** The current buffer is an incomplete log message. Call again with the next line */
+	BINP_MORE,
+	/** Syntax error parsing input */
+	BINP_ERR_SYNTAX,
+	/** The remaining codes are errors. The buffer is still tokenized, however, the
+	 *  one or more fields could not be parsed */
+	/** The timestamp was missing or incorrectly formatted */
+	BINP_ERR_TIMESTAMP,
+	/** Insufficient memory */
+	BINP_ERR_RESOURCE,
+} binp_result_t;
+
+struct bwq_entry;
+typedef struct binp_parser *binp_parser_t;
+struct binp_parser {
+	const char *(*get_name)(binp_parser_t);
+	const char *(*get_version)(binp_parser_t);
+	binp_result_t (*parse)(binp_parser_t, struct bstr *, struct bwq_entry **);
+	void (*release)(binp_parser_t);
+};
+typedef binp_parser_t (*binp_get_parser_fn_t)(void *);
 
 /**
  * Generic, convenient free function for ::bplugin.

@@ -48,11 +48,49 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+#include <libgen.h>
+#include "coll/rbt.h"
+#include <sos/sos.h>
 #include "btkn.h"
 #include <ctype.h>
 
+static int store_comparator(void *a, const void *b)
+{
+	return strcmp((char *)a, (char *)b);
+}
+/**
+ * The store tree keeps a database of open SOS containers indexed by
+ * the dirname() of the requested path to the container. Internally to
+ * the container there are schema for each of the logical baler stores.
+ */
+struct rbt store_tree = RBT_INITIALIZER(store_comparator);
+struct bsos_store_entry {
+	struct btkn_store store;
+	char *path;		/* container path and tree key */
+	sos_t sos;		/* container handle */
+	struct rbn rbn;
+};
+
 const char *btkn_type_str[] = {
-	BTKN_TYPE__LIST(, BENUM_STR)
+	[BTKN_TYPE_TYPE] = "TYPE",
+	[BTKN_TYPE_PRIORITY] = "PRIORITY",
+	[BTKN_TYPE_VERSION] = "VERSION",
+	[BTKN_TYPE_TIMESTAMP] = "TIMESTAMP",
+	[BTKN_TYPE_HOSTNAME] = "HOSTNAME",
+	[BTKN_TYPE_SERVICE] = "SERVICE",
+	[BTKN_TYPE_PID] = "PID",
+	[BTKN_TYPE_IP4_ADDR] = "IP4_ADDR",
+	[BTKN_TYPE_IP6_ADDR] = "IP6_ADDR",
+	[BTKN_TYPE_ETH_ADDR] = "ETH_ADDR",
+	[BTKN_TYPE_HEX_INT] = "HEX_INT",
+	[BTKN_TYPE_DEC_INT] = "DEC_INT",
+	[BTKN_TYPE_FLOAT] = "FLOAT",
+	[BTKN_TYPE_WORD] = "WORD",
+	[BTKN_TYPE_SEPARATOR] = "SEPARATOR",
+	[BTKN_TYPE_PATH] = "PATH",
+	[BTKN_TYPE_URL] = "URL",
+	[BTKN_TYPE_WHITESPACE] = "WHITESPACE",
+	[BTKN_TYPE_TEXT] = "TEXT"
 };
 
 btkn_type_t btkn_type(const char *str)
@@ -188,7 +226,7 @@ uint32_t btkn_store_insert_cstr(struct btkn_store *store, const char *str,
 	if (id == BMAP_ID_ERR)
 		goto out;
 	struct btkn_attr attr;
-	attr.type = type;
+	attr.type = BTKN_TYPE_MASK(type);
 	btkn_store_set_attr(store, id, attr);
 out:
 	if (bstr)
@@ -199,13 +237,13 @@ out:
 int btkn_store_char_insert(struct btkn_store *store, const char *cstr,
 							btkn_type_t type)
 {
-	uint32_t buf[4];
-	struct bstr *bs = (void*)buf;
+	uint32_t buf[sizeof(struct bstr) + 4];
+	struct bstr *bs = (void *)buf;
 	uint64_t tkn_id;
 	bs->blen = 1;
 	const char *c = cstr;
 	struct btkn_attr attr;
-	attr.type = type;
+	attr.type = BTKN_TYPE_MASK(type);
 	while (*c) {
 		bs->cstr[0] = *c;
 		tkn_id = btkn_store_insert(store, bs);

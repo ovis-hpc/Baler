@@ -60,6 +60,7 @@
 #ifndef __BWQUEUE_H
 #define __BWQUEUE_H
 
+#include "bstore.h"
 #include "bcommon.h"
 #include "btypes.h"
 #include "butils.h"
@@ -70,16 +71,21 @@
 /**
  * Baler Input Queue entry data.
  */
-struct binq_data {
+typedef struct binq_data {
 	enum {
 		BINQ_DATA_MSG = 0,
 		BINQ_DATA_METRIC,
 	} type;
+	enum binq_data_format {
+		BINQ_BSTR_LIST,
+		BINQ_BTKN_QUEUE
+	} format;
 	struct bstr *hostname; /**< Hostname. */
 	struct timeval tv; /**< Time value. */
 	uint32_t tok_count; /**< Token count, for convenient ptn allocation.*/
-	struct bstr_list_head tokens; /**< Pointer to message tokens. */
-};
+	struct bstr_list_head tokens; /**< Pointer to message strings. */
+	struct btkn_tailq_head tkn_q;
+} *binq_data_t;
 
 /**
  * Baler Output Queue entry data.
@@ -88,7 +94,7 @@ struct binq_data {
  * (`op`) specified in the boutq_data.
  */
 struct boutq_data {
-	struct boutplugin *op; /** Output plugin. */
+	struct boutplugin *plugin;
 	uint32_t comp_id; /**< Component ID (extracted from hostname). */
 	struct timeval tv; /**< Time value. */
 	struct bmsg *msg; /**< Parsed message, which also includes pattern in it. */
@@ -102,14 +108,16 @@ TAILQ_HEAD(bwq_head, bwq_entry);
 /**
  * Baler Work Queue entry.
  */
-struct bwq_entry {
+struct bwq;
+typedef struct bwq_entry {
+	int id;
 	union {
 		struct binq_data in;
 		struct boutq_data out;
 	} data;
 	void *ctxt;
 	TAILQ_ENTRY(bwq_entry) link; /**< Link to next/prev entry. */
-};
+} *bwq_entry_t;
 
 /**
  * Free function for binq entry.
@@ -119,7 +127,9 @@ static
 void binq_entry_free(struct bwq_entry *ent)
 {
 	bstr_list_free_entries(&ent->data.in.tokens);
-	free(ent->data.in.hostname);
+	btkn_tailq_free_entries(&ent->data.in.tkn_q);
+	if (ent->data.in.hostname)
+		free(ent->data.in.hostname);
 	free(ent);
 }
 
@@ -155,8 +165,8 @@ void bwq_nq(struct bwq *q, struct bwq_entry *ent)
 	sem_wait(&q->nq_sem);
 	pthread_mutex_lock(&q->qmutex);
 	TAILQ_INSERT_TAIL(&q->head, ent, link);
-	sem_post(&q->dq_sem);
 	pthread_mutex_unlock(&q->qmutex);
+	sem_post(&q->dq_sem);
 }
 
 /**
@@ -173,8 +183,8 @@ struct bwq_entry* bwq_dq(struct bwq *q)
 	pthread_mutex_lock(&q->qmutex);
 	ent = TAILQ_FIRST(&q->head);
 	TAILQ_REMOVE(&q->head, ent, link);
-	sem_post(&q->nq_sem);
 	pthread_mutex_unlock(&q->qmutex);
+	sem_post(&q->nq_sem);
 	return ent;
 }
 
@@ -190,7 +200,7 @@ void bwq_init(struct bwq *q, size_t qsize);
  * \return On success, a pointer to ::bwq.
  * \return NULL on failure.
  */
-struct bwq* bwq_alloc();
+struct bwq* bwq_alloc(void);
 
 /**
  * Convenient allocation function WITH structure initialization.

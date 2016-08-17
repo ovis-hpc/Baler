@@ -169,7 +169,7 @@ void btkn_store_set_attr(struct btkn_store *store, uint32_t tkn_id,
  * If \c str existed, this function does nothing and return the ID of \c str.
  *
  * \return If \c str existed or is successfully inserted, the ID of the token
- * 	\c str is returned.
+ *	\c str is returned.
  * \return On error, the function returns ::BMAP_ID_ERR.
  */
 static inline
@@ -185,7 +185,7 @@ uint32_t btkn_store_insert(struct btkn_store *store, struct bstr *str)
 	/* set attribute to '*' by default for new token */
 	struct btkn_attr attr;
 	if (bmvec_generic_get_len((void*)store->attr) <= id ) {
-		attr.type = BTKN_TYPE_STAR;
+		attr.type = BTKN_TYPE_MASK(BTKN_TYPE_TEXT);
 		btkn_store_set_attr(store, id, attr);
 	}
 
@@ -206,7 +206,7 @@ uint32_t btkn_store_insert_with_id(struct btkn_store *store, struct bstr *str, u
 	/* set attribute to '*' by default for new token */
 	struct btkn_attr attr;
 	if (bmvec_generic_get_len((void*)store->attr) <= id ) {
-		attr.type = BTKN_TYPE_STAR;
+		attr.type = BTKN_TYPE_MASK(BTKN_TYPE_TEXT);
 		btkn_store_set_attr(store, id, attr);
 	}
 

@@ -65,6 +65,8 @@
 #include <sys/queue.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
+#include "btkn_types.h"
 
 /**
  * Pair of strings (s0, s1).
@@ -164,13 +166,29 @@ struct bpair_str* bpair_str_search(struct bpair_str_head *head,
 /**
  * \brief Baler string structure for various types.
  */
-struct __attribute__((packed)) bstr {
+typedef struct __attribute__((packed)) bstr {
 	uint32_t blen; /**< Byte length of the string */
 	union {
 		char cstr[0]; /**< For regular char. */
-		uint32_t u32str[0]; /**< For uint32_t. */
+		uint32_t u32str[0]; /**< Array of 32b values */
+		uint64_t u64str[0]; /**< Array of 64b values */
 	};
-};
+} *bstr_t;
+
+/**
+ * A mask of the different types this text has occupied. For example,
+ * if "hero" has been seen in the hostname position of a syslog
+ * message, one of it's types is BTKN_TYPE_HOSTNAME, however, since it
+ * is also an English word, it also has the type BTKN_TYPE_WORD
+ */
+typedef uint64_t btkn_type_mask_t;
+typedef uint64_t btkn_id_t;
+typedef struct btkn {
+	btkn_id_t tkn_id;
+	btkn_type_mask_t tkn_type_mask;
+	uint64_t tkn_count;
+	struct bstr *tkn_str;
+} *btkn_t;
 
 #define BMETRIC_LEAD_TKN "\001\001\001\001"
 
@@ -326,6 +344,77 @@ struct bstr_list_entry {
 };
 
 /**
+ * List head definition for Baler Token Queue.
+ */
+TAILQ_HEAD(btkn_tailq_head, btkn_tailq_entry);
+
+/**
+ * Baler Token List Entry definition.
+ */
+typedef struct btkn_tailq_entry {
+	TAILQ_ENTRY(btkn_tailq_entry) link; /**< Link to next/previous entry. */
+	btkn_t tkn; /**< The token. */
+} *btkn_tailq_entry_t;
+
+#define BTKN_TYPE_MASK(_t_) (1 << (_t_ - 1))
+static int btkn_has_type(btkn_t tkn, btkn_type_t typ) {
+	return (tkn->tkn_type_mask & BTKN_TYPE_MASK(typ));
+}
+static btkn_type_t btkn_first_type(btkn_t tkn) {
+	return ffsl(tkn->tkn_type_mask);
+}
+
+static btkn_t
+btkn_alloc(btkn_id_t tkn_id, btkn_type_mask_t mask, const char *str, size_t len) {
+	btkn_t t = malloc(sizeof *t + sizeof(struct bstr) + (len+1));
+	if (t) {
+		t->tkn_id = tkn_id;
+		t->tkn_type_mask = mask;
+		t->tkn_count = 0;
+		t->tkn_str = (struct bstr *)(t+1);
+		t->tkn_str->blen = len;
+		memcpy(t->tkn_str->cstr, str, len);
+		t->tkn_str->cstr[len] = '\0';
+	}
+	return t;
+}
+
+static btkn_t btkn_dup(btkn_t src)
+{
+	btkn_t dst = malloc(sizeof *dst);
+	if (dst) {
+		*dst = *src;
+		dst->tkn_str = bstr_alloc(src->tkn_str->blen+1);
+		memcpy(dst->tkn_str->cstr, src->tkn_str->cstr, src->tkn_str->blen);
+		dst->tkn_str->cstr[src->tkn_str->blen] = '\0';
+	}
+	return dst;
+}
+
+static void btkn_free(btkn_t t)
+{
+	free(t);
+}
+
+static inline
+void btkn_tailq_free_entries(struct btkn_tailq_head *head)
+{
+	struct btkn_tailq_entry *e;
+	while ((e = TAILQ_FIRST(head))) {
+		TAILQ_REMOVE(head, e, link);
+		btkn_free(e->tkn);
+		free(e);
+	}
+}
+
+static inline
+void btkn_tailq_free(struct btkn_tailq_head *head)
+{
+	btkn_tailq_free_entries(head);
+	free(head);
+}
+
+/**
  * String List Entry allocation convenient function.
  * \param str_blen The byte length of the string
  * \return NULL on error.
@@ -378,24 +467,91 @@ void bstr_list_free(struct bstr_list_head *head)
  * Baler Message.
  * A baler message is defined by its 1-pattern id and the pattern arguments.
  */
-struct bmsg {
-	uint32_t ptn_id; /** Pattern ID. */
-	uint32_t argc; /** Argument count. */
-	uint32_t argv[0]; /** Arguments. */
-};
+typedef uint64_t bptn_id_t;
+typedef uint64_t bcomp_id_t;
+typedef struct bmsg {
+	bptn_id_t ptn_id; /** Pattern ID. */
+	bcomp_id_t comp_id;	/* Component id */
+	struct timeval timestamp;
+	uint32_t  argc; /** Argument count. */
+	btkn_id_t argv[0]; /** Arguments. */
+} *bmsg_t;
+
+typedef struct bptn {
+	bptn_id_t ptn_id;
+	struct timeval first_seen;
+	struct timeval last_seen;
+	uint64_t count;
+	uint64_t tkn_count;
+	bstr_t str;
+} *bptn_t;
+
+typedef struct btkn_hist_s {
+	btkn_id_t tkn_id;
+	uint32_t bin_width;
+	uint32_t time;
+	uint64_t tkn_count;
+} *btkn_hist_t;
+
+#define BPTN_ID_SUM_ALL		1
+typedef struct bptn_hist_s {
+	bptn_id_t ptn_id;
+	uint32_t bin_width;
+	uint32_t time;
+	uint64_t msg_count;
+} *bptn_hist_t;
+
+typedef struct bcomp_hist_s {
+	bcomp_id_t comp_id;
+	bptn_id_t ptn_id;
+	uint32_t bin_width;
+	uint32_t time;
+	uint64_t msg_count;
+} *bcomp_hist_t;
+
+static inline bptn_t bptn_alloc(size_t tkn_count) {
+	bptn_t p = malloc(sizeof *p);
+	if (p) {
+		p->str = bstr_alloc(tkn_count * sizeof(btkn_id_t));
+		if (!p->str) {
+			free(p);
+			p = NULL;
+		}
+	}
+	return p;
+}
+static inline void bptn_free(bptn_t ptn) {
+	free(ptn->str);
+	free(ptn);
+}
+
 
 /**
  * Convenient size calculation for a given \a msg.
  * \param msg The pointer to ::bmsg.
  */
-#define BMSG_SZ(msg_p) (sizeof(struct bmsg) + msg_p->argc*sizeof(*msg_p->argv))
+#define BMSG_SZ(msg_p) (sizeof(struct bmsg) + msg_p->argc * sizeof(*msg_p->argv))
 
 /**
  * Convenient allocation macro for ::bmsg.
  * \param argc The number of arguments for the pattern in the message.
  */
-#define bmsg_alloc(argc) ((struct bmsg*)malloc(sizeof(struct bmsg)	\
-						+argc*sizeof(uint32_t)))
+#define bmsg_alloc(_argc_) ((struct bmsg*)malloc(sizeof(struct bmsg)	\
+						+ _argc_ * sizeof(btkn_id_t)))
+
+/**
+ * Convenient msg dup macro for ::bmsg, similar to strdup()
+ * \param bmsg The message to dup.
+ */
+static bmsg_t bmsg_dup(bmsg_t src) {
+	size_t argv_sz = src->argc * sizeof(*src->argv);
+	bmsg_t dst = malloc(sizeof(*dst) + argv_sz);
+	if (dst) {
+		*dst = *src;
+		memcpy(dst->argv, src->argv, argv_sz);
+	}
+	return dst;
+}
 
 /**
  * Wrapper for regular free() function (just to match ::bmsg_alloc).

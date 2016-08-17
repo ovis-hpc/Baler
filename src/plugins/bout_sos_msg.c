@@ -117,7 +117,7 @@ int bout_sos_msg_process_output(struct boutplugin *this,
 	msg->data.uint32_[BSOS_MSG_COMP_ID] = odata->comp_id;
 	msg->data.uint32_[BSOS_MSG_PTN_ID] = odata->msg->ptn_id;
 	for (arg = 0; arg < odata->msg->argc; arg++)
-		msg->data.uint32_[arg + BSOS_MSG_ARGV_0] = odata->msg->argv[arg];
+		msg->data.uint32_[arg + BSOS_MSG_ARGV_0] = (uint32_t)odata->msg->argv[arg];
 
 	/* creat key */
 	ptc_k.comp_id = msg->data.uint32_[BSOS_MSG_COMP_ID];

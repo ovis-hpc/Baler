@@ -82,34 +82,6 @@ typedef uint64_t (*hash_u64_fn_t)(const char *str, int len, uint64_t seed);
  */
 hash_u64_fn_t bhash = fnv_hash_a1_64;
 
-static
-struct bstr* special_bstr[] = {
-	[BMAP_ID_BEGIN - 1] = NULL, /* Last special bstr */
-};
-
-/**
- * Localized convenient macro for special_bstr initialization.
- */
-#define ___SPECIAL_BSTR(ID, STR) do { \
-	special_bstr[ID] = bstr_alloc_init_cstr(STR); \
-	assert(special_bstr[ID]); \
-} while(0);
-
-void __special_bstr_init() __attribute__((constructor));
-void __special_bstr_init()
-{
-	static int initialized = 0;
-	if (initialized)
-		return;
-	initialized = 1;
-	const char *starenv = getenv("BALER_STAR");
-	if (starenv) {
-		___SPECIAL_BSTR(BMAP_ID_STAR, starenv);
-	} else {
-		___SPECIAL_BSTR(BMAP_ID_STAR, BMAP_STAR_TEXT);
-	}
-}
-
 struct bmap* bmap_open(const char *path)
 {
 	/* The function calls at err* labels can change errno,
@@ -374,11 +346,6 @@ const struct bstr* __bmap_get_bstr(struct bmap *map, uint32_t id)
 	struct bvec_u64 *str_idx = map->bmstr_idx->bvec;
 	if (str_idx->len <= id) /* out of range */
 		goto out;
-	if (id < BMAP_ID_BEGIN) { /* special ID */
-		bstr = special_bstr[id];
-		goto out;
-	}
-	/* Normal ID */
 	int64_t str_off = str_idx->data[id];
 	bstr = BMPTR(map->mstr, str_off);
 out:

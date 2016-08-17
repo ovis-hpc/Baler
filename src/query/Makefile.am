@@ -7,7 +7,11 @@ bquery_LDADD = $(BALER)/libbaler.la -lsos @SOS_LIBDIR_FLAG@ @SOS_LIB64DIR_FLAG@ 
 	       ../plugins/libbsos_img.la \
 	       ../plugins/libbsos_msg.la
 
-bin_PROGRAMS = bquery
+cquery_SOURCES = cquery.c
+cquery_CFLAGS = $(AM_CFLAGS)
+cquery_LDADD = $(BALER)/libbaler.la
+
+bin_PROGRAMS = bquery cquery
 
 libbquery_la_SOURCES = bquery.c bquery.h bquery_priv.h
 libbquery_la_CFLAGS = $(AM_CFLAGS) @SOS_INCDIR_FLAG@

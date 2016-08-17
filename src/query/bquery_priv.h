@@ -59,6 +59,7 @@
 #include "baler/bptn.h"
 #include "baler/bheap.h"
 #include "baler/bmeta.h"
+#include "baler/bstore.h"
 
 #include "plugins/bsos_img.h"
 #include "plugins/bsos_msg.h"
@@ -145,6 +146,7 @@ struct bq_msg_ptc_hent;
 struct bmsgquery {
 	struct bquery base;
 	sos_array_t msg; /**< Current msg object */
+	bmsg_t bmsg;
 	enum {
 		BMSGIDX_PTC,
 		BMSGIDX_TC,
@@ -170,6 +172,7 @@ struct bq_store {
 	struct btkn_store *tkn_store;
 	struct btkn_store *cmp_store;
 	struct bmptn_store *mptn_store;
+	bstore_t bs;
 };
 
 struct bq_msg_ptc_hent {

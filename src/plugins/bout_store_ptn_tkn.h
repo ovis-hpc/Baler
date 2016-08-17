@@ -1,10 +1,5 @@
 /* -*- c-basic-offset: 8 -*-
- * Copyright (c) 2013,2015-2016 Open Grid Computing, Inc. All rights reserved.
- * Copyright (c) 2013,2015-2016 Sandia Corporation. All rights reserved.
- * Under the terms of Contract DE-AC04-94AL85000, there is a non-exclusive
- * license for use of this work by or on behalf of the U.S. Government.
- * Export of this program may require a license from the United States
- * Government.
+ * Copyright (c) 2016 Open Grid Computing, Inc. All rights reserved.
  *
  * This software is available to you under a choice of one of two
  * licenses.  You may choose to be licensed under the terms of the GNU
@@ -48,43 +43,22 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-#include "boutput.h"
-#include <string.h>
+#ifndef __BOUT_STORE_PTN_TKN_H
+#define __BOUT_STORE_PTN_TKN_H
 
-/**
- * metric_ids[comp_id] mapping for ME output.
- */
-uint64_t *metric_ids;
+#include <stdio.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <pthread.h>
+#include "baler/bplugin.h"
+#include "baler/boutput.h"
+#include "baler/bstore.h"
 
-char *__store_path = NULL;
-char *__store_plugin = NULL;
+struct bout_store_ptn_tkn_plugin {
+	struct boutplugin base;
+	pthread_mutex_t lock;
+	bstore_t bs;
+};
 
-const char *bget_store_path()
-{
-	return __store_path;
-}
-
-const char *bget_store_plugin()
-{
-	return __store_plugin;
-}
-
-int bset_store_path(const char *path)
-{
-	if (__store_path)
-		free(__store_path);
-	__store_path = strdup(path);
-	if (!__store_path)
-		return ENOMEM;
-	return 0;
-}
-
-int bset_store_plugin(const char *plugin)
-{
-	if (__store_plugin)
-		free(__store_plugin);
-	__store_plugin = strdup(plugin);
-	if (!__store_plugin)
-		return ENOMEM;
-	return 0;
-}
+#endif
+/** \} */

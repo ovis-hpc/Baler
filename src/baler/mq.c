@@ -1,10 +1,5 @@
 /* -*- c-basic-offset: 8 -*-
- * Copyright (c) 2013,2015-2016 Open Grid Computing, Inc. All rights reserved.
- * Copyright (c) 2013,2015-2016 Sandia Corporation. All rights reserved.
- * Under the terms of Contract DE-AC04-94AL85000, there is a non-exclusive
- * license for use of this work by or on behalf of the U.S. Government.
- * Export of this program may require a license from the United States
- * Government.
+ * Copyright (c) 2016 Open Grid Computing, Inc. All rights reserved.
  *
  * This software is available to you under a choice of one of two
  * licenses.  You may choose to be licensed under the terms of the GNU
@@ -23,10 +18,6 @@
  *      copyright notice, this list of conditions and the following
  *      disclaimer in the documentation and/or other materials provided
  *      with the distribution.
- *
- *      Neither the name of Sandia nor the names of any contributors may
- *      be used to endorse or promote products derived from this software
- *      without specific prior written permission.
  *
  *      Neither the name of Open Grid Computing nor the names of any
  *      contributors may be used to endorse or promote products derived
@@ -48,43 +39,97 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-#include "boutput.h"
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <pthread.h>
+#include <unistd.h>
+#include "mq.h"
 
-/**
- * metric_ids[comp_id] mapping for ME output.
- */
-uint64_t *metric_ids;
-
-char *__store_path = NULL;
-char *__store_plugin = NULL;
-
-const char *bget_store_path()
+int mq_is_empty(mq_t mq)
 {
-	return __store_path;
+	return (mq->mq_cons == mq->mq_prod) && (mq->mq_cons_g == mq->mq_prod_g);
 }
 
-const char *bget_store_plugin()
+int mq_is_full(mq_t mq)
 {
-	return __store_plugin;
+	return (mq->mq_cons == mq->mq_prod) && (mq->mq_cons_g != mq->mq_prod_g);
 }
 
-int bset_store_path(const char *path)
+mq_msg_t mq_get_cons_msg(mq_t mq)
 {
-	if (__store_path)
-		free(__store_path);
-	__store_path = strdup(path);
-	if (!__store_path)
-		return ENOMEM;
-	return 0;
+	mq_msg_t msg;
+	if (mq_is_empty(mq))
+		return NULL;
+	return mq->mq_q[mq->mq_cons];
 }
 
-int bset_store_plugin(const char *plugin)
+mq_msg_t mq_get_cons_msg_wait(mq_t mq)
 {
-	if (__store_plugin)
-		free(__store_plugin);
-	__store_plugin = strdup(plugin);
-	if (!__store_plugin)
-		return ENOMEM;
-	return 0;
+	while (mq_is_empty(mq));
+	return mq->mq_q[mq->mq_cons];
+}
+
+void mq_post_cons_msg(mq_t mq)
+{
+	mq->mq_cons += 1;
+	if (mq->mq_cons >= mq->mq_depth) {
+		mq->mq_cons = 0;
+		mq->mq_cons_g = !mq->mq_cons_g;
+	}
+}
+
+mq_msg_t mq_get_prod_msg(mq_t mq)
+{
+	if (mq_is_full(mq))
+		return NULL;
+	return mq->mq_q[mq->mq_prod];
+}
+
+mq_msg_t mq_get_prod_msg_wait(mq_t mq)
+{
+	while (mq_is_full(mq));
+	return mq->mq_q[mq->mq_prod];
+}
+
+int mq_post_prod_msg(mq_t mq)
+{
+	int rc = mq->mq_prod;
+	mq->mq_prod += 1;
+	if (mq->mq_prod >= mq->mq_depth) {
+		mq->mq_prod = 0;
+		mq->mq_prod_g = !mq->mq_prod_g;
+	}
+	return rc;
+}
+
+mq_t mq_new(size_t q_depth, size_t max_msg_size)
+{
+	int i;
+	mq_t mq;
+	size_t msg_size = (max_msg_size * q_depth);
+	mq = malloc(sizeof(*mq));
+	if (!mq)
+		goto out;
+	mq->mq_msg_mem = malloc(msg_size);
+	if (!mq->mq_msg_mem)
+		goto err_0;
+	mq->mq_q = malloc(q_depth * sizeof(mq_msg_t));
+	if (!mq->mq_q)
+		goto err_1;
+	mq->mq_depth = q_depth;
+	mq->mq_msg_max = max_msg_size;
+	mq->mq_prod = mq->mq_cons = mq->mq_prod_g = mq->mq_cons_g = 0;
+	/* Populate msg_id (1 based) */
+	for (i = 0; i < mq->mq_depth; i++) {
+		mq->mq_q[i] = (mq_msg_t)&mq->mq_msg_mem[i * max_msg_size];
+		mq->mq_q[i]->msg_id = i + 1;
+	}
+ out:
+	return mq;
+ err_1:
+	free(mq->mq_msg_mem);
+ err_0:
+	free(mq);
+	return NULL;
 }

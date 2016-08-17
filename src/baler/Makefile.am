@@ -8,8 +8,9 @@ sbin_PROGRAMS =
 # A library for Baler-specific work functions, also includes codes from
 # dependent libraries so that the build on Ubuntu is easier (no need to specify
 # all libraries).
-libbaler_la_SOURCES = bwqueue.c btkn.c bptn.c binput.c boutput.c \
+libbaler_la_SOURCES = mq.c bwqueue.c btkn.c bptn.c binput.c boutput.c \
 		      bmapper.c bset.c bmvec.c bmem.c butils.c bhash.c \
+		      bstore.c \
 		      bmhash.c \
 		      bheap.c \
 		      bmeta.c \
@@ -19,21 +20,28 @@ libbaler_la_SOURCES = bwqueue.c btkn.c bptn.c binput.c boutput.c \
 		      bmeta_priv.h \
 		      fnv_hash.h \
 		      murmur_hash.h
-libbaler_la_LDFLAGS = $(AM_LDFLAGS) -lpthread
+libbaler_la_LDFLAGS = $(AM_LDFLAGS) -lpthread -lsos
+libbaler_la_CFLAGS = $(AM_CFLAGS) \
+	@OVIS_LIB_INCDIR_FLAG@ @SOS_INCDIR_FLAG@ \
+	@SOS_LIBDIR_FLAG@ @SOS_LIB64DIR_FLAG@
 lib_LTLIBRARIES += libbaler.la
 
 balerd_SOURCES = balerd.c
 balerd_LDADD = libbaler.la \
 	       -lcoll -levent -levent_pthreads -lzap -lpthread -ldl
 balerd_CFLAGS = @OVIS_LIB_INCDIR_FLAG@ @LIBEVENT_INCDIR_FLAG@
+#balerd_CFLAGS = -pg @OVIS_LIB_INCDIR_FLAG@ @LIBEVENT_INCDIR_FLAG@
 balerd_LDFLAGS = @OVIS_LIB_LIBDIR_FLAG@ @OVIS_LIB_LIB64DIR_FLAG@ @EVENTLIBS@
+
+pit_SOURCES = pit.c
+pit_LDADD = libbaler.la -ldl
 
 if ENABLE_OCM
 balerd_LDADD += -locm
 balerd_CFLAGS += -DENABLE_OCM @OCM_INCDIR_FLAG@
 balerd_LDFLAGS += @OCM_LIBDIR_FLAG@
 endif
-sbin_PROGRAMS += balerd
+bin_PROGRAMS += balerd pit
 
 bmap_dump_SOURCES = bmap_dump.c
 bmap_dump_LDADD = libbaler.la
@@ -47,6 +55,7 @@ pkginclude_HEADERS = barray.h \
 		     bcommon.h \
 		     bhash.h \
 		     bheap.h \
+		     bstore.h \
 		     binput.h \
 		     bmapper.h \
 		     bmem.h \
@@ -65,4 +74,5 @@ pkginclude_HEADERS = barray.h \
 		     btkn_types.h \
 		     btypes.h \
 		     butils.h \
-		     bwqueue.h
+		     bwqueue.h \
+		     mq.h

@@ -225,9 +225,15 @@ int bptn_store_id2str(struct bptn_store *ptns, struct btkn_store *tkns,
 	int i;
 	int rc;
 	int l;
-	const uint32_t *c;
-	for (i=0,c=ptn->u32str; i<ptn->blen; c++,i+=sizeof(*c)) {
-		rc = btkn_store_id2str(tkns, *c, s, slen);
+	const uint64_t *c;
+	for (i=0,c=ptn->u64str; i<ptn->blen; c++,i+=sizeof(*c)) {
+		btkn_id_t tkn_id = *c >> 8;
+		btkn_type_t tkn_type = *c >> 8;
+		if (tkn_id < BTKN_TYPE_LAST) {
+			strncpy(s, ptn_type_strs[tkn_type], slen);
+		} else {
+			rc = btkn_store_id2str(tkns, tkn_id, s, slen);
+		}
 		if (rc)
 			return rc;
 		l = strlen(s);
@@ -269,9 +275,10 @@ int bptn_store_ptn2str(struct bptn_store *ptns, struct btkn_store *tkns,
 	int l;
 	int i, rc;
 	char *s = dest;
-	const uint32_t *c;
-	for (i=0,c=ptn->u32str; i<ptn->blen; c++,i+=sizeof(*c)) {
-		rc = btkn_store_id2str(tkns, *c, s, slen);
+	const uint64_t *c;
+	for (i=0,c=ptn->u64str; i<ptn->blen; c++,i+=sizeof(*c)) {
+		btkn_id_t tkn_id = *c >> 8;
+		rc = btkn_store_id2str(tkns, tkn_id, s, slen);
 		if (rc)
 			return rc;
 		l = strlen(s);

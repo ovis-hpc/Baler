@@ -107,6 +107,7 @@ struct boutplugin {
  * \return store path.
  */
 const char *bget_store_path();
+const char *bget_store_plugin();
 
 /**
  * Set global store path.
@@ -118,6 +119,7 @@ const char *bget_store_path();
  * \return Error code on error.
  */
 int bset_store_path(const char *path);
+int bset_store_plugin(const char *plugin);
 
 #endif /* __BOUTPUT_H */
 

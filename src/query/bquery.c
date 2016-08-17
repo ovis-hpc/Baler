@@ -371,15 +371,15 @@ int bq_print_msg(struct bquery *q, struct bdstr *bdstr,
 	ptn = bmap_get_bstr(ptn_store->map, msg->ptn_id);
 	if (!ptn)
 		return ENOENT;
-	const uint32_t *msg_arg = msg->argv;
-	const uint32_t *ptn_tkn = ptn->u32str;
+	const uint32_t *msg_arg = (uint32_t *)msg->argv;
+	const uint32_t *ptn_tkn = (uint32_t *)ptn->u32str;
 	int len = ptn->blen;
 	int blen;
 	fmt_tkn_begin(q->formatter, bdstr);
 	while (len) {
 		struct btkn_attr attr;
 		uint32_t tkn_id = *ptn_tkn++;
-		if (tkn_id == BMAP_ID_STAR)
+		if (tkn_id == BTKN_TYPE_TEXT)
 			tkn_id = *msg_arg++;
 		bstr = btkn_store_get_bstr(tkn_store, tkn_id);
 		if (!bstr) {
@@ -2537,6 +2537,46 @@ int bq_is_metric_pattern(struct bq_store *store, int ptn_id)
 	return 0;
 }
 
+char* bq_get_ptn_tkns(struct bq_store *store, int ptn_id, int arg_idx)
+{
+	struct btkn_store *tkn_store = store->tkn_store;
+	struct bptn_store *ptn_store = store->ptn_store;
+	uint64_t attr_off = ptn_store->attr_idx->bvec->data[ptn_id];
+	struct bptn_attrM *attrM = BMPTR(ptn_store->mattr, attr_off);
+	if (!attrM || arg_idx > attrM->argc) {
+		errno = EINVAL;
+		return NULL;
+	}
+	uint64_t arg_off = attrM->arg_off[arg_idx];
+	struct bmlnode_u64 *node;
+	struct bdstr *bdstr = bdstr_new(65536);
+	char buf[4096+2]; /* 4096 should be more than enough for a token, and
+			   * the +2 is for \n and \0 */
+	int rc = 0;
+	int len;
+	BMLIST_FOREACH(node, arg_off, link, ptn_store->marg) {
+		/* node->data is token ID */
+		rc = btkn_store_id2str(tkn_store, node->data, buf, 4096);
+		if (rc)
+			goto err;
+		len = strlen(buf);
+		buf[len] = '\n';
+		buf[len+1] = '\0';
+		rc = bdstr_append(bdstr, buf);
+		if (rc)
+			goto err;
+	}
+	/* Keep only the string in bdstr, and throw away the wrapper */
+	char *str = bdstr_detach_buffer(bdstr);
+	bdstr_free(bdstr);
+	return str;
+err:
+	free(bdstr->str);
+	free(bdstr);
+	errno = rc;
+	return NULL;
+}
+
 int bq_get_comp_id(struct bq_store *store, const char *hostname)
 {
 	char buff[128];
@@ -3375,7 +3415,7 @@ float __ptn_eng_ratio(const struct bstr *ptn, struct bq_store *s)
 			bytes < ptn->blen;
 			bytes += sizeof(*tkn_id), tkn_id++) {
 		struct btkn_attr a = btkn_store_get_attr(s->tkn_store, *tkn_id);
-		if (a.type == BTKN_TYPE_ENG) {
+		if (a.type == BTKN_TYPE_WORD) {
 			eng_count++;
 		}
 	}

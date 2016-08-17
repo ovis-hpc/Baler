@@ -83,7 +83,6 @@
  * - \ref bquery
  * - \ref bhttpd
  * - \ref bassoc
- * - \ref bclient
  */
 
 /**
@@ -122,18 +121,6 @@
  * \b balerd input and output plugins can be configured via Baler Configuration
  * file. Please see \ref configuration section below.
  *
- * To support large-scale system, multiple \b balerd's are needed to parallelly
- * process the large amount of input. One can run multiple \b balerd's
- * independently, but this can be problematic because the same pattern (or
- * token) that appear in two different \b balerd's can be assigned to a
- * different ID. To solve this problem, \b balerd can run in two mode: \b master
- * and \b slave (see <b>-m</b> OPTION). There should only be one master, and
- * multiple slaves. The master \b balerd is the one who knows all of the
- * mapping. The slave \b balerd's know only by the need-to-know basis. When a
- * slave \b balerd encountered a new token (or pattern), it asks the master to
- * assign the ID.  When the ID is assigned, the slave also stores that ID
- * mapping locally to reduce further network traffic.
- *
  * \section options OPTIONS
  *
  * \par -l LOG_PATH
@@ -149,22 +136,6 @@
  * \par -F
  * Run in foreground mode (default: daemon mode)
  *
- * \par -m SM_MODE
- * Either 'master' or 'slave' mode (default: master).
- *
- * \par -x SM_XPRT
- * Zap transport to be used in slave-master communication (default: sock).
- *
- * \par -h M_HOST
- * For \b slave balerd, this option specifies master hostname or IP address to
- * connect to. This option is ignored in master-mode. This option is required in
- * slave-mode balerd and has no default value.
- *
- * \par -p M_PORT
- * For \b slave balerd, this specifies the port of the master to connect to.
- * For \b master balerd, this specifies the port number to listen to.
- * (default: ':30003').
- *
  * \par -z OCM_PORT
  * Specifying a port for receiving OCM connection and configuration (default:
  * 20005).
@@ -174,9 +145,6 @@
  *
  * \par -O NUMBER
  * Specify the number of output worker threads (default: 1).
- *
- * \par -V
- * Display version information.
  *
  * \par -?
  * Display help message.
@@ -326,7 +294,8 @@ int ocm_cb(struct ocm_event *e);
 #include "btkn.h"
 #include "bptn.h"
 #include "bwqueue.h"
-#include "config.h"
+#include "bstore.h"
+#include "../../config.h"
 
 /***** Definitions *****/
 typedef enum bmap_idx_enum {
@@ -370,7 +339,7 @@ struct bzap_ctxt {
 };
 
 /***** Command line arguments ****/
-#define BALER_OPT_STR "FC:l:s:m:x:h:p:v:I:O:Q:V?"
+#define BALER_OPT_STR "FC:l:s:S:v:I:O:Q:?"
 #ifdef ENABLE_OCM
 const char *optstring = BALER_OPT_STR "z:";
 #else
@@ -387,12 +356,9 @@ void display_help_msg()
 "Options: \n"
 "	-l <path>	Log file (log to stdout by default)\n"
 "	-s <path>	Store path (default: ./store)\n"
+"	-S <name>	Storage backend plugin name.\n"
 "	-C <path>	Configuration (Baler commands) file\n"
 "	-F		Foreground mode (default: daemon mode)\n"
-"	-m <mode>	'master' or 'slave' (default: master)\n"
-"	-h <host>	master host name or IP address.\n"
-"	-x <xprt>	transport (default: sock).\n"
-"	-p <port>	port of master balerd (default: 30003).\n"
 #ifdef ENABLE_OCM
 "	-z <port>	ocm port for balerd (default: 20005).\n"
 #endif
@@ -401,8 +367,7 @@ void display_help_msg()
 "	-I <number>	The number of input queue worker.\n"
 "	-O <number>	The number of output queue worker.\n"
 "	-Q <number>	The queue depth (applied to input and output queues).\n"
-"	-V		Show version and exit.\n"
-"	-?		Show help message and exit.\n"
+"	-?		Show help message\n"
 "\n"
 "For more information see balerd(3) manpage.\n"
 "\n";
@@ -418,9 +383,7 @@ int binqwkrN = 1; /**< Input Worker Thread Number */
 int boutqwkrN = 1; /**< Output Worker Thread Number */
 int qdepth = 1024; /**< Input/Output queue depth */
 int is_foreground = 0; /**< Run as foreground? */
-int is_master = 1; /**< Run in master mode */
 
-uint16_t m_port = 30003;
 char *m_host = NULL;
 char *sm_xprt = "sock";
 struct timeval reconnect_interval = {.tv_sec = 2};
@@ -442,8 +405,7 @@ char* str_to_lower(char *s)
  * command 'list' */
 #define BCFG_CMD__LIST(PREFIX, CMD) \
 	CMD(PREFIX, PLUGIN), \
-	CMD(PREFIX, TOKENS), \
-	CMD(PREFIX, HOSTS)
+	CMD(PREFIX, TOKENS)
 
 /* automatically generated enum */
 enum BCFG_CMD {
@@ -466,20 +428,6 @@ enum BCFG_CMD bcfg_cmd_str2enum(const char *s)
 zap_t zap;
 zap_ep_t zap_ep;
 struct event_base *evbase;
-
-int master_connected = 0;
-struct bzap_ctxt slave_zap_ctxt = {.mutex = PTHREAD_MUTEX_INITIALIZER};
-
-extern uint64_t *metric_ids;
-
-#define SLAVE_CREDIT 2048
-
-/*
- * We need to limit the slave processing rate. Otherwise, if the server cannot
- * complete slave's request fast enough, the slave will post the requests
- * without bound, resulting in out-of-memory situation.
- */
-sem_t slave_credit;
 
 /**
  * Input queue workers
@@ -533,15 +481,6 @@ struct bwq *boutq; /* array of boutq, one queue per worker */
 int *boutq_busy_count; /* queue busy count */
 
 /**
- * Pending input queue.
- *
- * Input entry that requires master-mode balerd consultant will have to wait in
- * this pending input queue. When the data is ready, the input entry will be put
- * into normal input queue again.
- */
-struct bwq *binq_pending;
-
-/**
  * Baler Input Worker's Context.
  * Data in this structure will be reused repeatedly by the worker thread
  * that owns it. Repeatedly allocate and deallocate is much slower than
@@ -550,6 +489,7 @@ struct bwq *binq_pending;
  */
 struct bin_wkr_ctxt {
 	int worker_id; /**< Worker ID */
+	bstore_t store;
 	uint32_t comp_id;
 	uint32_t unresolved_count;
 	int rc;
@@ -593,9 +533,7 @@ struct bout_wkr_ctxt {
 	int worker_id; /**< Worker ID */
 };
 
-struct btkn_store *token_store; /**< Token store */
-struct bptn_store *pattern_store; /**< Pattern store */
-struct btkn_store *comp_store; /**< Token store for comp_id */
+bstore_t bstore = NULL;
 
 /*********************************************/
 
@@ -725,324 +663,6 @@ bzmsg_type_e bzmsg_type_inverse(bzmsg_type_e type)
 	return (type ^ 1);
 }
 
-void master_handle_recv(zap_ep_t ep, zap_event_t ev)
-{
-	struct bzmsg *m = (void*)ev->data;
-	struct bzmsg simple_rep;
-	struct bzmsg *rep;
-	struct bmap *map = NULL;
-	int has_attr = 0;
-	void *store = NULL;
-	const struct bstr *bstr;
-	size_t len;
-	uint32_t (*ins_fn)(void*, void*);
-	zap_err_t zerr;
-
-	ntoh_bzmsg(m);
-
-	simple_rep.ctxt = m->ctxt;
-	simple_rep.ctxt_bstr = m->ctxt_bstr;
-	simple_rep.tkn_idx = m->tkn_idx;
-	simple_rep.mapidx = m->mapidx;
-
-	rep = &simple_rep;
-
-	switch (m->mapidx) {
-	case BMAP_IDX_TKN:
-		has_attr = 1;
-		map = token_store->map;
-		ins_fn = (void*)btkn_store_insert;
-		store = token_store;
-		break;
-	case BMAP_IDX_HST:
-		has_attr = 1;
-		map = comp_store->map;
-		ins_fn = (void*)btkn_store_insert;
-		store = comp_store;
-		break;
-	case BMAP_IDX_PTN:
-		map = pattern_store->map;
-		ins_fn = (void*)bptn_store_addptn;
-		store = pattern_store;
-		break;
-	default:
-		berr("Unknown mapid: %u", m->mapidx);
-		rep->rc = EINVAL;
-		rep->type = bzmsg_type_inverse(m->type);
-		goto out;
-	}
-
-	switch (m->type) {
-	case BZMSG_ID_REQ:
-		rep->type = BZMSG_ID_REP;
-		rep->rc = 0;
-		rep->id = bmap_get_id(map, &m->bstr);
-		if (has_attr) {
-			rep->attr = btkn_store_get_attr(store, rep->id);
-		}
-		break;
-	case BZMSG_BSTR_REQ:
-		bstr = bmap_get_bstr(map, m->id);
-		if (!bstr) {
-			rep = &simple_rep;
-			rep->type = BZMSG_BSTR_REP;
-			rep->rc = ENOENT;
-			goto out;
-		}
-		rep = bzmsg_alloc(bstr->blen);
-		if (!rep) {
-			rep = &simple_rep;
-			rep->type = BZMSG_BSTR_REP;
-			rep->rc = ENOMEM;
-			goto out;
-		}
-		*rep = simple_rep;
-		rep->type = BZMSG_BSTR_REP;
-		rep->rc = 0;
-		if (has_attr)
-			rep->attr = btkn_store_get_attr(store, m->id);
-		bstr_set_cstr(&rep->bstr, bstr->cstr, bstr->blen);
-		break;
-	case BZMSG_INSERT_REQ:
-		rep->type = BZMSG_INSERT_REP;
-		rep->id = ins_fn(store, &m->bstr);
-		if (rep->id < BMAP_ID_BEGIN) {
-			rep->rc = ENOMEM;
-			goto out;
-		}
-		if (has_attr) {
-			if ((uint32_t)m->attr.type < BTKN_TYPE_LAST) {
-				btkn_store_set_attr(store, rep->id, m->attr);
-			}
-			rep->attr = btkn_store_get_attr(store, rep->id);
-		}
-		rep->rc = 0;
-		break;
-	default:
-		berr("Unexpected balerd zap message type: %s",
-						bzmsg_type_str(m->type));
-	}
-out:
-	len = bzmsg_len(rep);
-	hton_bzmsg(rep);
-	zerr = zap_send(ep, rep, len);
-	if (zerr != ZAP_ERR_OK) {
-		berr("%s: zap_send() error: %s", __func__, zap_err_str(zerr));
-	}
-cleanup:
-	if (rep != &simple_rep)
-		free(rep);
-}
-
-/**
- * zap call back function for master-mode balerd
- */
-void master_zap_cb(zap_ep_t ep, zap_event_t ev)
-{
-	struct sockaddr lsock, rsock;
-	char tmp[64];
-	socklen_t slen;
-	switch (ev->type) {
-	case ZAP_EVENT_CONNECT_REQUEST:
-		zap_accept(ep, master_zap_cb, NULL, 0);
-		break;
-	case ZAP_EVENT_CONNECTED:
-		zap_get_name(ep, &lsock, &rsock, &slen);
-		snprint_sockaddr(tmp, sizeof(tmp), &rsock);
-		binfo("connected from slave-mode balerd: %s", tmp);
-		break;
-	case ZAP_EVENT_DISCONNECTED:
-		zap_get_name(ep, &lsock, &rsock, &slen);
-		snprint_sockaddr(tmp, sizeof(tmp), &rsock);
-		binfo("disconnected from slave-mode balerd: %s", tmp);
-		zap_free(ep);
-		break;
-	case ZAP_EVENT_RECV_COMPLETE:
-		master_handle_recv(ep, ev);
-		break;
-	default:
-		bwarn("%s: Unexpected zap event: %s", __func__,
-						zap_event_str(ev->type));
-		break;
-	}
-}
-
-void slave_zap_cb(zap_ep_t ep, zap_event_t ev);
-void slave_connect(int sock, short which, void *arg);
-
-void slave_schedule_reconnect()
-{
-	struct event *event;
-	bdebug("Scheduling reconnect...");
-	event = event_new(evbase, -1, 0, 0, 0);
-	event_assign(event, evbase, -1, 0, slave_connect, event);
-	event_add(event, &reconnect_interval);
-}
-
-void slave_connect(int sock, short which, void *arg)
-{
-	zap_err_t zerr;
-	struct event *ev = arg;
-	struct sockaddr *sa;
-	struct addrinfo hint = {.ai_family = AF_INET};
-	struct addrinfo *ai = NULL;
-	char tmp[8];
-	int rc;
-	pthread_mutex_lock(&slave_zap_ctxt.mutex);
-	bdebug("connecting to master ...");
-	zap_ep = zap_new(zap, slave_zap_cb);
-	if (!zap_ep) {
-		berror("zap_new()");
-		slave_schedule_reconnect();
-		goto out;
-	}
-	zap_set_ucontext(zap_ep, &slave_zap_ctxt);
-	snprintf(tmp, sizeof(tmp), "%hu", m_port);
-	rc = getaddrinfo(m_host, tmp, &hint, &ai);
-	if (rc) {
-		berr("getaddrinfo() error: %d, %s\n", rc, gai_strerror(rc));
-		goto out;
-	}
-	uint32_t addr = ((struct sockaddr_in*)ai->ai_addr)->sin_addr.s_addr;
-	uint16_t prt = ((struct sockaddr_in*)ai->ai_addr)->sin_port;
-	bdebug("connecting to master: %hhu.%hhu.%hhu.%hhu:%hu",
-			addr & 0xFF,
-			(addr>>8) & 0xFF,
-			(addr>>16) & 0xFF,
-			(addr>>24) & 0xFF,
-			be16toh(prt));
-
-	zerr = zap_connect(zap_ep, ai->ai_addr, ai->ai_addrlen, NULL, 0);
-	if (zerr != ZAP_ERR_OK) {
-		zap_free(zap_ep);
-		berr("zap_connect() error: %s", zap_err_str(zerr));
-		slave_schedule_reconnect();
-		goto out;
-	}
-out:
-	if (ev)
-		event_free(ev);
-	if (ai)
-		freeaddrinfo(ai);
-	pthread_mutex_unlock(&slave_zap_ctxt.mutex);
-}
-
-void slave_handle_insert_rep(struct bzmsg *bzmsg)
-{
-	uint32_t id;
-	struct bwq_entry *ent = bzmsg->ctxt;
-	struct bin_wkr_ctxt *ctxt = ent->ctxt;
-	struct bstr *bstr = bzmsg->ctxt_bstr;
-	ctxt->unresolved_count--;
-
-	if (bzmsg->rc) {
-		ctxt->rc = bzmsg->rc;
-	}
-
-	uint32_t (*ins_fn)(void *, void*, uint32_t);
-	void *store = NULL;
-	const char *store_name = "Unknown";
-	int has_attr = 0;
-
-	/* Handle by map type */
-	switch (bzmsg->mapidx) {
-	case BMAP_IDX_HST:
-		ctxt->comp_id = bmapid2compid(bzmsg->id);
-		ins_fn = (void*)btkn_store_insert_with_id;
-		has_attr = 1;
-		store = comp_store;
-		store_name = "comp_store";
-		break;
-	case BMAP_IDX_TKN:
-		ctxt->ptn_str.u32str[bzmsg->tkn_idx] = bzmsg->id;
-		ins_fn = (void*)btkn_store_insert_with_id;
-		has_attr = 1;
-		store = token_store;
-		store_name = "token_store";
-		break;
-	case BMAP_IDX_PTN:
-		ctxt->msg.ptn_id = bzmsg->id;
-		ins_fn = (void*)bptn_store_addptn_with_id;
-		has_attr = 0;
-		store = pattern_store;
-		store_name = "pattern_store";
-		break;
-	}
-
-	/* Update local map with the replied information */
-	id = ins_fn(store, bzmsg->ctxt_bstr, bzmsg->id);
-	if (id < BMAP_ID_BEGIN) {
-		ctxt->rc = ENOMEM;
-		berr("Error inserting <str, id>: <%.*s, %u>, into store: %s, "
-				"ret: %u",
-				bstr->blen, bstr->cstr,
-				bzmsg->id,
-				store_name,
-				id);
-		return;
-	}
-
-	if (has_attr) {
-		btkn_store_set_attr(store, id, bzmsg->attr);
-	}
-
-	if (ctxt->unresolved_count)
-		return;
-
-	/* Ready for next processing */
-	if (ctxt->rc) {
-		binq_entry_free(ent);
-		free(ctxt);
-		return;
-	}
-
-	ctxt->next_fn(ent);
-}
-
-void slave_handle_recv(zap_ep_t ep, zap_event_t ev)
-{
-	struct bzmsg *bzmsg = (void*)ev->data;
-	ntoh_bzmsg(bzmsg);
-	switch (bzmsg->type) {
-	case BZMSG_INSERT_REP:
-		slave_handle_insert_rep(bzmsg);
-		break;
-	default:
-		berr("Unexpected bzmsg type: %s", bzmsg_type_str(bzmsg->type));
-	}
-}
-
-/**
- * zap call back function for slave-mode balerd
- */
-void slave_zap_cb(zap_ep_t ep, zap_event_t ev)
-{
-	struct event *event;
-	struct bzap_ctxt *ctxt = zap_get_ucontext(ep);
-	switch (ev->type) {
-	case ZAP_EVENT_CONNECTED:
-		pthread_mutex_lock(&ctxt->mutex);
-		ctxt->is_ready = 1;
-		pthread_mutex_unlock(&ctxt->mutex);
-		break;
-	case ZAP_EVENT_DISCONNECTED:
-	case ZAP_EVENT_CONNECT_ERROR:
-		pthread_mutex_lock(&ctxt->mutex);
-		ctxt->is_ready = 0;
-		bdebug("master disconnected!!!");
-		pthread_mutex_unlock(&ctxt->mutex);
-		zap_free(ep);
-		slave_schedule_reconnect();
-		break;
-	case ZAP_EVENT_RECV_COMPLETE:
-		slave_handle_recv(ep, ev);
-		break;
-	default:
-		berr("Unexpected event: %s", zap_event_str(ev->type));
-		break;
-	}
-}
-
 void zap_log_fn(const char *fmt, ...)
 {
 	static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -1053,41 +673,6 @@ void zap_log_fn(const char *fmt, ...)
 	vsnprintf(buff, sizeof(buff), fmt, ap);
 	va_end(ap);
 	pthread_mutex_unlock(&mutex);
-}
-
-void master_pattern_bmap_ev_cb(struct bmap *map, bmap_event_t ev, void *_arg)
-{
-	struct bmap_event_new_insert_arg *arg = _arg;
-	/* XXX TODO IMPLEMENT ME IN THE FUTURE */
-	/* Do nohting for now ... */
-}
-
-void master_init()
-{
-	zap_err_t zerr;
-	struct sockaddr_in sin = {
-		.sin_family = AF_INET,
-		.sin_port = htons(m_port),
-	};
-
-	bmap_set_event_cb(pattern_store->map, master_pattern_bmap_ev_cb);
-
-	zap_ep = zap_new(zap, master_zap_cb);
-	if (!zap_ep) {
-		berror("zap_new()");
-		exit(-1);
-	}
-
-	zerr = zap_listen(zap_ep, (void*)&sin, sizeof(sin));
-	if (zerr) {
-		berr("zap_listen() error: %s", zap_err_str(zerr));
-		exit(-1);
-	}
-}
-
-void slave_init()
-{
-	slave_schedule_reconnect();
 }
 
 /**
@@ -1123,49 +708,14 @@ void initialize_daemon()
 		exit(-1);
 	}
 
-	binq_pending = bwq_alloci(qdepth);
-	if (!binq_pending) {
-		berror("(binq_pending) bwq_alloci");
-		exit(-1);
-	}
-
-	/* Slave credit init */
-	rc = sem_init(&slave_credit, 0, SLAVE_CREDIT);
-	if (rc) {
-		berror("sem_init()");
-		exit(-1);
-	}
-
-	/* Token/Pattern stores */
-	binfo("Opening Token Store.");
-	char tmp[PATH_MAX];
-	const char *store_path = bget_store_path();
-	sprintf(tmp, "%s/tkn_store", store_path);
-	token_store = btkn_store_open(tmp, O_CREAT|O_RDWR);
-	if (!token_store) {
-		berror("btkn_store_open");
-		berr("Cannot open token store: %s", tmp);
-		exit(-1);
-	}
-	/* First add the spaces into the store */
-	btkn_store_char_insert(token_store, " \t\r\n", BTKN_TYPE_SPC);
-	btkn_store_char_insert(token_store, BTKN_SYMBOL_STR, BTKN_TYPE_SYM);
-
-	sprintf(tmp, "%s/ptn_store", store_path);
-	pattern_store = bptn_store_open(tmp, O_CREAT|O_RDWR);
-	if (!pattern_store) {
-		berror("bptn_store_open");
-		berr("Cannot open pattern store: %s", tmp);
-		exit(-1);
-	}
-
-	/* Comp store for comp<->comp_id */
-	binfo("Opening Component Store.");
-	sprintf(tmp, "%s/comp_store", store_path);
-	comp_store = btkn_store_open(tmp, O_CREAT|O_RDWR);
-	if (!comp_store) {
-		berror("btkn_store_open");
-		berr("Cannot open token store: %s", tmp);
+	/* Open store plugin */
+	binfo("Opening Plugin Store.");
+	bstore = bstore_open(bget_store_plugin(), bget_store_path(),
+			     O_CREAT | O_RDWR, 0660);
+	if (!bstore) {
+		berror("bstore_open");
+		berr("Cannot open plugin '%s' store '%s'.\n",
+		     bget_store_plugin(), bget_store_path());
 		exit(-1);
 	}
 
@@ -1183,7 +733,7 @@ void initialize_daemon()
 			exit(-1);
 		}
 		ictxt->worker_id = i;
-		if ((rc = pthread_create(binqwkr+i, NULL,binqwkr_routine,
+		if ((rc = pthread_create(binqwkr+i, NULL, binqwkr_routine,
 						ictxt)) != 0) {
 			berr("pthread_create error code: %d\n", rc);
 			exit(-1);
@@ -1222,12 +772,6 @@ void initialize_daemon()
 		}
 	}
 
-	metric_ids = calloc(1024*1024, sizeof(*metric_ids));
-	if (!metric_ids) {
-		berr("cannot allocate metric_ids.\n");
-		exit(-1);
-	}
-
 	/* OCM */
 #ifdef ENABLE_OCM
 	ocm = ocm_create("sock", ocm_port, ocm_cb, __blog);
@@ -1249,18 +793,6 @@ void initialize_daemon()
 		exit(-1);
 	}
 #endif
-	/* slave/master network init */
-	zap_err_t zerr;
-	zap = zap_get(sm_xprt, zap_log_fn, bzap_mem_info);
-	if (!zap) {
-		berror("zap_get()");
-		exit(-1);
-	}
-	zap_cb_fn_t cb;
-	if (is_master)
-		master_init();
-	else
-		slave_init();
 	binfo("Baler Initialization Complete.");
 }
 
@@ -1444,7 +976,7 @@ int process_cmd_plugin(struct bconfig_list *cfg)
 
 struct __process_cmd_tokens_line_ctxt {
 	btkn_type_t tkn_type;
-	struct btkn_store *store;
+	bstore_t store;
 	union {
 		char _buff[1024 + sizeof(struct bstr)];
 		struct bstr bstr;
@@ -1456,12 +988,13 @@ int __process_cmd_tokens_line_cb(char *line, void *_ctxt)
 {
 	struct __process_cmd_tokens_line_ctxt *ctxt = _ctxt;
 	char *id_str;
-	uint32_t tkn_id;
 	int n;
 	int spc_idx;
+	uint32_t tkn_id = 0;
 	int has_tkn_id = 0;
 	int len;
-	/* get rid of leading spaces, trailing spaces has been eliminated before
+
+	/* Get rid of leading spaces, trailing spaces have been eliminated before
 	 * this callback. */
 	while (*line && isspace(*line)) {
 		line++;
@@ -1480,29 +1013,20 @@ int __process_cmd_tokens_line_cb(char *line, void *_ctxt)
 		berr("token too long: %s", line);
 		return 0;
 	}
-	bstr_set_cstr(&ctxt->bstr, line, strlen(line));
-
-	/* inssert */
+	btkn_t tkn = btkn_alloc(tkn_id,
+				BTKN_TYPE_MASK(ctxt->tkn_type),
+				line,
+				strlen(line));
 	if (has_tkn_id) {
-		/* User's hostid/compid is tkn_id - BMAP_ID_BEGIN */
-		if (ctxt->tkn_type == BTKN_TYPE_HOST) {
-			tkn_id = bcompid2mapid(tkn_id);
+		if (bstore_tkn_add_with_id(ctxt->store, tkn)) {
+			berr("error inserting token '%s' with id %d\n", line, tkn_id);
 		}
-		tkn_id = btkn_store_insert_with_id(ctxt->store, &ctxt->bstr, tkn_id);
 	} else {
-		tkn_id = btkn_store_insert(ctxt->store, &ctxt->bstr);
+		tkn_id = bstore_tkn_add(ctxt->store, tkn);
+		if (!tkn_id) {
+			berr("error inserting token '%s'", line);
+		}
 	}
-
-	if (tkn_id == BMAP_ID_ERR) {
-		/* log and continue ... don't return error to stop the
-		 * insertion process */
-		berr("cannot insert '%s' into token store", line);
-		return 0;
-	}
-
-	/* set type */
-	struct btkn_attr attr = {ctxt->tkn_type};
-	btkn_store_set_attr(ctxt->store, tkn_id, attr);
 	return 0;
 }
 
@@ -1512,7 +1036,6 @@ int __process_cmd_tokens_line_cb(char *line, void *_ctxt)
  */
 int process_cmd_tokens(struct bconfig_list *cfg)
 {
-	int rc;
 	struct bpair_str *bp_path = bpair_str_search(&cfg->arg_head_s, "path",
 									NULL);
 	struct bpair_str *bp_type = bpair_str_search(&cfg->arg_head_s, "type",
@@ -1524,65 +1047,16 @@ int process_cmd_tokens(struct bconfig_list *cfg)
 	if (!ctxt) {
 		return ENOMEM;
 	}
-
 	const char *path = bp_path->s1;
-	ctxt->tkn_type = btkn_type(bp_type->s1);
-	switch (ctxt->tkn_type) {
-	case BTKN_TYPE_HOST:
-		ctxt->store = comp_store;
-		break;
-	case BTKN_TYPE_ENG:
-		ctxt->store = token_store;
-		break;
-	default:
-		berr("Unknown token type: %s\n", bp_type->s1);
-		rc = EINVAL;
-		goto cleanup;
-	}
-
-	rc = bprocess_file_by_line_w_comment(path,
+        ctxt->tkn_type = btkn_type(bp_type->s1);
+	ctxt->store = bstore;
+	int rc = bprocess_file_by_line_w_comment(path,
 					__process_cmd_tokens_line_cb, ctxt);
 
 cleanup:
 	if (ctxt)
 		free(ctxt);
 	return rc;
-}
-
-int process_cmd_hosts(struct bconfig_list *bl)
-{
-	/*
-	 * NOTE 1: comp_store should be filled at this point.
-	 *         Each hostname should be able to resolved into an internal
-	 *         component id.
-	 *
-	 * NOTE 2: attribute-value list of 'hosts' command is
-	 * hostname1:metric_id1, hostnam2:metric_id2, ...
-	 */
-	struct btkn_store *store = comp_store;
-	struct bpair_str *av;
-	char buff[512];
-	struct bstr *bs = (void*)buff;
-	LIST_FOREACH(av, &bl->arg_head_s, link) {
-		uint64_t mid = strtoull(av->s1, NULL, 0);
-		bstr_set_cstr(bs, av->s0, 0);
-		uint32_t cid = bmap_get_id(store->map, bs);
-		if (cid < BMAP_ID_BEGIN) {
-			cid = btkn_store_insert(comp_store, bs);
-			if (cid < BMAP_ID_BEGIN) {
-				berr("cannot insert host: %s\n", av->s0);
-				return EINVAL;
-			}
-		}
-		if (cid >= 1024*1024) {
-			berr("component_id for '%s' out of range: %d\n", av->s0,
-					cid);
-			return EINVAL;
-		}
-		cid = bmapid2compid(cid);
-		metric_ids[cid] = mid;
-	}
-	return 0;
 }
 
 /**
@@ -1596,20 +1070,12 @@ int process_command(const char *cmd)
 	struct bconfig_list *cfg = parse_config_str(cmd);
 	int rc = 0;
 
-	if (!cfg) {
-		rc = errno;
-		goto out;
-	}
-
 	switch (bcfg_cmd_str2enum(cfg->command)) {
 	case BCFG_CMD_PLUGIN:
 		rc = process_cmd_plugin(cfg);
 		break;
 	case BCFG_CMD_TOKENS:
 		rc = process_cmd_tokens(cfg);
-		break;
-	case BCFG_CMD_HOSTS:
-		rc = process_cmd_hosts(cfg);
 		break;
 	default:
 		/* Unknown command */
@@ -1618,7 +1084,7 @@ int process_command(const char *cmd)
 	}
 
 	bconfig_list_free(cfg);
-out:
+
 	return rc;
 }
 
@@ -1654,7 +1120,6 @@ void config_file_handling(const char *path)
 			exit(rc);
 		}
 	}
-	fclose(fin);
 }
 
 #ifdef ENABLE_OCM
@@ -1697,9 +1162,6 @@ void process_ocm_cmd(ocm_cfg_cmd_t cmd)
 		break;
 	case BCFG_CMD_TOKENS:
 		process_cmd_tokens(bl);
-		break;
-	case BCFG_CMD_HOSTS:
-		process_cmd_hosts(bl);
 		break;
 	default:
 		/* Unknown command */
@@ -1771,11 +1233,12 @@ void handle_set_log_file(const char *path)
  */
 void args_handling(int argc, char **argv)
 {
-	bset_store_path("./store");
 	int c;
 	int len;
 	int rc;
 
+	bset_store_path("./store");
+	bset_store_plugin("bstore_htbl");
 	blog_set_level(BLOG_LV_WARN);
 
 next_arg:
@@ -1786,6 +1249,9 @@ next_arg:
 		break;
 	case 's':
 		bset_store_path(optarg);
+		break;
+	case 'S':
+		bset_store_plugin(optarg);
 		break;
 	case 'F':
 		is_foreground = 1;
@@ -1798,25 +1264,8 @@ next_arg:
 		ocm_port = atoi(optarg);
 		break;
 #endif
-	case 'm':
-		len = strlen(optarg);
-		if (strncasecmp("master", optarg, len) == 0) {
-			is_master = 1;
-		} else if (strncasecmp("slave", optarg, len) == 0) {
-			is_master = 0;
-		} else {
-			berr("Unknown mode: %s", optarg);
-			exit(-1);
-		}
-		break;
-	case 'x':
-		sm_xprt = optarg;
-		break;
 	case 'h':
 		m_host = optarg;
-		break;
-	case 'p':
-		m_port = atoi(optarg);
 		break;
 	case 'v':
 		rc = blog_set_level_str(optarg);
@@ -1834,11 +1283,6 @@ next_arg:
 	case 'Q':
 		qdepth = atoi(optarg);
 		break;
-	case 'V':
-		printf("Baler Daemon Version: %s\n", PACKAGE_VERSION);
-		printf("git-SHA: %s\n", OVIS_GIT_LONG);
-		exit(0);
-		break;
 	case '?':
 		display_help_msg();
 		exit(0);
@@ -1849,8 +1293,6 @@ next_arg:
 
 arg_done:
 	binfo("Baler Daemon Started.\n");
-	binfo("Version: %s\n", PACKAGE_VERSION);
-	binfo("git-SHA: %s\n", OVIS_GIT_LONG);
 }
 
 void binq_data_print(struct binq_data *d)
@@ -1864,250 +1306,28 @@ void binq_data_print(struct binq_data *d)
 	printf("\n");
 }
 
-int slave_bzmsg_send(struct bzmsg *bzmsg)
-{
-	zap_err_t zerr;
-	int rc = 0;
-	size_t len;
-	pthread_mutex_lock(&slave_zap_ctxt.mutex);
-	if (!slave_zap_ctxt.is_ready) {
-		rc = EIO;
-		goto out;
-	}
-
-	len = bzmsg_len(bzmsg);
-	hton_bzmsg(bzmsg);
-	zerr = zap_send(zap_ep, bzmsg, len);
-	if (zerr != ZAP_ERR_OK)
-		rc = EIO;
-
-out:
-	pthread_mutex_unlock(&slave_zap_ctxt.mutex);
-	return rc;
-}
-
-int finalize_input_entry(struct bwq_entry *ent);
-
-int slave_process_input_entry_step3(struct bwq_entry *ent)
-{
-	struct bin_wkr_ctxt *ctxt = ent->ctxt;
-	struct binq_data *in_data = &ent->data.in;
-	struct bmsg *msg = &ctxt->msg;
-	int rc;
-	rc = finalize_input_entry(ent);
-cleanup:
-	free(ent->ctxt);
-	binq_entry_free(ent);
-	sem_post(&slave_credit);
-	return rc;
-}
-
-void process_input_extract_ptn(struct binq_data *in_data, struct bmsg *msg, struct bstr *str)
-{
-	int tkn_idx = 0;
-	int attr_count = 0;
-
-	if (in_data->type == BINQ_DATA_METRIC) {
-		msg->argc = 0;
-		return;
-	}
-
-	/* Otherwise, we need to mark some of the token in 'str' as '*' */
-	attr_count = 0;
-	for (tkn_idx = 0; tkn_idx < in_data->tok_count; tkn_idx++) {
-		int tid = str->u32str[tkn_idx];
-		struct btkn_attr attr = btkn_store_get_attr(token_store, tid);
-		/* REMARK: The default type of a token is '*' */
-		if (attr.type == BTKN_TYPE_STAR) {
-			/* This will be marked as '*' and put into arg list. */
-			str->u32str[tkn_idx] = BMAP_ID_STAR;
-			msg->argv[attr_count++] = tid;
-		}
-		/* else, do nothing */
-	}
-	msg->argc = attr_count;
-}
-
-int slave_process_input_entry_step2(struct bwq_entry *ent)
+static int queue_output(bmsg_t msg)
 {
 	int rc = 0;
-	struct bin_wkr_ctxt *ctxt = ent->ctxt;
-	struct binq_data *in_data = &ent->data.in;
-
-	struct bmsg *msg = &ctxt->msg;
-	struct bstr *str = &ctxt->ptn_str;
-	int attr_count = 0;
-	int tkn_idx = 0;
-	struct bstr_list_entry *str_ent;
-
-	ctxt->next_fn = slave_process_input_entry_step3;
-
-	process_input_extract_ptn(in_data, msg, str);
-
-	/* Now str is the pattern string, with arguments in msg->argv */
-
-	msg->ptn_id = bptn_store_get_id(pattern_store, str);
-	if (msg->ptn_id >= BMAP_ID_BEGIN)
-		return slave_process_input_entry_step3(ent);
-
-	zap_err_t zerr;
-	struct bzmsg *bzmsg = &ctxt->zmsg;
-	bzmsg->type = BZMSG_INSERT_REQ;
-	bzmsg->mapidx = BMAP_IDX_PTN;
-	bzmsg->attr.type = -1;
-	bzmsg->ctxt = ent;
-	bzmsg->ctxt_bstr = str;
-	bstr_cpy(&bzmsg->bstr, str);
-	ctxt->unresolved_count = 1;
-	rc = slave_bzmsg_send(bzmsg);
-	if (rc)
-		goto err;
-
-	return 0;
-
-err:
-	free(ent->ctxt);
-	binq_entry_free(ent);
-	return rc;
-}
-
-/*
- * TODO make sure that ctxt owns by ent. (see callers)
- */
-int slave_process_input_entry_step1(struct bwq_entry *ent, struct bin_wkr_ctxt *_ignore)
-{
-	int rc = 0;
-	struct binq_data *in_data = &ent->data.in;
-	uint32_t comp_id;
-	int unresolved_count = 0;
-
-again:
-	rc = sem_wait(&slave_credit);
-	if (rc) {
-		berror("sem_wait()");
-		goto again;
-	}
-
-	if (in_data->type == BINQ_DATA_MSG) {
-		comp_id = bmap_get_id(comp_store->map, in_data->hostname);
-		if (comp_id < BMAP_ID_BEGIN) {
-			comp_id = -1; /* all 0xFF */
-			unresolved_count++;
-		} else {
-			comp_id = bmapid2compid(comp_id);
-		}
-	} else {
-		comp_id = in_data->hostname->u32str[0];
-	}
-
-	struct bin_wkr_ctxt *ctxt = malloc(sizeof(*ctxt));
-	if (!ctxt) {
-		berr("Cannot allocate input context in %s:%s",
-							__FILE__, __func__);
-		return ENOMEM;
-	}
-
-	ent->ctxt = ctxt;
-	ctxt->comp_id = comp_id;
-	ctxt->next_fn = slave_process_input_entry_step2;
-	ctxt->rc = 0;
-	ctxt->worker_id = -1;
-
-	struct bstr_list_entry *str_ent;
-	/* NOTE: ptn and msg is meant to be a uint32_t string */
-	struct bstr *str = &ctxt->ptn_str;
-	/* msg->agrv will hold the pattern arguments. */
-	uint32_t attr_count = 0;
-	uint32_t tkn_idx = 0;
-	/* resolving token IDs, use ctxt->ptn_str to temporarily hold tok IDs */
-	LIST_FOREACH(str_ent, &in_data->tokens, link) {
-		struct btkn_attr attr;
-		int tid = btkn_store_get_id(token_store, &str_ent->str);
-		if (tid == BMAP_ID_NOTFOUND)
-			unresolved_count++;
-		str->u32str[tkn_idx] = tid;
-		tkn_idx++;
-	}
-	str->blen = in_data->tok_count * sizeof(uint32_t);
-	ctxt->unresolved_count = unresolved_count;
-
-	if (!unresolved_count)
-		return slave_process_input_entry_step2(ent);
-
-	/* Reaching here means there are some unresolved */
-	/* Make requests for the unresolved tokens */
-	zap_err_t zerr;
-	struct bzmsg *bzmsg = &ctxt->zmsg;
-
-	if (ctxt->comp_id == -1) {
-		bzmsg->ctxt = (void*)ent;
-		bzmsg->ctxt_bstr = in_data->hostname;
-		bzmsg->type = BZMSG_INSERT_REQ;
-		bzmsg->attr.type = BTKN_TYPE_HOST;
-		bzmsg->tkn_idx = -1;
-		bzmsg->mapidx = BMAP_IDX_HST;
-		bstr_cpy(&bzmsg->bstr, in_data->hostname);
-		rc = slave_bzmsg_send(bzmsg);
-		if (rc)
-			goto err;
-	}
-
-	tkn_idx = 0;
-	LIST_FOREACH(str_ent, &in_data->tokens, link) {
-		if (str->u32str[tkn_idx] != BMAP_ID_NOTFOUND)
-			goto next;
-		bzmsg->ctxt = ent;
-		bzmsg->ctxt_bstr = &str_ent->str;
-		bzmsg->type = BZMSG_INSERT_REQ;
-		bzmsg->attr.type = BTKN_TYPE_LAST; /* master will set it */
-		bzmsg->tkn_idx = tkn_idx;
-		bzmsg->mapidx = BMAP_IDX_TKN;
-		bstr_cpy(&bzmsg->bstr, &str_ent->str);
-		rc = slave_bzmsg_send(bzmsg);
-		if (rc)
-			goto err;
-	next:
-		tkn_idx++;
-	}
-
-	return rc;
-
-err:
-	free(ent->ctxt);
-	binq_entry_free(ent);
-	return rc;
-}
-
-int finalize_input_entry(struct bwq_entry *ent)
-{
-	int rc;
 	struct bplugin *p;
-	struct bin_wkr_ctxt *ctxt = ent->ctxt;
-	struct binq_data *in_data = &ent->data.in;
-	struct bmsg *msg = &ctxt->msg;
-	rc = bptn_store_addmsg(pattern_store, &in_data->tv, ctxt->comp_id, msg);
 	LIST_FOREACH(p, &bop_head_s, link) {
 		/* Copy msg to omsg for future usage in output queue. */
 		struct bmsg *omsg = bmsg_alloc(msg->argc);
 		if (!omsg) {
-			return ENOMEM;
+			rc = ENOMEM;
+			break;
 		}
 		memcpy(omsg, msg, BMSG_SZ(msg));
 		/* Prepare output queue entry. */
-		struct bwq_entry *oent = malloc(sizeof(*oent));
-		if (!oent) {
-			bmsg_free(omsg);
-			return ENOMEM;
-		}
+		struct bwq_entry *oent = (typeof(oent))malloc(sizeof(*oent));
 		struct boutq_data *odata = &oent->data.out;
-		odata->comp_id = ctxt->comp_id;
-		odata->tv = in_data->tv;
+		odata->comp_id = msg->comp_id;
+		odata->tv = msg->timestamp;
 		odata->msg = omsg;
-		odata->op = (struct boutplugin *)p;
-		/* Put the processed message into output queue */
-		bwq_nq(odata->op->_outq, oent);
+		odata->plugin = (struct boutplugin *)p;
+		bwq_nq(boutq, oent);
 	}
-	return 0;
+	return rc;
 }
 
 /**
@@ -2117,63 +1337,89 @@ int finalize_input_entry(struct bwq_entry *ent)
  * \return 0 on success.
  * \return errno on error.
  */
-int process_input_entry(struct bwq_entry *ent, struct bin_wkr_ctxt *ctxt)
+static int process_input_entry(struct bwq_entry *bwq_ent, struct bin_wkr_ctxt *ctxt)
 {
 	int rc = 0;
-	struct binq_data *in_data = &ent->data.in;
-	uint32_t comp_id;
-	if (in_data->type == BINQ_DATA_MSG) {
-		comp_id = bmap_insert(comp_store->map, in_data->hostname);
-		if (comp_id < BMAP_ID_BEGIN) {
-			/* Error, cannot insert the comp_id */
-			berr("Cannot insert host: %.*s", in_data->hostname->blen,
-					in_data->hostname->cstr);
-			rc = ENOENT;
-			goto cleanup;
-		}
-		comp_id = bmapid2compid(comp_id);
-	} else {
-		comp_id = in_data->hostname->u32str[0];
-	}
-	ent->ctxt = ctxt;
-	ctxt->comp_id = comp_id;
-	struct bstr_list_entry *str_ent;
-	/* NOTE: ptn and msg is meant to be a uint32_t string */
-	struct bstr *str = &ctxt->ptn_str;
-	/* msg->agrv will hold the pattern arguments. */
+	binq_data_t in_data = &bwq_ent->data.in;
+	bcomp_id_t comp_id;
+	uint64_t tkn_id;
+	int tkn_idx;
+
+	if (in_data->type != BINQ_DATA_MSG)
+		assert(1);
+
+	btkn_tailq_entry_t ent;
+	struct bstr *ptn = &ctxt->ptn_str;
 	struct bmsg *msg = &ctxt->msg;
-	uint32_t tkn_idx = 0;
-	LIST_FOREACH(str_ent, &in_data->tokens, link) {
-		int tid = btkn_store_insert(token_store, &str_ent->str);
-		if (tid == BMAP_ID_ERR) {
+
+	/*
+	 * Add each token to the token store if not already present;
+	 * in either case return it's unique token id.  Place this
+	 * token id into a bstr in the field position this token
+	 * occupied in the message.
+	 */
+	tkn_idx = 0;
+	comp_id = 0;
+	TAILQ_FOREACH(ent, &in_data->tkn_q, link) {
+		btkn_type_t tkn_type = btkn_first_type(ent->tkn);
+		ent->tkn->tkn_count = 1;
+		tkn_id = bstore_tkn_add(bstore, ent->tkn);
+		if (!tkn_id) {
 			rc = errno;
 			goto cleanup;
 		}
-		str->u32str[tkn_idx] = tid;
+		/*
+		 * When the tkn comes from the parser, it hasn't
+		 * discriminated between dictionary words, hostnames
+		 * and plain text.
+		 */
+		if (btkn_has_type(ent->tkn, BTKN_TYPE_SERVICE))
+			/* Service names may be dictionary words */
+			tkn_type = BTKN_TYPE_SERVICE;
+		if (btkn_has_type(ent->tkn, BTKN_TYPE_HOSTNAME))
+			tkn_type = BTKN_TYPE_HOSTNAME;
+		else if (btkn_has_type(ent->tkn, BTKN_TYPE_WORD))
+			tkn_type = BTKN_TYPE_WORD;
+		/* Pattern 'wilcards' are everyting except WORDs or
+		 * SEPARATORs */
+		switch (tkn_type) {
+		case BTKN_TYPE_SEPARATOR:
+		case BTKN_TYPE_WORD:
+			ptn->u64str[tkn_idx] = (tkn_id << 8) | tkn_type;
+			break;
+		case BTKN_TYPE_HOSTNAME:
+			/* Don't override the component id if a hostname
+			 * appears a second time in the message */
+			if (!comp_id)
+				msg->comp_id = comp_id = tkn_id;
+		default:
+			ptn->u64str[tkn_idx] = (tkn_type << 8) | tkn_type;
+		}
+		/* Message argument is always the token 'literal' */
+		msg->argv[tkn_idx] = (tkn_id << 8) | tkn_type;
 		tkn_idx++;
 	}
-	str->blen = tkn_idx * sizeof(uint32_t);
-
-	process_input_extract_ptn(in_data, msg, str);
-
-	/* Now str is the pattern string, with arguments in msg->argv */
-	/* pid stands for pattern id */
-	uint32_t pid = bptn_store_addptn(pattern_store, str);
-	if (pid < BMAP_ID_BEGIN) {
-		char *tmp = malloc(65536);
-		assert(tmp);
-		bptn_store_ptn2str(pattern_store, token_store, str, tmp, 65536);
-		berr("bptn_store_addptn() failed for '%s', errno: %d", tmp, errno);
-		free(tmp);
+	if (comp_id == 0 && in_data->hostname) {
+		/* Use the hostname from the entry */
+		btkn_t tkn = btkn_alloc(0, BTKN_TYPE_MASK(BTKN_TYPE_HOSTNAME),
+					in_data->hostname->cstr,
+					in_data->hostname->blen);
+		tkn_id = bstore_tkn_add(bstore, tkn);
+		msg->comp_id = tkn_id;
+		btkn_free(tkn);
+	}
+	ptn->blen = tkn_idx * sizeof(uint64_t);
+	msg->argc = tkn_idx;
+	msg->timestamp = in_data->tv;
+	msg->ptn_id = bstore_ptn_add(bstore, &in_data->tv, ptn);
+	if (!msg->ptn_id) {
+		berr("bstore_add_pattern() failed, errno: %d", errno);
 		rc = errno;
 		goto cleanup;
 	}
-	msg->ptn_id = pid;
-
-	rc = finalize_input_entry(ent);
-
+	rc = queue_output(msg);
 cleanup:
-	binq_entry_free(ent);
+	binq_entry_free(bwq_ent);
 	return rc;
 }
 
@@ -2187,12 +1433,11 @@ cleanup:
  */
 void* binqwkr_routine(void *arg)
 {
+	struct timeval start_time = { 0, 0 };
+	struct timeval end_time = { 0, 0 };
+	int inp_count = 0;
 	struct bwq_entry *ent;
-	int (*fn)(struct bwq_entry *, struct bin_wkr_ctxt *);
-	if (is_master)
-		fn = process_input_entry;
-	else
-		fn = slave_process_input_entry_step1;
+	gettimeofday(&start_time, NULL);
 loop:
 	/* bwq_dq will block the execution if the queue is empty. */
 	ent = bwq_dq(binq);
@@ -2200,11 +1445,38 @@ loop:
 		/* This is not supposed to happen. */
 		berr("Error, ent == NULL\n");
 	}
-	if (fn(ent, (struct bin_wkr_ctxt*) arg) == -1) {
+	if (!inp_count)
+		gettimeofday(&start_time, NULL);
+	if (process_input_entry(ent, (struct bin_wkr_ctxt*) arg) == -1) {
 		/* XXX Do better error handling ... */
 		berr("process input error ...");
 	}
+	inp_count++;
+	gettimeofday(&end_time, NULL);
+	double start = (double)start_time.tv_sec * 1.0e6 + (double)start_time.tv_usec;
+	double end = (double)end_time.tv_sec * 1.0e6 + (double)end_time.tv_usec;
+	double dur = (end - start) / 1.0e6;
+	if (dur > 1) {
+		printf("input messages/sec = %g\n", inp_count / dur);
+		inp_count = 0;
+	}
 	goto loop;
+}
+
+int process_output_entry(struct bwq_entry *ent, struct bout_wkr_ctxt *ctxt)
+{
+	int rc = 0;
+	struct bplugin *p;
+	LIST_FOREACH(p, &bop_head_s, link) {
+		struct boutplugin *outp = (typeof(outp))p;
+		rc = outp->process_output(outp, &ent->data.out);
+		if (rc) {
+			bwarn("Output plugin %s->process_output error, code:"
+				       " %d\n", p->name, rc);
+			break;
+		}
+	}
+	return rc;
 }
 
 /**
@@ -2214,10 +1486,10 @@ loop:
  */
 void* boutqwkr_routine(void *arg)
 {
-	struct bout_wkr_ctxt *octxt = arg;
+	int rc;
+	struct bout_wkr_ctxt *octxt= arg;
 	struct bwq_entry *ent;
 	struct boutq_data *d;
-	int rc;
 loop:
 	/* bwq_dq will block the execution if the queue is empty. */
 	ent = bwq_dq(&boutq[octxt->worker_id]);
@@ -2225,13 +1497,10 @@ loop:
 		/* This is not supposed to happen. */
 		berr("Error, ent == NULL\n");
 	}
-	d = &ent->data.out;
-	rc = d->op->process_output(d->op, d);
-	if (rc) {
-		/* XXX Do better error handling ... */
-		berr("output plugin '%s' error, code %d\n",
-					d->op->base.name, rc);
-	}
+	rc = ent->data.out.plugin->
+		process_output(ent->data.out.plugin, &ent->data.out);
+	if (rc)
+		berr("process input error, code %d\n", errno);
 	boutq_entry_free(ent);
 	goto loop;
 }
@@ -2258,7 +1527,10 @@ void thread_join()
  */
 void cleanup_daemon(int x)
 {
-	binfo("Baler Daemon exiting ... code %d\n", x);
+	printf("Closing the store and syncing data...");
+	fflush(stdout);
+	bstore_close(bstore);
+	printf("complete.\n");
 	exit(0);
 }
 
@@ -2301,6 +1573,16 @@ int main(int argc, char **argv)
 {
 	struct sigaction cleanup_act, logrotate_act;
 	sigset_t sigset;
+
+	/*
+	 * Initialize before turning off all the signals or any fatal
+	 * errors encountered will fail to exit the process.
+	 */
+	args_handling(argc, argv);
+	initialize_daemon();
+	if (config_path)
+		config_file_handling(config_path);
+
 	sigemptyset(&sigset);
 	sigaddset(&sigset, SIGUSR1);
 	cleanup_act.sa_handler = cleanup_daemon;
@@ -2318,15 +1600,6 @@ int main(int argc, char **argv)
 	logrotate_act.sa_flags = 0;
 	logrotate_act.sa_mask = sigset;
 	sigaction(SIGUSR1, &logrotate_act, NULL);
-
-	args_handling(argc, argv);
-
-	/* Initializing daemon and worker threads according to the
-	 * configuration. */
-	initialize_daemon();
-
-	if (config_path)
-		config_file_handling(config_path);
 
 	binfo("Baler is ready.");
 

@@ -80,6 +80,14 @@ struct __attribute__ ((__packed__)) bsos_msg_key_ptc {
 	/* higher bytes */
 };
 
+struct __attribute__ ((__packed__)) bsos_msg_key_ptc2 {
+	/* lower bytes, more precedence */
+	uint64_t ptn_id;
+	uint32_t sec;
+	uint64_t comp_id;
+	/* higher bytes */
+};
+
 static inline
 void bsos_msg_key_ptc_set_ptn_id(struct bsos_msg_key_ptc *k, uint32_t ptn_id)
 {
@@ -110,6 +118,11 @@ struct __attribute__ ((packed)) bsos_msg_key_tc {
 	/* this structure is uint64_t, lower byte has less precedence */
 	/* NOTE: We don't care about big-endian machine at the moment */
 	uint32_t comp_id;
+	uint32_t sec;
+};
+
+struct __attribute__ ((__packed__)) bsos_msg_key_tc2 {
+	uint64_t comp_id;
 	uint32_t sec;
 };
 

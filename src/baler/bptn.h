@@ -83,6 +83,30 @@
 #include <sys/fcntl.h>
 #include <sys/time.h>
 
+static const char *ptn_type_strs[] = {
+	[BTKN_TYPE_FIRST] = NULL,
+	[BTKN_TYPE_TYPE] = "<type>",
+	[BTKN_TYPE_PRIORITY] = "<prio>",
+	[BTKN_TYPE_VERSION] = "<vers>",
+	[BTKN_TYPE_TIMESTAMP] = "<ts>",
+	[BTKN_TYPE_HOSTNAME] = "<host>",
+	[BTKN_TYPE_SERVICE] = "<svc>",
+	[BTKN_TYPE_PID] = "<pid>",
+	[BTKN_TYPE_IP4_ADDR] = "<ip4>",
+	[BTKN_TYPE_IP6_ADDR] = "<ip6>",
+	[BTKN_TYPE_ETH_ADDR] = "<mac>",
+	[BTKN_TYPE_HEX_INT] = "<hex>",
+	[BTKN_TYPE_DEC_INT] = "<dec>",
+	[BTKN_TYPE_SEPARATOR] = "<sep>",
+	[BTKN_TYPE_FLOAT] = "<float>",
+	[BTKN_TYPE_PATH] = "<path>",
+	[BTKN_TYPE_URL] = "<url>",
+	[BTKN_TYPE_WORD] = "<word>",
+	[BTKN_TYPE_TEXT] = "*",
+	[BTKN_TYPE_WHITESPACE] = " ",
+	[BTKN_TYPE_LAST] = NULL,
+};
+
 /**
  * Attributes for a Baler Pattern (stored in ::bptn_store::mattr).
  */

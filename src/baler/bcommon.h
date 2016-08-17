@@ -130,10 +130,10 @@ int bget_str_idx(const char *table[], int table_len, const char *key)
 {
 	int i;
 	for (i=0; i<table_len; i++) {
-		if (strcasecmp(table[i], key) == 0)
+		if (table[i] && (0 == strcasecmp(table[i], key)))
 			return i;
 	}
-	return table_len;
+	return -1;
 }
 
 /**\}*/

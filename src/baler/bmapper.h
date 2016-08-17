@@ -79,28 +79,17 @@
 typedef enum {
 	BMAP_ID_ERR_BEGIN = 0,
 	BMAP_ID_NOTFOUND=0,	/**< For search not foundt */
-	BMAP_ID_NONE = BMAP_ID_NOTFOUND,
-	BMAP_ID_ERR,		/**< For various error */
+	BMAP_ID_NONE = (uint32_t)-4,
+	BMAP_ID_ERR,
 	BMAP_ID_INVAL,
-	BMAP_ID_ERR_END = 63,
+	BMAP_ID_ERR_END
 } bmap_id_error_t;
-
-static inline
-int bmap_id_is_err(uint32_t id)
-{
-	return BMAP_ID_ERR_BEGIN <= id && id <= BMAP_ID_ERR_END;
-}
-
-#define BMAP_STAR_TEXT "\u2022"
 
 /**
  * Special ID for Baler Map.
  */
 typedef enum {
-	BMAP_ID_SPECIAL_BEGIN = 64,
-	BMAP_ID_STAR=64,	/**< The special ID for KLEEN_STAR */
-	BMAP_ID_SPECIAL_END = 127,
-	BMAP_ID_BEGIN=128,	/**< The first non-special ID */
+	BMAP_ID_BEGIN=256,	/**< The first non-special ID */
 } bmap_id_special_t;
 
 /**

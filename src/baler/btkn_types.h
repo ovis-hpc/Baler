@@ -57,27 +57,94 @@
 
 #include "bcommon.h"
 
-#define BTKN_TYPE__LIST(P, CMD) \
-	CMD(P, STAR), /**< Wild card (*) token */ \
-	CMD(P, ENG),  /**< English word */ \
-	CMD(P, SYM),  /**< Symbol */ \
-	CMD(P, SPC),  /**< White spaces */ \
-	CMD(P, NAME), /**< Names, such as service name */ \
-	CMD(P, HOST), /**< Host name */ \
-	CMD(P, OTHER) /**< Other type */
-
-/**
- * Types of a token.
- */
-typedef enum {
-	BTKN_TYPE__LIST(BTKN_TYPE_, BENUM),
-	BTKN_TYPE_LAST
-} btkn_type_t;
+enum btkn_type {
+	BTKN_TYPE_FIRST = 0,
+	/**
+	 * This token is a type name
+	 */
+	BTKN_TYPE_TYPE = 1,
+	/**
+	 * Input message priority
+	 */
+	BTKN_TYPE_PRIORITY,
+	/**
+	 * Input message syntax version
+	 */
+	BTKN_TYPE_VERSION,
+	/**
+	 * Timestamp
+	 */
+	BTKN_TYPE_TIMESTAMP,
+	/**
+	 * Hostname
+	 */
+	BTKN_TYPE_HOSTNAME,
+	/**
+	 * Service Name
+	 */
+	BTKN_TYPE_SERVICE,
+	/**
+	 * Process Id
+	 */
+	BTKN_TYPE_PID,
+	/**
+	 * IPv4 Address
+	 */
+	BTKN_TYPE_IP4_ADDR,
+	/**
+	 * IPv6 Address
+	 */
+	BTKN_TYPE_IP6_ADDR,
+	/**
+	 * Ethernet Address
+	 */
+	BTKN_TYPE_ETH_ADDR,
+	/**
+	 * Hexadecimal Integer
+	 */
+	BTKN_TYPE_HEX_INT,
+	/**
+	 * Decimal Integer
+	 */
+	BTKN_TYPE_DEC_INT,
+	/**
+	 * Floating point number
+	 */
+	BTKN_TYPE_FLOAT,
+	/**
+	 * Unix filesystem path
+	 */
+	BTKN_TYPE_PATH,
+	/**
+	 * W3 URL
+	 */
+	BTKN_TYPE_URL,
+	/**
+	 * Natural language word
+	 */
+	BTKN_TYPE_WORD,
+	/**
+	 * Separator or punctuation
+	 */
+	BTKN_TYPE_SEPARATOR,
+	/**
+	 * Whitespace
+	 */
+	BTKN_TYPE_WHITESPACE,
+	/**
+	 * Text unrecognized as a particular token type
+	 */
+	BTKN_TYPE_TEXT,
+	/**
+	 * All other token types are defined dynamically by the store
+	 * and opportunistically returned by the parser.
+	 */
+	BTKN_TYPE_LAST,
+};
+typedef uint64_t btkn_type_t;
 
 extern
 const char *btkn_type_str[];
-
-btkn_type_t btkn_type(const char *str);
 
 /**
  * Baler's Token Attributes, containing attributes of a token.
@@ -89,9 +156,9 @@ struct btkn_attr {
 static
 const char *btkn_attr_type_str(btkn_type_t t)
 {
-	if (t <= BTKN_TYPE_OTHER)
+	if (t < BTKN_TYPE_LAST)
 		return btkn_type_str[t];
-	return "BTKN_TYPE_UNKNOWN";
+	return NULL;
 }
 
 #endif

@@ -78,6 +78,10 @@ struct __attribute__((packed)) bmlnode_u32 {
 	uint32_t data;
 	struct bmlist_link link;
 };
+struct __attribute__((packed)) bmlnode_u64 {
+	uint64_t data;
+	struct bmlist_link link;
+};
 
 /**
  * \brief Baler MMapped List node for bmapper hash table.

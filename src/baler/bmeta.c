@@ -390,7 +390,7 @@ int bmptn_get_eng_signature(struct bmptn_store *store, const struct bstr *s,
 	struct btkn_attr tkn_attr;
 	for (i = 0; i < len; i++) {
 		tkn_attr = btkn_store_get_attr(store->tkn_store, s->u32str[i]);
-		if (tkn_attr.type != BTKN_TYPE_ENG)
+		if (tkn_attr.type != BTKN_TYPE_WORD)
 			continue;
 		out->u32str[olen++] = s->u32str[i];
 	}
