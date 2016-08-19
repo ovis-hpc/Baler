@@ -153,6 +153,11 @@ btkn_t bstore_tkn_iter_first(btkn_iter_t iter)
 	return iter->bs->plugin->tkn_iter_first(iter);
 }
 
+btkn_t bstore_tkn_iter_obj(btkn_iter_t iter)
+{
+	return iter->bs->plugin->tkn_iter_obj(iter);
+}
+
 btkn_t bstore_tkn_iter_next(btkn_iter_t iter)
 {
 	return iter->bs->plugin->tkn_iter_next(iter);
@@ -186,6 +191,11 @@ uint64_t bstore_ptn_iter_card(bptn_iter_t iter)
 bptn_t bstore_ptn_iter_find(bptn_iter_t iter, time_t start)
 {
 	return iter->bs->plugin->ptn_iter_find(iter, start);
+}
+
+bptn_t bstore_ptn_iter_obj(bptn_iter_t iter)
+{
+	return iter->bs->plugin->ptn_iter_obj(iter);
 }
 
 bptn_t bstore_ptn_iter_next(bptn_iter_t iter)
@@ -226,11 +236,6 @@ int bstore_msg_add(bstore_t bs, struct timeval *tv, bmsg_t msg)
 bstore_iter_pos_t bstore_msg_iter_pos(bmsg_iter_t iter)
 {
 	return iter->bs->plugin->msg_iter_pos(iter);
-}
-
-int bstore_msg_iter_pos_set(bmsg_iter_t iter, bstore_iter_pos_t pos)
-{
-	return iter->bs->plugin->msg_iter_pos_set(iter, pos);
 }
 
 bmsg_iter_t bstore_msg_iter_new(bstore_t bs)
@@ -276,6 +281,16 @@ bmsg_t bstore_msg_iter_find(bmsg_iter_t iter,
 			    bmsg_cmp_fn_t cmp_fn, void *ctxt)
 {
 	return iter->bs->plugin->msg_iter_find(iter, ptn_id, start, comp_id, cmp_fn, ctxt);
+}
+
+int bstore_msg_iter_pos_set(bmsg_iter_t iter, bstore_iter_pos_t pos)
+{
+	return iter->bs->plugin->msg_iter_pos_set(iter, pos);
+}
+
+bmsg_t bstore_msg_iter_obj(bmsg_iter_t iter)
+{
+	return iter->bs->plugin->msg_iter_obj(iter);
 }
 
 bmsg_t bstore_msg_iter_next(bmsg_iter_t iter)
@@ -328,6 +343,11 @@ btkn_t bstore_ptn_tkn_iter_find(bptn_tkn_iter_t iter, bptn_id_t ptn_id, uint64_t
 	return iter->bs->plugin->ptn_tkn_iter_find(iter, ptn_id, pos);
 }
 
+btkn_t bstore_ptn_tkn_iter_obj(bptn_tkn_iter_t iter)
+{
+	return iter->bs->plugin->ptn_tkn_iter_obj(iter);
+}
+
 btkn_t bstore_ptn_tkn_iter_next(bptn_tkn_iter_t iter)
 {
 	return iter->bs->plugin->ptn_tkn_iter_next(iter);
@@ -366,6 +386,11 @@ void bstore_tkn_hist_iter_free(btkn_hist_iter_t i)
 btkn_hist_t bstore_tkn_hist_iter_find(btkn_hist_iter_t iter, btkn_hist_t tkn_h)
 {
 	return iter->bs->plugin->tkn_hist_iter_find(iter, tkn_h);
+}
+
+btkn_hist_t bstore_tkn_hist_iter_obj(btkn_hist_iter_t iter, btkn_hist_t tkn_h)
+{
+	return iter->bs->plugin->tkn_hist_iter_obj(iter, tkn_h);
 }
 
 btkn_hist_t bstore_tkn_hist_iter_next(btkn_hist_iter_t iter, btkn_hist_t tkn_h)
@@ -414,6 +439,11 @@ bptn_hist_t bstore_ptn_hist_iter_find(bptn_hist_iter_t iter, bptn_hist_t ptn_h)
 	return iter->bs->plugin->ptn_hist_iter_find(iter, ptn_h);
 }
 
+bptn_hist_t bstore_ptn_hist_iter_obj(bptn_hist_iter_t iter, bptn_hist_t ptn_h)
+{
+	return iter->bs->plugin->ptn_hist_iter_obj(iter, ptn_h);
+}
+
 bptn_hist_t bstore_ptn_hist_iter_next(bptn_hist_iter_t iter, bptn_hist_t ptn_h)
 {
 	return iter->bs->plugin->ptn_hist_iter_next(iter, ptn_h);
@@ -447,6 +477,11 @@ void bstore_comp_hist_iter_free(bcomp_hist_iter_t i)
 bcomp_hist_t bstore_comp_hist_iter_find(bcomp_hist_iter_t iter, bcomp_hist_t comp_h)
 {
 	return iter->bs->plugin->comp_hist_iter_find(iter, comp_h);
+}
+
+bcomp_hist_t bstore_comp_hist_iter_obj(bcomp_hist_iter_t iter, bcomp_hist_t comp_h)
+{
+	return iter->bs->plugin->comp_hist_iter_obj(iter, comp_h);
 }
 
 bcomp_hist_t bstore_comp_hist_iter_next(bcomp_hist_iter_t iter, bcomp_hist_t comp_h)

@@ -1255,6 +1255,14 @@ static btkn_t bs_tkn_iter_first(btkn_iter_t iter)
 
 	return __make_tkn(bss, sos_iter_obj(i->iter));
 }
+
+static btkn_t bs_tkn_iter_obj(btkn_iter_t iter)
+{
+	bsos_iter_t i = (bsos_iter_t)iter;
+	bstore_sos_t bss = (bstore_sos_t)i->bs;
+	return __make_tkn(bss, sos_iter_obj(i->iter));
+}
+
 static btkn_t bs_tkn_iter_next(btkn_iter_t iter)
 {
 	bsos_iter_t i = (bsos_iter_t)iter;
@@ -1425,6 +1433,13 @@ static bptn_t bs_ptn_iter_last(bptn_iter_t iter)
 	rc = sos_iter_end(i->iter);
 	if (rc)
 		return NULL;
+	return __make_ptn(bss, i, sos_iter_obj(i->iter));
+}
+
+static bptn_t bs_ptn_iter_obj(bptn_iter_t iter)
+{
+	bsos_iter_t i = (bsos_iter_t)iter;
+	bstore_sos_t bss = (bstore_sos_t)i->bs;
 	return __make_ptn(bss, i, sos_iter_obj(i->iter));
 }
 
@@ -1712,6 +1727,13 @@ bs_msg_iter_last(bmsg_iter_t iter)
 	return __make_msg(bss, i, sos_iter_obj(i->iter));
 }
 
+static bmsg_t bs_msg_iter_obj(bmsg_iter_t iter)
+{
+	bsos_iter_t i = (bsos_iter_t)iter;
+	bstore_sos_t bss = (bstore_sos_t)i->bs;
+	return __make_msg(bss, i, sos_iter_obj(i->iter));
+}
+
 static bmsg_t bs_msg_iter_next(bmsg_iter_t iter)
 {
 	sos_obj_t obj;
@@ -1733,7 +1755,7 @@ static bmsg_t bs_msg_iter_prev(bmsg_iter_t iter)
 	bsos_iter_t i = (bsos_iter_t)iter;
 	bstore_sos_t bss = (bstore_sos_t)i->bs;
 	int rc;
-	rc = sos_iter_next(i->iter);
+	rc = sos_iter_prev(i->iter);
 	if (rc)
 		return NULL;
 	obj = __next_matching_msg(rc, i, 0);
@@ -2120,22 +2142,49 @@ static int bs_msg_add(bstore_t bs, struct timeval *tv, bmsg_t msg)
 	return rc;
 }
 
+static btkn_t make_ptn_tkn(bsos_iter_t i)
+{
+	bstore_sos_t bss = (bstore_sos_t)i->bs;
+	int rc;
+	ptn_pos_tkn_t ppt_o;
+	btkn_t tkn;
+	bptn_id_t ptn_id_;
+	uint64_t tkn_pos_;
+	btkn_id_t tkn_id_;
+	sos_key_t key_o;
+	sos_obj_ref_t ref;
+
+	key_o = sos_iter_key(i->iter);
+	if (!key_o)
+		goto out;
+
+	ppt_o = (typeof(ppt_o))sos_key_value(key_o);
+	ptn_id_ = be64toh(ppt_o->key.ptn_id);
+	tkn_pos_ = be64toh(ppt_o->key.pos);
+	tkn_id_ = be64toh(ppt_o->key.tkn_id);
+	sos_key_put(key_o);
+
+	if ((tkn_pos_ != i->arg) || (ptn_id_ != i->ptn_id))
+		goto out;
+
+	tkn = bs_tkn_find_by_id(i->bs, tkn_id_);
+	ref = sos_iter_ref(i->iter);
+	tkn->tkn_count = ref.idx_data.uint64_[1];
+	return tkn;
+
+ out:
+	return NULL;
+}
+
 static btkn_t bs_ptn_tkn_iter_find(bptn_tkn_iter_t iter,
 				   bptn_id_t ptn_id, uint64_t tkn_pos)
 {
 	bsos_iter_t i = (bsos_iter_t)iter;
 	bstore_sos_t bss = (bstore_sos_t)i->bs;
-	bptn_id_t ptn_id_;
-	uint64_t tkn_pos_;
-	btkn_id_t tkn_id_;
 	SOS_KEY(key);
-	sos_key_t key_o;
 	ods_key_value_t kv = key->as.ptr;
 	ptn_pos_tkn_t ppt_k = (ptn_pos_tkn_t)kv->value;
 	int rc;
-	ptn_pos_tkn_t ppt_o;
-	btkn_t tkn;
-	sos_obj_ref_t ref;
 
 	ppt_k->key.ptn_id = htobe64(ptn_id);
 	ppt_k->key.pos = htobe64(tkn_pos);
@@ -2146,65 +2195,23 @@ static btkn_t bs_ptn_tkn_iter_find(bptn_tkn_iter_t iter,
 	i->arg = tkn_pos;
 
 	rc = sos_iter_sup(i->iter, key);
-	if (rc)
-		goto out;
-
-	key_o = sos_iter_key(i->iter);
-	if (!key_o)
-		goto out;
-	ppt_o = (typeof(ppt_o))sos_key_value(key_o);
-	ptn_id_ = be64toh(ppt_o->key.ptn_id);
-	tkn_pos_ = be64toh(ppt_o->key.pos);
-	tkn_id_ = be64toh(ppt_o->key.tkn_id);
-	sos_key_put(key_o);
-
-	if ((tkn_pos_ != i->arg) || (ptn_id_ != i->ptn_id))
-		goto out;
-
-	tkn = bs_tkn_find_by_id(i->bs, tkn_id_);
-	ref = sos_iter_ref(i->iter);
-	tkn->tkn_count = ref.idx_data.uint64_[1];
-	return tkn;
- out:
+	if (!rc)
+		return make_ptn_tkn(i);
 	return NULL;
+}
+
+static btkn_t bs_ptn_tkn_iter_obj(bptn_tkn_iter_t iter)
+{
+	bsos_iter_t i = (bsos_iter_t)iter;
+	return make_ptn_tkn(i);
 }
 
 static btkn_t bs_ptn_tkn_iter_next(bptn_tkn_iter_t iter)
 {
 	bsos_iter_t i = (bsos_iter_t)iter;
-	bstore_sos_t bss = (bstore_sos_t)i->bs;
-	int rc;
-	ptn_pos_tkn_t ppt_o;
-	btkn_t tkn;
-	bptn_id_t ptn_id_;
-	uint64_t tkn_pos_;
-	btkn_id_t tkn_id_;
-	sos_key_t key_o;
-	sos_obj_ref_t ref;
-
-	rc = sos_iter_next(i->iter);
-	if (rc)
-		goto out;
-
-	key_o = sos_iter_key(i->iter);
-	if (!key_o)
-		goto out;
-
-	ppt_o = (typeof(ppt_o))sos_key_value(key_o);
-	ptn_id_ = be64toh(ppt_o->key.ptn_id);
-	tkn_pos_ = be64toh(ppt_o->key.pos);
-	tkn_id_ = be64toh(ppt_o->key.tkn_id);
-	sos_key_put(key_o);
-
-	if ((tkn_pos_ != i->arg) || (ptn_id_ != i->ptn_id))
-		goto out;
-
-	tkn = bs_tkn_find_by_id(i->bs, tkn_id_);
-	ref = sos_iter_ref(i->iter);
-	tkn->tkn_count = ref.idx_data.uint64_[1];
-	return tkn;
-
- out:
+	int rc = sos_iter_next(i->iter);
+	if (!rc)
+		return make_ptn_tkn(i);
 	return NULL;
 }
 
@@ -2336,9 +2343,14 @@ static btkn_hist_t bs_tkn_hist_iter_first(btkn_hist_iter_t iter, btkn_hist_t tkn
 	return tkn_hist_next(i, tkn_h);
 }
 
+static btkn_hist_t bs_tkn_hist_iter_obj(btkn_hist_iter_t iter, btkn_hist_t tkn_h)
+{
+	bsos_iter_t i = (bsos_iter_t)iter;
+	return tkn_hist_next(i, tkn_h);
+}
+
 static btkn_hist_t bs_tkn_hist_iter_next(btkn_hist_iter_t iter, btkn_hist_t tkn_h)
 {
-	bstore_sos_t bss = (bstore_sos_t)iter->bs;
 	bsos_iter_t i = (bsos_iter_t)iter;
 	int rc;
 
@@ -2484,9 +2496,14 @@ static bptn_hist_t bs_ptn_hist_iter_first(bptn_hist_iter_t iter, bptn_hist_t ptn
 	return ptn_hist_next(i, ptn_h);
 }
 
+static bptn_hist_t bs_ptn_hist_iter_obj(bptn_hist_iter_t iter, bptn_hist_t ptn_h)
+{
+	bsos_iter_t i = (bsos_iter_t)iter;
+	return ptn_hist_next(i, ptn_h);
+}
+
 static bptn_hist_t bs_ptn_hist_iter_next(bptn_hist_iter_t iter, bptn_hist_t ptn_h)
 {
-	bstore_sos_t bss = (bstore_sos_t)iter->bs;
 	bsos_iter_t i = (bsos_iter_t)iter;
 	int rc;
 
@@ -2623,12 +2640,14 @@ static bcomp_hist_t bs_comp_hist_iter_first(bcomp_hist_iter_t iter, bcomp_hist_t
 	return comp_hist_next(i, comp_h);
 }
 
+static bcomp_hist_t bs_comp_hist_iter_obj(bcomp_hist_iter_t iter, bcomp_hist_t comp_h)
+{
+	return comp_hist_next((bsos_iter_t)iter, comp_h);
+}
+
 static bcomp_hist_t bs_comp_hist_iter_next(bcomp_hist_iter_t iter, bcomp_hist_t comp_h)
 {
-	bstore_sos_t bss = (bstore_sos_t)iter->bs;
 	bsos_iter_t i = (bsos_iter_t)iter;
-	sos_obj_t hist_o;
-	comp_hist_t comp_o;
 	int rc;
 
 	rc = sos_iter_next(i->iter);
@@ -2655,7 +2674,9 @@ static struct bstore_plugin_s plugin = {
 	.tkn_iter_free = bs_tkn_iter_free,
 	.tkn_iter_card = bs_tkn_iter_card,
 	.tkn_iter_first = bs_tkn_iter_first,
+	.tkn_iter_obj = bs_tkn_iter_obj,
 	.tkn_iter_next = bs_tkn_iter_next,
+	// .tkn_iter_prev = bs_tkn_iter_prev,
 
 	.msg_add = bs_msg_add,
 	.msg_iter_pos = bs_msg_iter_pos,
@@ -2666,6 +2687,7 @@ static struct bstore_plugin_s plugin = {
 	.msg_iter_find = bs_msg_iter_find,
 	.msg_iter_first = bs_msg_iter_first,
 	.msg_iter_last = bs_msg_iter_last,
+	.msg_iter_obj = bs_msg_iter_obj,
 	.msg_iter_next = bs_msg_iter_next,
 	.msg_iter_prev = bs_msg_iter_prev,
 
@@ -2679,6 +2701,7 @@ static struct bstore_plugin_s plugin = {
 	.ptn_iter_find = bs_ptn_iter_find,
 	.ptn_iter_first = bs_ptn_iter_first,
 	.ptn_iter_last = bs_ptn_iter_last,
+	.ptn_iter_obj = bs_ptn_iter_obj,
 	.ptn_iter_next = bs_ptn_iter_next,
 	.ptn_iter_prev = bs_ptn_iter_prev,
 
@@ -2688,7 +2711,9 @@ static struct bstore_plugin_s plugin = {
 	.ptn_tkn_iter_free = bs_ptn_tkn_iter_free,
 	.ptn_tkn_iter_card = bs_ptn_tkn_iter_card,
 	.ptn_tkn_iter_find = bs_ptn_tkn_iter_find,
+	.ptn_tkn_iter_obj = bs_ptn_tkn_iter_obj,
 	.ptn_tkn_iter_next = bs_ptn_tkn_iter_next,
+	// .ptn_tkn_iter_prev = bs_ptn_tkn_iter_prev,
 
 	.tkn_hist_update = bs_tkn_hist_update,
 	.tkn_hist_iter_pos = bs_tkn_hist_iter_pos,
@@ -2696,7 +2721,9 @@ static struct bstore_plugin_s plugin = {
 	.tkn_hist_iter_new = bs_tkn_hist_iter_new,
 	.tkn_hist_iter_free = bs_tkn_hist_iter_free,
 	.tkn_hist_iter_find = bs_tkn_hist_iter_find,
+	.tkn_hist_iter_obj = bs_tkn_hist_iter_obj,
 	.tkn_hist_iter_next = bs_tkn_hist_iter_next,
+	// .tkn_hist_iter_prev = bs_tkn_hist_iter_prev,
 	.tkn_hist_iter_first = bs_tkn_hist_iter_first,
 
 	.ptn_hist_update = bs_ptn_hist_update,
@@ -2706,7 +2733,9 @@ static struct bstore_plugin_s plugin = {
 	.ptn_hist_iter_new = bs_ptn_hist_iter_new,
 	.ptn_hist_iter_free = bs_ptn_hist_iter_free,
 	.ptn_hist_iter_find = bs_ptn_hist_iter_find,
+	.ptn_hist_iter_obj = bs_ptn_hist_iter_obj,
 	.ptn_hist_iter_next = bs_ptn_hist_iter_next,
+	// .ptn_hist_iter_prev = bs_ptn_hist_iter_prev,
 	.ptn_hist_iter_first = bs_ptn_hist_iter_first,
 
 	.comp_hist_iter_pos = bs_comp_hist_iter_pos,
@@ -2714,7 +2743,9 @@ static struct bstore_plugin_s plugin = {
 	.comp_hist_iter_new = bs_comp_hist_iter_new,
 	.comp_hist_iter_free = bs_comp_hist_iter_free,
 	.comp_hist_iter_find = bs_comp_hist_iter_find,
+	.comp_hist_iter_obj = bs_comp_hist_iter_obj,
 	.comp_hist_iter_next = bs_comp_hist_iter_next,
+	// .comp_hist_iter_prev = bs_comp_hist_iter_prev,
 	.comp_hist_iter_first = bs_comp_hist_iter_first,
 
 	.iter_pos_to_str = bs_iter_pos_to_str,

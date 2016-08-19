@@ -93,6 +93,10 @@ typedef struct bstore_plugin_s {
 	 */
 	btkn_t (*tkn_iter_first)(btkn_iter_t iter);
 	/**
+	 * Return the current token
+	 */
+	btkn_t (*tkn_iter_obj)(btkn_iter_t iter);
+	/**
 	 * Return the next token
 	 */
 	btkn_t (*tkn_iter_next)(btkn_iter_t iter);
@@ -108,6 +112,7 @@ typedef struct bstore_plugin_s {
 	bmsg_t (*msg_iter_find)(bmsg_iter_t i,
 				bptn_id_t ptn_id, time_t start, bcomp_id_t comp_id,
 				bmsg_cmp_fn_t cmp_fn, void *ctxt);
+	bmsg_t (*msg_iter_obj)(bmsg_iter_t i);
 	bmsg_t (*msg_iter_next)(bmsg_iter_t i);
 	bmsg_t (*msg_iter_prev)(bmsg_iter_t i);
 	bmsg_t (*msg_iter_first)(bmsg_iter_t i);
@@ -135,6 +140,7 @@ typedef struct bstore_plugin_s {
 	/**
 	 * Advance to the next pattern.
 	 */
+	bptn_t (*ptn_iter_obj)(bptn_iter_t iter);
 	bptn_t (*ptn_iter_next)(bptn_iter_t iter);
 	/**
 	 * Advance to the prevous pattern.
@@ -163,6 +169,7 @@ typedef struct bstore_plugin_s {
 	/**
 	 * Return the next pattern token
 	 */
+	btkn_t (*ptn_tkn_iter_obj)(bptn_tkn_iter_t iter);
 	btkn_t (*ptn_tkn_iter_next)(bptn_tkn_iter_t iter);
 	/**
 	 * Return the type id for a token type name
@@ -179,6 +186,7 @@ typedef struct bstore_plugin_s {
 	btkn_hist_iter_t (*tkn_hist_iter_new)(bstore_t bs);
 	void (*tkn_hist_iter_free)(btkn_hist_iter_t iter);
 	btkn_hist_t (*tkn_hist_iter_find)(btkn_hist_iter_t iter, btkn_hist_t tkn_h);
+	btkn_hist_t (*tkn_hist_iter_obj)(btkn_hist_iter_t iter, btkn_hist_t tkn_h);
 	btkn_hist_t (*tkn_hist_iter_next)(btkn_hist_iter_t iter, btkn_hist_t tkn_h);
 	btkn_hist_t (*tkn_hist_iter_first)(btkn_hist_iter_t iter, btkn_hist_t tkn_h);
 
@@ -198,6 +206,7 @@ typedef struct bstore_plugin_s {
 	bptn_hist_iter_t (*ptn_hist_iter_new)(bstore_t bs);
 	void (*ptn_hist_iter_free)(bptn_hist_iter_t iter);
 	bptn_hist_t (*ptn_hist_iter_find)(bptn_hist_iter_t iter, bptn_hist_t ptn_h);
+	bptn_hist_t (*ptn_hist_iter_obj)(bptn_hist_iter_t iter, bptn_hist_t ptn_h);
 	bptn_hist_t (*ptn_hist_iter_next)(bptn_hist_iter_t iter, bptn_hist_t ptn_h);
 	bptn_hist_t (*ptn_hist_iter_first)(bptn_hist_iter_t iter, bptn_hist_t ptn_h);
 
@@ -206,6 +215,7 @@ typedef struct bstore_plugin_s {
 	bcomp_hist_iter_t (*comp_hist_iter_new)(bstore_t bs);
 	void (*comp_hist_iter_free)(bcomp_hist_iter_t iter);
 	bcomp_hist_t (*comp_hist_iter_find)(bcomp_hist_iter_t iter, bcomp_hist_t comp_h);
+	bcomp_hist_t (*comp_hist_iter_obj)(bcomp_hist_iter_t iter, bcomp_hist_t comp_h);
 	bcomp_hist_t (*comp_hist_iter_next)(bcomp_hist_iter_t iter, bcomp_hist_t comp_h);
 	bcomp_hist_t (*comp_hist_iter_first)(bcomp_hist_iter_t iter, bcomp_hist_t comp_h);
 	/**
@@ -231,6 +241,7 @@ btkn_iter_t bstore_tkn_iter_new(bstore_t bs);
 void bstore_tkn_iter_free(btkn_iter_t i);
 uint64_t bstore_tkn_iter_card(btkn_iter_t i);
 btkn_t bstore_tkn_iter_first(btkn_iter_t iter);
+btkn_t bstore_tkn_iter_obj(btkn_iter_t iter);
 btkn_t bstore_tkn_iter_next(btkn_iter_t iter);
 
 int bstore_msg_add(bstore_t bs, struct timeval *tv, bmsg_t msg);
@@ -242,6 +253,7 @@ uint64_t bstore_msg_iter_card(bmsg_iter_t i);
 bmsg_t bstore_msg_iter_find(bmsg_iter_t i,
 			    bptn_id_t ptn_id, time_t start, bcomp_id_t comp_id,
 			    bmsg_cmp_fn_t cmp_fn, void *ctxt);
+bmsg_t bstore_msg_iter_obj(bmsg_iter_t i);
 bmsg_t bstore_msg_iter_next(bmsg_iter_t i);
 bmsg_t bstore_msg_iter_prev(bmsg_iter_t i);
 bmsg_t bstore_msg_iter_first(bmsg_iter_t i);
@@ -255,6 +267,7 @@ bptn_iter_t bstore_ptn_iter_new(bstore_t bs);
 void bstore_ptn_iter_free(bptn_iter_t iter);
 uint64_t bstore_ptn_iter_card(bptn_iter_t i);
 bptn_t bstore_ptn_iter_find(bptn_iter_t iter, time_t start);
+bptn_t bstore_ptn_iter_obj(bptn_iter_t iter);
 bptn_t bstore_ptn_iter_next(bptn_iter_t iter);
 bptn_t bstore_ptn_iter_prev(bptn_iter_t iter);
 bptn_t bstore_ptn_iter_first(bptn_iter_t iter);
@@ -266,6 +279,7 @@ bptn_tkn_iter_t bstore_ptn_tkn_iter_new(bstore_t bs);
 void bstore_ptn_tkn_iter_free(bptn_tkn_iter_t iter);
 uint64_t bstore_ptn_tkn_iter_card(bptn_tkn_iter_t i);
 btkn_t bstore_ptn_tkn_iter_find(bptn_tkn_iter_t iter, bptn_id_t ptn_id, uint64_t pos);
+btkn_t bstore_ptn_tkn_iter_obj(bptn_tkn_iter_t iter);
 btkn_t bstore_ptn_tkn_iter_next(bptn_tkn_iter_t iter);
 
 /* Token History */
@@ -275,6 +289,7 @@ int bstore_tkn_hist_iter_pos_set(btkn_hist_iter_t, bstore_iter_pos_t);
 btkn_hist_iter_t bstore_tkn_hist_iter_new(bstore_t bs);
 void bstore_tkn_hist_iter_free(btkn_hist_iter_t iter);
 btkn_hist_t bstore_tkn_hist_iter_find(btkn_hist_iter_t iter, btkn_hist_t tkn_h);
+btkn_hist_t bstore_tkn_hist_iter_obj(btkn_hist_iter_t iter, btkn_hist_t tkn_h);
 btkn_hist_t bstore_tkn_hist_iter_next(btkn_hist_iter_t iter, btkn_hist_t tkn_h);
 btkn_hist_t bstore_tkn_hist_iter_first(btkn_hist_iter_t iter, btkn_hist_t tkn_h);
 
@@ -287,6 +302,7 @@ int bstore_ptn_hist_iter_pos_set(bptn_hist_iter_t, bstore_iter_pos_t);
 bptn_hist_iter_t bstore_ptn_hist_iter_new(bstore_t bs);
 void bstore_ptn_hist_iter_free(bptn_hist_iter_t iter);
 bptn_hist_t bstore_ptn_hist_iter_find(bptn_hist_iter_t iter, bptn_hist_t ptn_h);
+bptn_hist_t bstore_ptn_hist_iter_obj(bptn_hist_iter_t iter, bptn_hist_t ptn_h);
 bptn_hist_t bstore_ptn_hist_iter_next(bptn_hist_iter_t iter, bptn_hist_t ptn_h);
 bptn_hist_t bstore_ptn_hist_iter_first(bptn_hist_iter_t iter, bptn_hist_t ptn_h);
 
@@ -296,6 +312,7 @@ int bstore_comp_hist_iter_pos_set(bcomp_hist_iter_t, bstore_iter_pos_t);
 bcomp_hist_iter_t bstore_comp_hist_iter_new(bstore_t bs);
 void bstore_comp_hist_iter_free(bcomp_hist_iter_t iter);
 bcomp_hist_t bstore_comp_hist_iter_find(bcomp_hist_iter_t iter, bcomp_hist_t comp_h);
+bcomp_hist_t bstore_comp_hist_iter_obj(bcomp_hist_iter_t iter, bcomp_hist_t comp_h);
 bcomp_hist_t bstore_comp_hist_iter_next(bcomp_hist_iter_t iter, bcomp_hist_t comp_h);
 bcomp_hist_t bstore_comp_hist_iter_first(bcomp_hist_iter_t iter, bcomp_hist_t comp_h);
 

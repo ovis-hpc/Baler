@@ -203,6 +203,18 @@ PyObject *Tkn_Iter_Pos_Set(Btkn_iter_t iter, PyObject *py_str)
 	return PyInt_FromLong(rc);
 }
 
+PyObject *Tkn_Iter_Obj(Btkn_iter_t iter)
+{
+	btkn_t btkn;
+	PyObject *ptkn;
+	btkn = bstore_tkn_iter_obj(iter->iter);
+	if (!btkn)
+		return Py_None;
+	ptkn = __make_tkn(btkn);
+	btkn_free(btkn);
+	return (ptkn ? ptkn : Py_None);
+}
+
 PyObject *Tkn_Iter_Next(Btkn_iter_t iter)
 {
 	btkn_t btkn;
@@ -342,6 +354,45 @@ PyObject *Msg_Iter_Find(Bmsg_iter_t i,
 	i->start = start;
 	i->comp_id = comp_id;
 	msg = bstore_msg_iter_find(i->iter, ptn_id, start, comp_id, NULL, NULL);
+	if (msg)
+		py_msg = __make_msg(i->bs, msg);
+	return py_msg;
+}
+
+PyObject *Msg_Iter_Pos(Bmsg_iter_t iter)
+{
+	bstore_iter_pos_t pos = bstore_msg_iter_pos(iter->iter);
+	if (!pos)
+		return Py_None;
+	const char *pos_str = bstore_iter_pos_to_str(iter->iter, pos);
+	bstore_iter_pos_free(iter->iter, pos);
+	if (!pos_str)
+		return Py_None;
+	PyObject *py_pos = PyString_FromString(pos_str);
+	free((char*)pos_str);
+	return (py_pos?py_pos:Py_None);
+}
+
+PyObject *Msg_Iter_Pos_Set(Bmsg_iter_t iter, PyObject *py_str)
+{
+	long rc;
+	const char *pos_str = PyString_AsString(py_str);
+	bstore_iter_pos_t pos = bstore_iter_pos_from_str(iter->iter, pos_str);
+	if (!pos) {
+		rc = ENOENT;
+		goto out;
+	}
+	rc = bstore_msg_iter_pos_set(iter->iter, pos);
+ out:
+	return PyInt_FromLong(rc);
+}
+
+PyObject *Msg_Iter_Obj(Bmsg_iter_t i)
+{
+	PyObject *py_msg = Py_None;
+	bmsg_t msg;
+
+	msg = bstore_msg_iter_obj(i->iter);
 	if (msg)
 		py_msg = __make_msg(i->bs, msg);
 	return py_msg;
@@ -554,6 +605,17 @@ PyObject *Ptn_Iter_Pos_Set(Bptn_iter_t iter, PyObject *py_str)
 	return PyInt_FromLong(rc);
 }
 
+PyObject *Ptn_Iter_Obj(Bptn_iter_t iter)
+{
+	PyObject *py_ptn = Py_None;
+	bptn_t ptn;
+
+	ptn = bstore_ptn_iter_obj(iter->iter);
+	if (ptn)
+		py_ptn = __make_ptn(iter->bs, ptn);
+	return py_ptn;
+}
+
 PyObject *Ptn_Iter_Next(Bptn_iter_t iter)
 {
 	PyObject *py_ptn = Py_None;
@@ -672,6 +734,17 @@ PyObject *Ptn_Tkn_Iter_Pos_Set(Bptn_tkn_iter_t iter, PyObject *py_str)
 	return PyInt_FromLong(rc);
 }
 
+PyObject *Ptn_Tkn_Iter_Obj(Bptn_tkn_iter_t iter)
+{
+	PyObject *py_tkn = Py_None;
+	btkn_t tkn;
+
+	tkn = bstore_ptn_tkn_iter_obj(iter->iter);
+	if (tkn)
+		py_tkn = __make_tkn(tkn);
+	return py_tkn;
+}
+
 PyObject *Ptn_Tkn_Iter_Next(Bptn_tkn_iter_t iter)
 {
 	PyObject *py_tkn = Py_None;
@@ -777,6 +850,15 @@ PyObject *Tkn_Hist_Iter_Pos_Set(Btkn_hist_iter_t iter, PyObject *py_str)
 	return PyInt_FromLong(rc);
 }
 
+PyObject *Tkn_Hist_Iter_Obj(Btkn_hist_iter_t i)
+{
+	struct btkn_hist_s hist, *p;
+	p = bstore_tkn_hist_iter_obj(i->iter, &hist);
+	if (!p)
+		return Py_None;
+	return __make_tkn_hist(p);
+}
+
 PyObject *Tkn_Hist_Iter_Next(Btkn_hist_iter_t i)
 {
 	struct btkn_hist_s hist, *p;
@@ -876,6 +958,15 @@ PyObject *Ptn_Hist_Iter_Pos_Set(Bptn_hist_iter_t iter, PyObject *py_str)
 	rc = bstore_ptn_hist_iter_pos_set(iter->iter, pos);
  out:
 	return PyInt_FromLong(rc);
+}
+
+PyObject *Ptn_Hist_Iter_Obj(Bptn_hist_iter_t i)
+{
+	struct bptn_hist_s hist, *p;
+	p = bstore_ptn_hist_iter_obj(i->iter, &hist);
+	if (!p)
+		return Py_None;
+	return __make_ptn_hist(p);
 }
 
 PyObject *Ptn_Hist_Iter_Next(Bptn_hist_iter_t i)
@@ -981,6 +1072,15 @@ PyObject *Comp_Hist_Iter_Pos_Set(Bcomp_hist_iter_t iter, PyObject *py_str)
 	rc = bstore_comp_hist_iter_pos_set(iter->iter, pos);
  out:
 	return PyInt_FromLong(rc);
+}
+
+PyObject *Comp_Hist_Iter_Obj(Bcomp_hist_iter_t i)
+{
+	struct bcomp_hist_s hist, *p;
+	p = bstore_comp_hist_iter_obj(i->iter, &hist);
+	if (!p)
+		return Py_None;
+	return __make_comp_hist(p);
 }
 
 PyObject *Comp_Hist_Iter_Next(Bcomp_hist_iter_t i)
@@ -1584,6 +1684,7 @@ void Tkn_Iter_Free(Btkn_iter_t iter);
 uint64_t Tkn_Iter_Card(Btkn_iter_t i);
 PyObject *Tkn_Iter_First(Btkn_iter_t iter);
 PyObject *Tkn_Iter_Find_By_Type(Btkn_iter_t iter, Btkn_type_t type_id);
+PyObject *Tkn_Iter_Obj(Btkn_iter_t iter);
 PyObject *Tkn_Iter_Next(Btkn_iter_t iter);
 
 Bptn_iter_t Ptn_Iter_New(Bstore_t bs);
@@ -1591,6 +1692,7 @@ void Ptn_Iter_Free(Bptn_iter_t iter);
 uint64_t Ptn_Iter_Card(Bptn_iter_t i);
 typedef uint64_t Bptn_id_t;
 PyObject *Ptn_Iter_Find(Bptn_iter_t iter, uint32_t start);
+PyObject *Ptn_Iter_Obj(Bptn_iter_t iter);
 PyObject *Ptn_Iter_Next(Bptn_iter_t iter);
 PyObject *Ptn_Iter_Prev(Bptn_iter_t iter);
 PyObject *Ptn_Iter_First(Bptn_iter_t iter);
@@ -1602,6 +1704,7 @@ void Msg_Iter_Free(Bmsg_iter_t i);
 uint64_t Msg_Iter_Card(Bmsg_iter_t i);
 PyObject *Msg_Iter_Find(Bmsg_iter_t i, Bptn_id_t ptn_id,
 			uint32_t start, Bcomp_id_t comp_id);
+PyObject *Msg_Iter_Obj(Bmsg_iter_t i);
 PyObject *Msg_Iter_Next(Bmsg_iter_t i);
 PyObject *Msg_Iter_Prev(Bmsg_iter_t i);
 PyObject *Msg_Iter_First(Bmsg_iter_t i);
@@ -1611,24 +1714,28 @@ Bptn_tkn_iter_t Ptn_Tkn_Iter_New(Bstore_t bs);
 void Ptn_Tkn_Iter_Free(Bptn_tkn_iter_t i);
 uint64_t Ptn_Tkn_Iter_Card(Bptn_tkn_iter_t i);
 PyObject *Ptn_Tkn_Iter_Find(Bptn_tkn_iter_t iter, Bptn_id_t ptn_id, uint64_t pos);
+PyObject *Ptn_Tkn_Iter_Obj(Bptn_tkn_iter_t iter);
 PyObject *Ptn_Tkn_Iter_Next(Bptn_tkn_iter_t iter);
 
 Btkn_hist_iter_t Tkn_Hist_Iter_New(Bstore_t bs);
 void Tkn_Hist_Iter_Free(Btkn_hist_iter_t i);
 PyObject *Tkn_Hist_Iter_Find(Btkn_hist_iter_t i, uint64_t tkn_id,
 			     uint32_t bin_width, uint32_t time);
+PyObject *Tkn_Hist_Iter_Obj(Btkn_hist_iter_t i);
 PyObject *Tkn_Hist_Iter_Next(Btkn_hist_iter_t i);
 
 Bptn_hist_iter_t Ptn_Hist_Iter_New(Bstore_t bs);
 void Ptn_Hist_Iter_Free(Bptn_hist_iter_t i);
 PyObject *Ptn_Hist_Iter_Find(Bptn_hist_iter_t i, uint64_t ptn_id,
 			     uint32_t bin_width, uint32_t time);
+PyObject *Ptn_Hist_Iter_Obj(Bptn_hist_iter_t i);
 PyObject *Ptn_Hist_Iter_Next(Bptn_hist_iter_t i);
 
 Bcomp_hist_iter_t Comp_Hist_Iter_New(Bstore_t bs);
 void Comp_Hist_Iter_Free(Bcomp_hist_iter_t i);
 PyObject *Comp_Hist_Iter_Find(Bcomp_hist_iter_t i, uint64_t comp_id,
 			      uint32_t bin_width, uint32_t time);
+PyObject *Comp_Hist_Iter_Obj(Bcomp_hist_iter_t i);
 PyObject *Comp_Hist_Iter_Next(Bcomp_hist_iter_t i);
 
 PyObject *Ptn_Hist(Bstore_t bs, PyObject * id_list, uint32_t bin_width,
@@ -1639,6 +1746,8 @@ PyObject *Comp_Ptn_Hist(Bstore_t bs, PyObject *comp_id_list, PyObject *ptn_id_li
 			uint32_t bin_width, uint32_t start_time, uint32_t end_time);
 Btkn_type_t Tkn_Type_Get(Bstore_t bs, const char *name);
 
+PyObject *Msg_Iter_Pos(Bmsg_iter_t iter);
+PyObject *Msg_Iter_Pos_Set(Bmsg_iter_t iter, PyObject *py_str);
 PyObject *Tkn_Iter_Pos(Btkn_iter_t iter);
 PyObject *Tkn_Iter_Pos_Set(Btkn_iter_t iter, PyObject *py_str);
 PyObject *Ptn_Iter_Pos(Bptn_iter_t iter);
