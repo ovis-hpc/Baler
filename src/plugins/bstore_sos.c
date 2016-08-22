@@ -1106,8 +1106,23 @@ static btkn_type_t bs_tkn_type_get(bstore_t bs, const char *typ_name, size_t nam
 	return type_id;
 }
 
+#define TKN_ITER		0x01
+
+#define MSG_ITER_PTN_TIME	0x11
+#define MSG_ITER_COMP_TIME	0x12
+#define MSG_ITER_TIME_COMP	0x13
+
+#define PTN_ITER_ID		0x21
+#define PTN_ITER_FIRST_SEEN	0x22
+
+#define PTN_TKN_ITER		0x31
+#define TKN_HIST_ITER		0x41
+#define PTN_HIST_ITER		0x51
+#define COMP_HIST_ITER		0x61
+
 typedef struct bsos_iter_s {
 	bstore_t bs;
+	int iter_type;
 	sos_iter_t iter;
 	uint64_t arg;
 	btkn_id_t tkn_id;
@@ -1119,24 +1134,34 @@ typedef struct bsos_iter_s {
 	void *cmp_ctxt;
 } *bsos_iter_t;
 
+struct bstore_iter_pos_s {
+	int iter_type;
+	struct sos_pos sos_pos;
+};
+
 static bstore_iter_pos_t __iter_pos(bsos_iter_t iter)
 {
 	int rc;
-	sos_pos_t pos = malloc(sizeof *pos);
+	struct bstore_iter_pos_s *pos;
+	if (!iter->iter)
+		return NULL;
+	pos = malloc(sizeof *pos);
 	if (!pos)
 		return NULL;
-	rc = sos_iter_pos(iter->iter, pos);
+	rc = sos_iter_pos(iter->iter, &pos->sos_pos);
 	if (rc) {
 		errno = rc;
 		free(pos);
 		pos = NULL;
 	}
+	pos->iter_type = iter->iter_type;
 	return pos;
 }
 
-static int __iter_pos_set(bsos_iter_t iter, bstore_iter_pos_t pos)
+static int __iter_pos_set(bsos_iter_t iter, bstore_iter_pos_t _pos)
 {
-	return sos_iter_set(iter->iter, (sos_pos_t)pos);
+	struct bstore_iter_pos_s *pos = (typeof(pos))_pos;
+	return sos_iter_set(iter->iter, (sos_pos_t)&pos->sos_pos);
 }
 
 static void bs_iter_pos_free(bstore_iter_t iter, bstore_iter_pos_t pos)
@@ -1147,13 +1172,15 @@ static void bs_iter_pos_free(bstore_iter_t iter, bstore_iter_pos_t pos)
 static const char *bs_iter_pos_to_str(bstore_iter_t iter, bstore_iter_pos_t _pos)
 {
 	int i;
-	sos_pos_t pos = (sos_pos_t)_pos;
-	char *s, *pos_str = malloc(sizeof(struct sos_pos) << 1 + 1);
+	struct bstore_iter_pos_s *pos = (typeof(pos))_pos;
+	char *s, *pos_str = malloc(((sizeof(pos->sos_pos) + 1) << 1) + 1);
 	if (!pos_str)
 		return NULL;
 	s = pos_str;
-	for (i = 0; i < sizeof(pos->data); i++) {
-		sprintf(s, "%02hhX", pos->data[i]);
+	sprintf(s, "%02hhX", (unsigned char)pos->iter_type);
+	s += 2;
+	for (i = 0; i < sizeof(pos->sos_pos); i++) {
+		sprintf(s, "%02hhX", pos->sos_pos.data[i]);
 		s += 2;
 	}
 	return pos_str;
@@ -1161,16 +1188,26 @@ static const char *bs_iter_pos_to_str(bstore_iter_t iter, bstore_iter_pos_t _pos
 
 static bstore_iter_pos_t bs_iter_pos_from_str(bstore_iter_t iter, const char *pos_str)
 {
-	int i;
-	sos_pos_t pos = malloc(sizeof *pos);
+	int i, n;
+	char iter_type;
+	struct bstore_iter_pos_s *pos = malloc(sizeof *pos);
 	if (!pos)
 		return NULL;
-	for (i = 0; i < sizeof(pos->data); i++) {
-		int n = sscanf(pos_str, "%02hhX", &pos->data[i]);
-		assert(n == 1);
+	n = sscanf(pos_str, "%02hhX", &iter_type);
+	if (n != 1)
+		goto err;
+	pos->iter_type = iter_type;
+	pos_str += 2;
+	for (i = 0; i < sizeof(pos->sos_pos.data); i++) {
+		int n = sscanf(pos_str, "%02hhX", &pos->sos_pos.data[i]);
+		if (n != 1)
+			goto err;
 		pos_str += 2;
 	}
 	return pos;
+ err:
+	free(pos);
+	return NULL;
 }
 
 static bstore_iter_pos_t bs_tkn_iter_pos(btkn_iter_t iter)
@@ -1178,9 +1215,14 @@ static bstore_iter_pos_t bs_tkn_iter_pos(btkn_iter_t iter)
 	return __iter_pos((bsos_iter_t)iter);
 }
 
-static int bs_tkn_iter_pos_set(btkn_iter_t iter, bstore_iter_pos_t pos)
+static int bs_tkn_iter_pos_set(btkn_iter_t iter, bstore_iter_pos_t _pos)
 {
-	return __iter_pos_set((bsos_iter_t)iter, pos);
+	bsos_iter_t i = (bsos_iter_t)iter;
+	struct bstore_iter_pos_s *pos = _pos;
+	/* If the sos_iter already exists and is the correct type, use it */
+	if (!i->iter || (i->iter_type != pos->iter_type))
+		return ENOENT;
+	return __iter_pos_set(i, pos);
 }
 
 static btkn_iter_t bs_tkn_iter_new(bstore_t bs)
@@ -1189,6 +1231,7 @@ static btkn_iter_t bs_tkn_iter_new(bstore_t bs)
 	bsos_iter_t ti = calloc(1, sizeof(*ti));
 	if (ti) {
 		ti->bs = bs;
+		ti->iter_type = TKN_ITER;
 		ti->iter = sos_attr_iter_new(bss->tkn_id_attr);
 		if (!ti->iter)
 			goto err;
@@ -1279,9 +1322,37 @@ static bstore_iter_pos_t bs_ptn_iter_pos(bptn_iter_t iter)
 	return __iter_pos((bsos_iter_t)iter);
 }
 
-static int bs_ptn_iter_pos_set(bptn_iter_t iter, bstore_iter_pos_t pos)
+static int bs_ptn_iter_pos_set(bptn_iter_t iter, bstore_iter_pos_t _pos)
 {
-	return __iter_pos_set((bsos_iter_t)iter, pos);
+	bsos_iter_t i = (bsos_iter_t)iter;
+	struct bstore_iter_pos_s *pos = _pos;
+	bstore_sos_t bss = (bstore_sos_t)i->bs;
+
+	/* If the sos_iter already exists and is the correct type, use it */
+	if (i->iter && i->iter_type == pos->iter_type)
+		goto set_pos;
+	/* Free the existing iterator if present */
+	if (i->iter) {
+		sos_iter_free(i->iter);
+		i->iter = NULL;
+	}
+	/* Allocate a new iterator of the correct type */
+	switch (pos->iter_type) {
+	case PTN_ITER_ID:
+		i->iter_type = PTN_ITER_ID;
+		i->iter = sos_attr_iter_new(bss->ptn_id_attr);
+		break;
+	case PTN_ITER_FIRST_SEEN:
+		i->iter_type = PTN_ITER_FIRST_SEEN;
+		i->iter = sos_attr_iter_new(bss->first_seen_attr);
+		break;
+	default:
+		return ENOENT;
+	}
+	if (!i->iter)
+		return ENOENT;
+ set_pos:
+	return __iter_pos_set(i, pos);
 }
 
 static bptn_iter_t bs_ptn_iter_new(bstore_t bs)
@@ -1380,6 +1451,7 @@ static bptn_t bs_ptn_iter_find(bptn_iter_t iter, time_t start)
 	if (i->iter)
 		sos_iter_free(i->iter);
 	if (start > 0) {
+		i->iter_type = PTN_ITER_FIRST_SEEN;
 		i->iter = sos_attr_iter_new(bss->first_seen_attr);
 		if (!i->iter)
 			goto err;
@@ -1389,6 +1461,7 @@ static bptn_t bs_ptn_iter_find(bptn_iter_t iter, time_t start)
 		kv->len = 8;
 		rc = sos_iter_sup(i->iter, time_key);
 	} else {
+		i->iter_type = PTN_ITER_ID;
 		i->iter = sos_attr_iter_new(bss->ptn_id_attr);
 		if (!i->iter)
 			goto err;
@@ -1410,6 +1483,7 @@ static bptn_t bs_ptn_iter_first(bptn_iter_t iter)
 	i->ptn_id = 0;
 	if (i->iter)
 		sos_iter_free(i->iter);
+	i->iter_type = PTN_ITER_ID;
 	i->iter = sos_attr_iter_new(bss->ptn_id_attr);
 	if (!i->iter)
 		return NULL;
@@ -1427,6 +1501,7 @@ static bptn_t bs_ptn_iter_last(bptn_iter_t iter)
 	i->ptn_id = 0;
 	if (i->iter)
 		sos_iter_free(i->iter);
+	i->iter_type = PTN_ITER_ID;
 	i->iter = sos_attr_iter_new(bss->ptn_id_attr);
 	if (!i->iter)
 		return NULL;
@@ -1470,9 +1545,16 @@ static bstore_iter_pos_t bs_ptn_tkn_iter_pos(bptn_tkn_iter_t iter)
 	return __iter_pos((bsos_iter_t)iter);
 }
 
-static int bs_ptn_tkn_iter_pos_set(bptn_tkn_iter_t iter, bstore_iter_pos_t pos)
+static int bs_ptn_tkn_iter_pos_set(bptn_tkn_iter_t iter, bstore_iter_pos_t _pos)
 {
-	return __iter_pos_set((bsos_iter_t)iter, pos);
+	bsos_iter_t i = (bsos_iter_t)iter;
+	struct bstore_iter_pos_s *pos = _pos;
+
+	/* If the sos_iter already exists and is the correct type, use it */
+	if (!i->iter || (i->iter_type != pos->iter_type))
+		return ENOENT;
+
+	return __iter_pos_set(i, pos);
 }
 
 static bptn_tkn_iter_t bs_ptn_tkn_iter_new(bstore_t bs)
@@ -1481,6 +1563,7 @@ static bptn_tkn_iter_t bs_ptn_tkn_iter_new(bstore_t bs)
 	bsos_iter_t pti = calloc(1, sizeof(*pti));
 	if (pti) {
 		pti->bs = bs;
+		pti->iter_type = PTN_TKN_ITER;
 		pti->iter = sos_attr_iter_new(bss->ptn_pos_tkn_key_attr);
 		if (!pti->iter)
 			goto err;
@@ -1504,13 +1587,50 @@ static uint64_t bs_ptn_tkn_iter_card(bptn_tkn_iter_t i)
 	return sos_iter_card(((bsos_iter_t)i)->iter);
 }
 
+struct msg_iter_pos_s {
+	int type;		/* ptn:time, comp:time, time:comp */
+	struct sos_pos pos;
+};
+
 static bstore_iter_pos_t bs_msg_iter_pos(bmsg_iter_t iter)
 {
 	return __iter_pos((bsos_iter_t)iter);
 }
 
-static int bs_msg_iter_pos_set(bmsg_iter_t iter, bstore_iter_pos_t pos)
+static int bs_msg_iter_pos_set(bmsg_iter_t iter, bstore_iter_pos_t _pos)
 {
+	bsos_iter_t i = (bsos_iter_t)iter;
+	struct bstore_iter_pos_s *pos = _pos;
+	bstore_sos_t bss = (bstore_sos_t)i->bs;
+
+	/* If the sos_iter already exists and is the correct type, use it */
+	if (i->iter && i->iter_type == pos->iter_type)
+		goto set_pos;
+	/* Free the existing iterator if present */
+	if (i->iter) {
+		sos_iter_free(i->iter);
+		i->iter = NULL;
+	}
+	/* Allocate a new iterator of the correct type */
+	switch (pos->iter_type) {
+	case MSG_ITER_PTN_TIME:
+		i->iter_type = MSG_ITER_PTN_TIME;
+		i->iter = sos_attr_iter_new(bss->pt_key_attr);
+		break;
+	case MSG_ITER_COMP_TIME:
+		i->iter_type = MSG_ITER_COMP_TIME;
+		i->iter = sos_attr_iter_new(bss->ct_key_attr);
+		break;
+	case MSG_ITER_TIME_COMP:
+		i->iter_type = MSG_ITER_TIME_COMP;
+		i->iter = sos_attr_iter_new(bss->tc_key_attr);
+		break;
+	default:
+		return ENOENT;
+	}
+	if (!i->iter)
+		return ENOENT;
+ set_pos:
 	return __iter_pos_set((bsos_iter_t)iter, pos);
 }
 
@@ -1648,6 +1768,7 @@ bs_msg_iter_find(bmsg_iter_t iter, bptn_id_t ptn_id, time_t start,
 	i->cmp_ctxt = ctxt;
 
 	if (ptn_id) {
+		i->iter_type = MSG_ITER_PTN_TIME;
 		i->iter = sos_attr_iter_new(bss->pt_key_attr);
 		if (!i->iter)
 			goto err;
@@ -1655,6 +1776,7 @@ bs_msg_iter_find(bmsg_iter_t iter, bptn_id_t ptn_id, time_t start,
 		pt_key->ptn_id = htobe64(ptn_id);
 		pt_key->usecs = htobe64(usecs);
 	} else if (comp_id) {
+		i->iter_type = MSG_ITER_COMP_TIME;
 		i->iter = sos_attr_iter_new(bss->ct_key_attr);
 		if (!i->iter)
 			goto err;
@@ -1662,6 +1784,7 @@ bs_msg_iter_find(bmsg_iter_t iter, bptn_id_t ptn_id, time_t start,
 		ct_key->comp_id = htobe64(comp_id);
 		ct_key->usecs = htobe64(usecs);
 	} else {
+		i->iter_type = MSG_ITER_TIME_COMP;
 		i->iter = sos_attr_iter_new(bss->tc_key_attr);
 		if (!i->iter)
 			goto err;
@@ -1694,6 +1817,7 @@ bs_msg_iter_first(bmsg_iter_t iter)
 
 	if (i->iter)
 		sos_iter_free(i->iter);
+	i->iter_type = MSG_ITER_TIME_COMP;
 	i->iter = sos_attr_iter_new(bss->tc_key_attr);
 	if (!i->iter)
 		return NULL;
@@ -1718,6 +1842,7 @@ bs_msg_iter_last(bmsg_iter_t iter)
 
 	if (i->iter)
 		sos_iter_free(i->iter);
+	i->iter_type = MSG_ITER_TIME_COMP;
 	i->iter = sos_attr_iter_new(bss->tc_key_attr);
 	if (!i->iter)
 		return NULL;
@@ -2220,9 +2345,14 @@ static bstore_iter_pos_t bs_tkn_hist_iter_pos(btkn_hist_iter_t iter)
 	return __iter_pos((bsos_iter_t)iter);
 }
 
-static int bs_tkn_hist_iter_pos_set(btkn_hist_iter_t iter, bstore_iter_pos_t pos)
+static int bs_tkn_hist_iter_pos_set(btkn_hist_iter_t iter, bstore_iter_pos_t _pos)
 {
-	return __iter_pos_set((bsos_iter_t)iter, pos);
+	bsos_iter_t i = (bsos_iter_t)iter;
+	struct bstore_iter_pos_s *pos = _pos;
+	/* If the sos_iter already exists and is the correct type, use it */
+	if (!i->iter || (i->iter_type != pos->iter_type))
+		return ENOENT;
+	return __iter_pos_set(i, pos);
 }
 
 btkn_hist_iter_t bs_tkn_hist_iter_new(bstore_t bs)
@@ -2231,6 +2361,7 @@ btkn_hist_iter_t bs_tkn_hist_iter_new(bstore_t bs)
 	bsos_iter_t thi = calloc(1, sizeof(*thi));
 	if (thi) {
 		thi->bs = bs;
+		thi->iter_type = TKN_HIST_ITER;
 		thi->iter = sos_attr_iter_new(bss->tkn_hist_key_attr);
 		if (!thi->iter)
 			goto err;
@@ -2366,9 +2497,14 @@ static bstore_iter_pos_t bs_ptn_hist_iter_pos(bptn_hist_iter_t iter)
 	return __iter_pos((bsos_iter_t)iter);
 }
 
-static int bs_ptn_hist_iter_pos_set(bptn_hist_iter_t iter, bstore_iter_pos_t pos)
+static int bs_ptn_hist_iter_pos_set(bptn_hist_iter_t iter, bstore_iter_pos_t _pos)
 {
-	return __iter_pos_set((bsos_iter_t)iter, pos);
+	bsos_iter_t i = (bsos_iter_t)iter;
+	struct bstore_iter_pos_s *pos = _pos;
+	/* If the sos_iter already exists and is the correct type, use it */
+	if (!i->iter || (i->iter_type != pos->iter_type))
+		return ENOENT;
+	return __iter_pos_set(i, pos);
 }
 
 bptn_hist_iter_t bs_ptn_hist_iter_new(bstore_t bs)
@@ -2377,6 +2513,7 @@ bptn_hist_iter_t bs_ptn_hist_iter_new(bstore_t bs)
 	bsos_iter_t phi = calloc(1, sizeof(*phi));
 	if (phi) {
 		phi->bs = bs;
+		phi->iter_type = PTN_HIST_ITER;
 		phi->iter = sos_attr_iter_new(bss->ptn_hist_key_attr);
 		if (!phi->iter)
 			goto err;
@@ -2519,9 +2656,14 @@ static bstore_iter_pos_t bs_comp_hist_iter_pos(bcomp_hist_iter_t iter)
 	return __iter_pos((bsos_iter_t)iter);
 }
 
-static int bs_comp_hist_iter_pos_set(bcomp_hist_iter_t iter, bstore_iter_pos_t pos)
+static int bs_comp_hist_iter_pos_set(bcomp_hist_iter_t iter, bstore_iter_pos_t _pos)
 {
-	return __iter_pos_set((bsos_iter_t)iter, pos);
+	bsos_iter_t i = (bsos_iter_t)iter;
+	struct bstore_iter_pos_s *pos = _pos;
+	/* If the sos_iter already exists and is the correct type, use it */
+	if (!i->iter || (i->iter_type != pos->iter_type))
+		return ENOENT;
+	return __iter_pos_set(i, pos);
 }
 
 bcomp_hist_iter_t bs_comp_hist_iter_new(bstore_t bs)
@@ -2530,6 +2672,7 @@ bcomp_hist_iter_t bs_comp_hist_iter_new(bstore_t bs)
 	bsos_iter_t chi = calloc(1, sizeof(*chi));
 	if (chi) {
 		chi->bs = bs;
+		chi->iter_type = COMP_HIST_ITER;
 		chi->iter = sos_attr_iter_new(bss->comp_hist_key_attr);
 		if (!chi->iter)
 			goto err;
