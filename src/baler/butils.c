@@ -56,6 +56,12 @@
  * \brief Implementation of functions (and some global variables) defined in
  * butils.h
  */
+#ifndef _XOPEN_SOURCE
+#define _XOPEN_SOURCE
+#endif
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
 #include "butils.h"
 #include <linux/limits.h>
 #include <string.h>
@@ -1187,4 +1193,23 @@ const char *berrnostr(int _errno)
 {
 	return brcstr(_errno);
 }
+
+time_t bparse_ts(const char *ts)
+{
+	struct tm tm = {0};
+	char *ts_ret;
+	time_t t;
+	ts_ret = strptime(ts, "%F %T", &tm);
+	if (ts_ret != NULL) {
+		tm.tm_isdst = -1;
+		t = mktime(&tm);
+	} else {
+		/* try seconds since Epoch instead */
+		t = strtol(ts, &ts_ret, 0);
+		if (*ts_ret != '\0')
+			return -1;
+	}
+	return t;
+}
+
 /* END OF FILE */

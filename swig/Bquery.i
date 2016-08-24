@@ -1031,13 +1031,15 @@ static PyObject *__make_comp_hist(bcomp_hist_t comp_h)
 }
 
 PyObject *Comp_Hist_Iter_Find(Bcomp_hist_iter_t i, uint64_t comp_id,
-			      uint32_t bin_width, uint32_t time)
+			      uint32_t bin_width, uint32_t time,
+			      uint64_t ptn_id)
 {
 	struct bcomp_hist_s hist, *p;
 
 	hist.comp_id = comp_id;
 	hist.bin_width = bin_width;
 	hist.time = time;
+	hist.ptn_id = ptn_id;
 
 	p = bstore_comp_hist_iter_find(i->iter, &hist);
 	if (!p)
@@ -1734,7 +1736,8 @@ PyObject *Ptn_Hist_Iter_Next(Bptn_hist_iter_t i);
 Bcomp_hist_iter_t Comp_Hist_Iter_New(Bstore_t bs);
 void Comp_Hist_Iter_Free(Bcomp_hist_iter_t i);
 PyObject *Comp_Hist_Iter_Find(Bcomp_hist_iter_t i, uint64_t comp_id,
-			      uint32_t bin_width, uint32_t time);
+			      uint32_t bin_width, uint32_t time,
+			      uint64_t ptn_id);
 PyObject *Comp_Hist_Iter_Obj(Bcomp_hist_iter_t i);
 PyObject *Comp_Hist_Iter_Next(Bcomp_hist_iter_t i);
 

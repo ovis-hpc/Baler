@@ -514,6 +514,12 @@ uint64_t bgetenv_u64(const char *name, uint64_t _default)
 	return strtoull(var, NULL, 0);
 }
 
+/**
+ * \param ts the string in "yyyy-mm-dd HH:MM:SS" or "sec-since-epoch" format.
+ * \retval sec the number of seconds since epoch.
+ */
+time_t bparse_ts(const char *ts);
+
 /*** BIN utility ***/
 
 /**
@@ -543,6 +549,5 @@ int bmetricbin_getbinidx(struct bmetricbin *bin, double value);
 
 const char *brcstr(int rc);
 const char *berrnostr(int _errno);
-
 #endif // _BUTILS_H
 /**\}*/

@@ -48,6 +48,7 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+#include <assert.h>
 #include "bset.h"
 #include "butils.h"
 #include <stdlib.h>
@@ -438,6 +439,445 @@ int brange_u32_iter_set_pos(struct brange_u32_iter *itr, uint32_t pos)
 {
 	int rc = 0;
 	struct brange_u32 *rng;
+	rng = itr->first_range;
+	while (rng) {
+		if (pos < rng->a) {
+			/* the rest of the ranges are greater than pos,
+			 * no need to continue. */
+			rng = NULL;
+			break;
+		}
+		if (pos <= rng->b) {
+			/* found it */
+			break;
+		}
+		/* otherwise, continue searching */
+		rng = TAILQ_NEXT(rng, link);
+	}
+	if (rng) {
+		itr->current_range = rng;
+		itr->current_value = pos;
+	}
+out:
+	return rc;
+}
+
+struct bset_u64* bset_u64_alloc(int hsize)
+{
+	struct bset_u64 *set = (typeof(set)) calloc(1, sizeof(*set));
+	if (!set)
+		goto err0;
+	if (bset_u64_init(set, hsize) == -1)
+		goto err1;
+	return set;
+err1:
+	free(set);
+err0:
+	return NULL;
+}
+
+int bset_u64_init(struct bset_u64 *set, int hsize)
+{
+	if (!set)
+		return -1;
+	if (!hsize)
+		hsize = BSET_DEFAULT_HSIZE;
+	set->hash = (typeof(set->hash)) calloc(hsize, sizeof(*set->hash));
+	if (!set->hash)
+		return -1;
+	set->hsize = hsize;
+	set->count = 0;
+	return 0;
+}
+
+void bset_u64_clear(struct bset_u64 *set)
+{
+	if (!set)
+		return;
+	int i;
+	for (i=0; i<set->hsize; i++) {
+		struct blist_u64 *elm;
+		while ((elm = LIST_FIRST(&set->hash[i]))) {
+			LIST_REMOVE(elm, link);
+			free(elm);
+		}
+	}
+	free(set->hash);
+}
+
+void bset_u64_free(struct bset_u64 *set)
+{
+	bset_u64_clear(set);
+	free(set);
+}
+
+int bset_u64_exist(struct bset_u64 *set, uint64_t val)
+{
+	uint64_t idx = val % set->hsize;
+	struct blist_u64_head *lh = &set->hash[idx];
+	struct blist_u64 *elm;
+	LIST_FOREACH(elm, lh, link) {
+		if (elm->data == val)
+			return 1;
+	}
+	return 0;
+}
+
+/**
+ * The same as ::bset_u64_exist, but also export index \a idx of the \a val.
+ * \param set The pointer to ::bset_u64.
+ * \param val The value to be inserted.
+ * \param[out] idx The (output) index of \a val.
+ */
+int bset_u64_exist_idx(struct bset_u64 *set, uint64_t val, uint64_t *idx)
+{
+	*idx = val % set->hsize;
+	struct blist_u64_head *lh = &set->hash[*idx];
+	struct blist_u64 *elm;
+	LIST_FOREACH(elm, lh, link) {
+		if (elm->data == val)
+			return 1;
+	}
+	return 0;
+}
+
+int bset_u64_insert(struct bset_u64 *set, uint64_t val)
+{
+	uint64_t idx;
+	if (bset_u64_exist_idx(set, val, &idx))
+		return EEXIST;
+	struct blist_u64 *elm = (typeof(elm)) malloc(sizeof(*elm));
+	if (!elm)
+		return ENOMEM;
+	elm->data = val;
+	LIST_INSERT_HEAD(&set->hash[idx], elm, link);
+	set->count++;
+	return 0;
+}
+
+int bset_u64_remove(struct bset_u64 *set, uint64_t val)
+{
+	int idx = val % set->hsize;
+	struct blist_u64 *elm;
+	LIST_FOREACH(elm, &set->hash[idx], link) {
+		if (elm->data != val)
+			continue;
+		LIST_REMOVE(elm, link);
+		free(elm);
+		return 0;
+	}
+	return ENOENT;
+}
+
+struct bset_u64_iter* bset_u64_iter_new(struct bset_u64 *set)
+{
+	struct bset_u64_iter *iter = calloc(1, sizeof(*iter));
+	if (!iter)
+		return NULL;
+	iter->set = set;
+	return iter;
+}
+
+void bset_u64_iter_free(struct bset_u64_iter *iter)
+{
+	free(iter);
+}
+
+int bset_u64_iter_next(struct bset_u64_iter *iter, uint64_t *out)
+{
+	while (!iter->elem && iter->next_idx < iter->set->hsize) {
+		iter->elem = LIST_FIRST(&iter->set->hash[iter->next_idx++]);
+	}
+
+	if (!iter->elem)
+		return ENOENT;
+
+	*out = iter->elem->data;
+	iter->elem = LIST_NEXT(iter->elem, link);
+	return 0;
+}
+
+int bset_u64_iter_reset(struct bset_u64_iter *iter)
+{
+	iter->next_idx = 0;
+	iter->elem = NULL;
+	return 0;
+}
+
+int uint64_t_cmp(const void *p1, const void *p2)
+{
+	/* 0 - 4294967295 = 1, so *p1 - *p2 is unsafe */
+	if (*(uint64_t*)p1 < *(uint64_t*)p2)
+		return -1;
+	if (*(uint64_t*)p1 > *(uint64_t*)p2)
+		return 1;
+	return 0;
+}
+
+int bset_u64_to_brange_u64(struct bset_u64 *set, struct brange_u64_head *head)
+{
+	int rc = 0;
+	uint64_t *data = malloc(sizeof(*data) * set->count);
+	if (!data) {
+		rc = ENOENT;
+		goto err1;
+	}
+	struct bset_u64_iter *iter = bset_u64_iter_new(set);
+	if (!iter) {
+		rc = errno;
+		goto err2;
+	}
+	uint64_t v;
+	int i = 0;
+	while (bset_u64_iter_next(iter, &v) == 0) {
+		data[i++] = v;
+	}
+	free(iter); /* iter is not needed anymore */
+	iter = NULL;
+	qsort(data, set->count, sizeof(data[0]), uint64_t_cmp);
+	struct brange_u64 *pr; /* previous range */
+	struct brange_u64 *r; /* current range */
+	/* init the first range */
+	r = calloc(1, sizeof(*r));
+	if (!r) {
+		rc = errno;
+		goto err3;
+	}
+	r->a = r->b = data[0];
+	TAILQ_INSERT_HEAD(head, r, link);
+
+	for (i=1; i<set->count; i++) {
+		if (data[i] - r->b == 1) {
+			r->b = data[i];
+			continue;
+		}
+		/* else create new range */
+		pr = r;
+		r = calloc(1, sizeof(*r));
+		if (!r) {
+			rc = errno;
+			goto err4;
+		}
+		r->a = r->b = data[i];
+		TAILQ_INSERT_AFTER(head, pr, r, link);
+	}
+	free(data);
+	data = NULL;
+
+	return 0;
+
+err4:
+	while ((r = TAILQ_FIRST(head))) {
+		TAILQ_REMOVE(head, r, link);
+		free(r);
+	}
+err3:
+	free(iter);
+err2:
+	free(data);
+err1:
+	free(head);
+err0:
+	return rc;
+}
+
+struct bset_u64 *bset_u64_from_numlist(const char *num_lst, int hsize)
+{
+	int rc = 0;
+	int tn, sn;
+	uint64_t a, b, i;
+	const char *s = num_lst;
+	struct bset_u64 *set = bset_u64_alloc(hsize);
+	if (!set) {
+		goto err0;
+	}
+
+	while (*s) {
+		tn = sscanf(s, "%lu%n - %lu%n", &a, &sn, &b, &sn);
+		switch (tn) {
+		case 1:
+			b = a;
+			break;
+		case 2:
+			/* do nothing */
+			break;
+		default:
+			/* Parse error */
+			errno = EINVAL;
+			goto err1;
+		}
+		s += sn;
+		for (i = a; i <= b; i++) {
+			rc = bset_u64_insert(set, i);
+			if (rc && rc != EEXIST) {
+				errno = rc;
+				goto err1;
+			}
+		}
+		while (*s && *s == ',')
+			s++;
+	}
+
+	return set;
+err1:
+	bset_u64_free(set);
+err0:
+	return NULL;
+}
+
+static
+int __u64cmp(const void *_a, const void *_b)
+{
+	uint64_t a = *(uint64_t*)_a;
+	uint64_t b = *(uint64_t*)_b;
+	if (a<b)
+		return -1;
+	if (a>b)
+		return 1;
+	return 0;
+}
+
+void bset_u64_dump(struct bset_u64 *set)
+{
+	int i;
+	uint64_t *num = calloc(sizeof(uint64_t), set->count);
+	struct bset_u64_iter *itr = bset_u64_iter_new(set);
+	i = 0;
+	while (0 == bset_u64_iter_next(itr, &num[i])) {
+		i++;
+	}
+	assert(i == set->count);
+	qsort(num, set->count, sizeof(*num), __u64cmp);
+	printf("-------- set dump (sorted) ---------\n");
+	for (i = 0; i < set->count; i++) {
+		printf("%lu\n", num[i]);
+	}
+	printf("----------- end -----------\n");
+	bset_u64_iter_free(itr);
+	free(num);
+}
+
+struct brange_u64_iter *brange_u64_iter_new(struct brange_u64 *first)
+{
+        struct brange_u64_iter *itr = calloc(1, sizeof(*itr));
+        if (!itr)
+                return NULL;
+        itr->first_range = first;
+        itr->current_range = first;
+        itr->current_value = first->a;
+        return itr;
+}
+
+void brange_u64_iter_free(struct brange_u64_iter *itr)
+{
+	free(itr);
+}
+
+int brange_u64_iter_get_value(struct brange_u64_iter *itr, uint64_t *v)
+{
+	if (itr->current_range) {
+		*v = itr->current_value;
+		return 0;
+	}
+	return ENOENT;
+}
+
+int brange_u64_iter_next(struct brange_u64_iter *itr, uint64_t *v)
+{
+again:
+	if (!itr->current_range)
+		return ENOENT;
+	if (itr->current_value == itr->current_range->b) {
+		itr->current_range = TAILQ_NEXT(itr->current_range, link);
+		goto again;
+	}
+
+	if (itr->current_value < itr->current_range->a) {
+		*v = itr->current_value = itr->current_range->a;
+		return 0;
+	}
+
+	*v = ++itr->current_value;
+
+	return 0;
+}
+
+int brange_u64_iter_begin(struct brange_u64_iter *itr, uint64_t *v)
+{
+	if (!itr) {
+		*v = 0;
+		return 0;
+	}
+	itr->current_range = itr->first_range;
+	*v = itr->current_value = itr->current_range->a;
+	return 0;
+}
+
+int brange_u64_iter_end(struct brange_u64_iter *itr, uint64_t *v)
+{
+	if (!itr) {
+		*v = 0xFFFFFFFF;
+		return 0;
+	}
+	if (!itr->current_range) {
+		itr->current_range = itr->first_range;
+	}
+	struct brange_u64 *next;
+	while ((next = TAILQ_NEXT(itr->current_range, link))) {
+		itr->current_range = next;
+	}
+	*v = itr->current_value = itr->current_range->b;
+	return 0;
+}
+
+int brange_u64_iter_fwd_seek(struct brange_u64_iter *itr, uint64_t *v)
+{
+	struct brange_u64 *r;
+	int rc;
+	if (*v < itr->current_value)
+		return EINVAL;
+	r = itr->current_range;
+	while (r) {
+		rc = brange_u64_cmp(r, *v);
+		if (rc > 0)
+			goto next;
+		/* found a valid range */
+		itr->current_range = r;
+		itr->current_value = (rc)?(r->a):(*v);
+		*v = itr->current_value;
+		return 0;
+	next:
+		r = TAILQ_NEXT(r, link);
+	}
+	return ENOENT;
+}
+
+int brange_u64_iter_bwd_seek(struct brange_u64_iter *itr, uint64_t *v)
+{
+	struct brange_u64 *r;
+	int rc;
+	if (*v > itr->current_value)
+		return EINVAL;
+	r = itr->current_range;
+	while (r) {
+		rc = brange_u64_cmp(r, *v);
+		if (rc < 0)
+			goto next;
+		/* found a valid range */
+		itr->current_range = r;
+		itr->current_value = (rc)?(r->b):(*v);
+		*v = itr->current_value;
+		return 0;
+	next:
+		r = TAILQ_PREV(r, brange_u64_head, link);
+	}
+	return ENOENT;
+}
+
+int brange_u64_iter_set_pos(struct brange_u64_iter *itr, uint64_t pos)
+{
+	int rc = 0;
+	struct brange_u64 *rng;
 	rng = itr->first_range;
 	while (rng) {
 		if (pos < rng->a) {

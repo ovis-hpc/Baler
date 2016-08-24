@@ -339,5 +339,273 @@ int brange_u32_iter_bwd_seek(struct brange_u32_iter *itr, uint32_t *v);
  */
 int brange_u32_iter_set_pos(struct brange_u32_iter *itr, uint32_t pos);
 
+/** List head */
+LIST_HEAD(blist_u64_head, blist_u64);
+
+/**
+ * List of uint64_t
+ */
+struct blist_u64 {
+	uint64_t data;
+	LIST_ENTRY(blist_u64) link;
+};
+
+/**
+ * Set of uint64_t.
+ */
+struct bset_u64 {
+	uint64_t hsize; /**< Hash size. */
+	uint64_t count; /**< Track the number of elements. */
+	struct blist_u64_head *hash; /**< Hash table (to linked list). */
+};
+
+/**
+ * Iterator for ::bset_u64
+ */
+struct bset_u64_iter {
+	struct bset_u64 *set; /**< Reference to the set */
+	int next_idx; /**< next index of set->hash */
+	struct blist_u64 *elem; /**< Current element of the current index */
+};
+
+/**
+ * Create an iterator for the set \c set.
+ * \param set The set handle.
+ * \return A pointer to ::bset_u64_iter on succes.
+ * \return NULL on error.
+ */
+struct bset_u64_iter* bset_u64_iter_new(struct bset_u64 *set);
+
+/**
+ * Iterator destructor.
+ * \param iter The iterator created by bset_u64_iter_new().
+ */
+void bset_u64_iter_free(struct bset_u64_iter *iter);
+
+/**
+ * Set \c *out with value of next element, and step the \c iter forward.
+ * \param iter The iterator.
+ * \param[out] out The output parameter.
+ * \return 0 on success.
+ * \return \c ENOENT if no more elements.
+ * \return Error code on error
+ */
+int bset_u64_iter_next(struct bset_u64_iter *iter, uint64_t *out);
+
+/**
+ * Reset the iterator \c iter.
+ * \param iter The iterator handle.
+ * \return 0 on success.
+ * \return Error number on error.
+ */
+int bset_u64_iter_reset(struct bset_u64_iter *iter);
+
+/**
+ * Allocation function for ::bset_u64.
+ */
+struct bset_u64* bset_u64_alloc(int hsize);
+
+/**
+ * Initialize \a set. This is used in the case that ::bset_u64 is allocated
+ * without calling ::bset_u64_alloc().
+ * \return -1 on error.
+ * \return 0 on success.
+ */
+int bset_u64_init(struct bset_u64 *set, int hsize);
+
+/**
+ * Clear and free ONLY the contents inside the \a set, but NOT
+ * freeing the \a set itself. This function complements ::bset_u64_init().
+ * \param set The set to be cleared.
+ */
+void bset_u64_clear(struct bset_u64 *set);
+
+/**
+ * Free for ::bset_u64.
+ */
+void bset_u64_free(struct bset_u64 *set);
+
+/**
+ * Check for existence of \a val in \a set.
+ * \param set The pointer to ::bset_u64.
+ * \param val The value to check for.
+ */
+int bset_u64_exist(struct bset_u64 *set, uint64_t val);
+
+/**
+ * Insert \c val into \c set.
+ * \param set The pointer to ::bset_u64.
+ * \param val The value to be inserted.
+ * \return 0 on success.
+ * \return Error code on error.
+ */
+int bset_u64_insert(struct bset_u64 *set, uint64_t val);
+
+/**
+ * Remove \c val from \c set.
+ * \param set The set handle.
+ * \param val The value.
+ * \return 0 on success.
+ * \return ENOENT if \c val is not found.
+ */
+int bset_u64_remove(struct bset_u64 *set, uint64_t val);
+
+/**
+ * Create ::bset_u64 from \c num_list.
+ * \param[in] num_list List of numbers (e.g. "1,2,5-7")
+ * \param hsize The hash size for the ::bset_u64.
+ * \retval NULL on error.
+ * \retval ptr Pointer to ::bset_u64 containing numbers in the given \c num_lst.
+ */
+struct bset_u64 *bset_u64_from_numlist(const char *num_lst, int hsize);
+
+/********* Range **********/
+/**
+ * A ::brange_u64 representing a range <tt>[a, b]</tt>
+ */
+struct brange_u64 {
+	uint64_t a;
+	uint64_t b;
+	TAILQ_ENTRY(brange_u64) link;
+};
+
+TAILQ_HEAD(brange_u64_head, brange_u64);
+
+struct brange_u64_iter {
+	struct brange_u64 *first_range;
+	struct brange_u64 *current_range;
+	uint64_t current_value;
+};
+
+/**
+ * Compare \c x to \c range.
+ * \return 0 if \c x is in \c range.
+ * \return 1 if \c x is greater than \c range.
+ * \return -1 if \c x is less than \c range.
+ */
+static inline
+int brange_u64_cmp(struct brange_u64 *range, uint64_t x)
+{
+	if (x < range->a)
+		return -1;
+	if (range->b < x)
+		return 1;
+	return 0;
+}
+
+/**
+ * Create a list of ranges from the given set \c set, and append them to
+ * \c * head.
+ *
+ * \param set The set handle.
+ * \param head The list head to append the ranges to.
+ *
+ * \retval 0 if OK
+ * \retval errno if error.
+ */
+int bset_u64_to_brange_u64(struct bset_u64 *set, struct brange_u64_head *head);
+
+/**
+ * Dump content of the set through STDOUT.
+ */
+void bset_u64_dump(struct bset_u64 *set);
+
+/**
+ * Create a value iterator for ranges.
+ *
+ * \param first The first range in the range list.
+ *
+ * \retval NULL if error.
+ * \retval ptr ponter to the iterator handle, if success.
+ */
+struct brange_u64_iter *brange_u64_iter_new(struct brange_u64 *first);
+
+/**
+ * Get current value from the iterator.
+ *
+ * \param itr The iterator.
+ * \param[out] v The output value.
+ *
+ * \retval 0 if OK.
+ * \retval ENOENT if there is no more entry.
+ */
+int brange_u64_iter_get_value(struct brange_u64_iter *itr, uint64_t *v);
+
+/**
+ * Move the iterator to the beginning position; also set \c *v to the first
+ * value of the ranges.
+ *
+ * \param itr The iterator handle.
+ * \param[out] v The output value.
+ *
+ * \retval 0 if OK
+ * \retval errno if error.
+ */
+int brange_u64_iter_begin(struct brange_u64_iter *itr, uint64_t *v);
+
+/**
+ * Move the iterator to the beginning position; also set \c *v to the last
+ * value of the ranges.
+ *
+ * \param itr The iterator handle.
+ * \param[out] v The output value.
+ *
+ * \retval 0 if OK
+ * \retval errno if error.
+ */
+int brange_u64_iter_end(struct brange_u64_iter *itr, uint64_t *v);
+
+/**
+ * Free the iterator.
+ */
+void brange_u64_iter_free(struct brange_u64_iter *itr);
+
+/**
+ * Move iterator to the next entry, and assign the value to \c *v.
+ *
+ * \param itr The iterator.
+ * \param[out] v The output value.
+ *
+ * \retval 0 if OK.
+ * \retval ENOENT if there is no more entry.
+ */
+int brange_u64_iter_next(struct brange_u64_iter *itr, uint64_t *v);
+
+/**
+ * Move the iterator, in a forward direction, to the position greater than or
+ * equal to \c *v.
+ *
+ * \param itr The iterator.
+ * \param[in,out] v The value to seek to, also will be set to current position
+ *                  as an output (if success).
+ *
+ * \retval 0 if success.
+ * \retval EINVAL if \c v is less than the current position.
+ * \retval ENOENT if there is no range that contained or positioned beyond \c v.
+ */
+int brange_u64_iter_fwd_seek(struct brange_u64_iter *itr, uint64_t *v);
+
+/**
+ * Move the iterator, in a backward direction, to the position less than or
+ * equal to \c *v.
+ *
+ * \param itr The iterator.
+ * \param[in,out] v The value to seek to, also will be set to current position
+ *                  as an output (if success).
+ *
+ * \retval 0 if success.
+ * \retval EINVAL if \c v is greater than the current position.
+ * \retval ENOENT if there is no range that contained or positioned before \c v.
+ */
+int brange_u64_iter_bwd_seek(struct brange_u64_iter *itr, uint64_t *v);
+
+/**
+ * Set iterator position to \c pos.
+ *
+ * \retval 0 if success.
+ * \retval EINVAL if \c pos is not a valid position (e.g. not in the ranges).
+ */
+int brange_u64_iter_set_pos(struct brange_u64_iter *itr, uint64_t pos);
+
 #endif
 /**\}*/

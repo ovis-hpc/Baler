@@ -20,7 +20,8 @@ libbaler_la_SOURCES = mq.c bwqueue.c btkn.c bptn.c binput.c boutput.c \
 		      bmeta_priv.h \
 		      fnv_hash.h \
 		      murmur_hash.h
-libbaler_la_LDFLAGS = $(AM_LDFLAGS) -lpthread -lsos
+libbaler_la_LDFLAGS = $(AM_LDFLAGS) -lpthread -lsos -ldl -lcoll \
+		      @OVIS_LIB_LIBDIR_FLAG@
 libbaler_la_CFLAGS = $(AM_CFLAGS) \
 	@OVIS_LIB_INCDIR_FLAG@ @SOS_INCDIR_FLAG@ \
 	@SOS_LIBDIR_FLAG@ @SOS_LIB64DIR_FLAG@

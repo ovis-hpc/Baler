@@ -73,9 +73,11 @@
  * extract images from baler store:
  * \par
  * \code
- *     bassoc -x -w WORKSPACE -s BALERD_STORE [-B TS] [-E TS] [-H IDS] -R RECIPE_FILE
+ *     bassoc -x -w WORKSPACE -p BSTORE_PLUGIN -s BALERD_STORE [-B TS] [-E TS] \\
+ *            [-H IDS] -R RECIPE_FILE
  *
- *     bassoc -x -w WORKSPACE -s BALERD_STORE [-B TS] [-E TS] [-H IDS] -r RECIPE1 -r RECIPE2 ...
+ *     bassoc -x -w WORKSPACE -p BSTORE_PLUGIN -s BALERD_STORE [-B TS] [-E TS] \\
+ *            [-H IDS] -r RECIPE1 -r RECIPE2 ...
  * \endcode
  *
  * extract images from metric input stream:
@@ -140,7 +142,11 @@
  * \par -X,--metric-stream
  * Same as '-x', but with metric input stream enabled.
  *
- * \par -s,--store STOR_DIR
+ * \par -p,--store-plugin BSTORE_PLUGIN
+ * BSTORE plugin. This is the plugin name given to the '-S' option of `balerd`.
+ * This option is required if '-s' is specified.
+ *
+ * \par -s,--store STORE_DIR
  * This is a path to balerd's store. This option is needed for image extraction
  * from message occurrences. If it is not given, the \c query options (-B,-E,-H)
  * will be ignored.
@@ -435,10 +441,12 @@
 #include "../baler/butils.h"
 #include "../baler/barray.h"
 #include "../baler/bmqueue.h"
+#include "../baler/bset.h"
+#include "../baler/bstore.h"
 #include "../query/bquery.h"
 
 /***** OPTIONS *****/
-const char *short_opt = "hicw:t:n:xXs:B:E:H:r:R:o:m:M:z:K:S:D:v:bO:?";
+const char *short_opt = "hicw:t:n:xXs:B:E:H:r:R:o:m:M:z:K:S:D:v:bO:p:?";
 struct option long_opt[] = {
 	{"help",                    0,  0,  'h'},
 	{"info",                    0,  0,  'i'},
@@ -449,6 +457,7 @@ struct option long_opt[] = {
 	{"extract",                 0,  0,  'x'},
 	{"extract-w-metric",        0,  0,  'X'},
 	{"store",                   1,  0,  's'},
+	{"store-plugin",            1,  0,  'p'},
 	{"ts-begin",                1,  0,  'B'},
 	{"ts-end",                  1,  0,  'E'},
 	{"host-ids",                1,  0,  'H'},
@@ -492,6 +501,7 @@ const char *workspace_path = NULL;
 uint32_t spp = 3600;
 uint32_t npp = 1;
 const char *store_path = NULL;
+const char *store_plugin = "bstore_htbl";
 const char *ts_begin = NULL;
 const char *ts_end = NULL;
 const char *host_ids = NULL;
@@ -501,6 +511,8 @@ double significance = 0.10;
 double difference = 0.15;
 int offset = 0;
 const char *mine_target_file_path = NULL;
+time_t time_begin = 0;
+time_t time_end = 0;
 
 int blackwhite = 0;
 
@@ -549,6 +561,8 @@ struct bassoc_rule_q rule_q;
 pthread_t *miner = NULL;
 int miner_threads = 1;
 struct bassoc_rule_index *rule_index = NULL;
+struct bset_u64 *comp_set = NULL;
+uint32_t bin_width = 0;
 
 /***** FUNCTIONS *****/
 
@@ -560,10 +574,12 @@ void usage()
 "		bassoc -w WORKSPACE -c [-t NUMBER] [-n NUMBER]\n"
 "\n"
 "	extracting images: \n"
-"		bassoc -w WORKSPACE -x -s BALERD_STORE [-B TS] [-E TS]\n"
+"		bassoc -w WORKSPACE -x -p BSTORE_PLUGIN -s BALERD_STORE\n"
+"					[-B TS] [-E TS]\n"
 "					[-H IDS] -R RECIPE_FILE\n"
 "\n"
-"		bassoc -w WORKSPACE -x -s BALERD_STORE [-B TS] [-E TS] \n"
+"		bassoc -w WORKSPACE -x -p BSTORE_PLUGIN -s BALERD_STORE\n"
+"					[-B TS] [-E TS]\n"
 "					[-H IDS] -r RECIPE1 -r RECIPE2 ...\n"
 "\n"
 "	mine for associations: \n"
@@ -573,6 +589,101 @@ void usage()
 "\n"
 "See bassoc(1) for more information."
 	);
+}
+
+static
+uint32_t __get_bin_width()
+{
+	uint32_t bin[] = {DAY, HOUR, MINUTE};
+	uint32_t i;
+	for (i = 0; i < sizeof(bin)/sizeof(bin[0]); i++) {
+		if (conf_handle->conf->spp >= bin[i])
+			return bin[i];
+	}
+	return 0;
+}
+
+bcomp_hist_iter_hent_t bcomp_hist_iter_hent_new(bstore_t bs, uint64_t comp_id,
+						time_t ts_begin,
+						time_t ts_end,
+						uint64_t bin_width)
+{
+	bcomp_hist_iter_hent_t hiter = calloc(1, sizeof(*hiter));
+	if (!hiter)
+		return NULL;
+	hiter->iter = bstore_comp_hist_iter_new(bs);
+	if (!hiter->iter) {
+		goto err0;
+	}
+	hiter->comp_id = comp_id;
+	hiter->ts_begin = ts_begin;
+	hiter->ts_end = ts_end;
+	hiter->bin_width = bin_width;
+	return hiter;
+err0:
+	free(hiter);
+	return NULL;
+}
+
+void bcomp_hist_iter_hent_free(bcomp_hist_iter_hent_t hiter)
+{
+	return; /* do nothing!!! */
+	bstore_comp_hist_iter_free(hiter->iter);
+	free(hiter);
+}
+
+int bcomp_hist_iter_hent_first(bcomp_hist_iter_hent_t hiter)
+{
+	bcomp_hist_t h;
+	hiter->valid = 0;
+	hiter->hist.comp_id = hiter->comp_id;
+	hiter->hist.time = hiter->ts_begin;
+	hiter->hist.bin_width = hiter->bin_width;
+	h = bstore_comp_hist_iter_find(hiter->iter, &hiter->hist);
+	if (!h)
+		return ENOENT;
+	hiter->valid = 1;
+	return 0;
+}
+
+int bcomp_hist_iter_hent_next(bcomp_hist_iter_hent_t hiter)
+{
+	bcomp_hist_t h;
+	time_t last_time;
+	if (!hiter->valid)
+		return EINVAL;
+	last_time = hiter->hist.time;
+	hiter->valid = 0;
+	h = bstore_comp_hist_iter_next(hiter->iter, &hiter->hist);
+	if (!h)
+		return ENOENT;
+	if (hiter->ts_end && hiter->ts_end < hiter->hist.time)
+		return ENOENT;
+	hiter->valid = 1;
+	assert(hiter->comp_id == hiter->hist.comp_id);
+	assert(last_time <= hiter->hist.time);
+	return 0;
+}
+
+int bcomp_hist_iter_hent_cmp(void *_a, void *_b)
+{
+	bcomp_hist_iter_hent_t a = _a;
+	bcomp_hist_iter_hent_t b = _b;
+	/* using min heap ==> invalid iterator is the greatest */
+	if (!a->valid)
+		return 1;
+	if (!b->valid)
+		return -1;
+	/* both valid, compare current hist entry */
+	if (a->hist.time < b->hist.time)
+		return -1;
+	if (a->hist.time > b->hist.time)
+		return 1;
+	if (a->hist.comp_id < b->hist.comp_id)
+		return -1;
+	if (a->hist.comp_id > b->hist.comp_id)
+		return 1;
+	return 0;
 }
 
 struct bassocimgbin *bassocimgbin_new(int alloc_bin_len)
@@ -920,11 +1031,24 @@ loop:
 	case 's':
 		store_path = optarg;
 		break;
+	case 'p':
+		store_plugin = optarg;
+		break;
 	case 'B':
 		ts_begin = optarg;
+		time_begin = bparse_ts(ts_begin);
+		if (time_begin == -1) {
+			berr("Unknown time format: %s", ts_begin);
+			exit(-1);
+		}
 		break;
 	case 'E':
 		ts_end = optarg;
+		time_end = bparse_ts(ts_end);
+		if (time_end == -1) {
+			berr("Unknown time format: %s", ts_begin);
+			exit(-1);
+		}
 		break;
 	case 'H':
 		host_ids = optarg;
@@ -1352,12 +1476,79 @@ struct bheap *__heap_init(struct bq_store *bq_store, const char *img_store_name)
 }
 
 static
+struct bheap *__heap4_init(bstore_t bs, struct bset_u64 *comp_set, uint32_t bin_width)
+{
+	char buff[128];
+	struct bset_u64_iter *set_iter = NULL;
+	struct bheap *h = NULL;
+	uint64_t comp_id;
+	int rc, i;
+
+	set_iter = bset_u64_iter_new(comp_set);
+	if (!set_iter) {
+		berror("bset_u64_iter_new()");
+		goto out;
+	}
+
+	h = bheap_new(comp_set->count, bcomp_hist_iter_hent_cmp);
+	if (!h) {
+		berror("bheap_new()");
+		goto cleanup;
+	}
+
+	while (0 == (rc = bset_u64_iter_next(set_iter, &comp_id))) {
+		bcomp_hist_iter_hent_t hiter = bcomp_hist_iter_hent_new(bs,
+				comp_id, time_begin, time_end, bin_width);
+		if (!hiter)
+			goto err0;
+		rc = bcomp_hist_iter_hent_first(hiter);
+		if (rc) {
+			bcomp_hist_iter_hent_free(hiter);
+			continue;
+		}
+		rc = bheap_insert(h, hiter);
+		if (rc) {
+			bcomp_hist_iter_hent_free(hiter);
+			goto err0;
+		}
+	}
+
+	goto cleanup;
+
+err0:
+	for (i = 0; i < h->len; i++) {
+		bcomp_hist_iter_hent_free(h->array[i]);
+	}
+	bheap_free(h);
+	h = NULL;
+
+cleanup:
+	if (set_iter)
+		bset_u64_iter_free(set_iter);
+out:
+	return h;
+}
+
+static
 int __heap_get_pixel(struct bheap *bheap, struct bpixel *pixel)
 {
 	struct bimgquery *bq = bheap_get_top(bheap);
 	if (!bq)
 		return ENOENT;
 	return bq_img_entry_get_pixel(bq, pixel);
+}
+
+static
+int __heap4_get_pixel(struct bheap *h, struct bpixel *pixel)
+{
+	bcomp_hist_iter_hent_t hent = bheap_get_top(h);
+	if (!hent || !hent->valid)
+		return ENOENT;
+	pixel->count = hent->hist.msg_count;
+	pixel->ptn_id = hent->hist.ptn_id;
+	pixel->sec = hent->hist.time;
+	pixel->comp_id = hent->hist.comp_id;
+	return 0;
 }
 
 static
@@ -1378,6 +1569,36 @@ int __heap_next_entry(struct bheap *bheap)
 		/* end of this bq --> destroy */
 		bheap_remove_top(bheap);
 		bimgquery_destroy(bq);
+		if (bheap_get_top(bheap) == NULL)
+			/* no more bq in the heap */
+			return ENOENT;
+		return 0;
+	/* For other rc, just return it as-is */
+	}
+
+	return rc;
+}
+
+static
+int __heap4_next_entry(struct bheap *bheap)
+{
+	int rc;
+	bcomp_hist_iter_hent_t hiter = bheap_get_top(bheap);
+	if (!hiter)
+		return ENOENT;
+	assert(hiter->valid);
+
+	rc = bcomp_hist_iter_hent_next(hiter);
+
+	switch (rc) {
+	case 0:
+		/* hent is still good, just percolate it */
+		bheap_percolate_top(bheap);
+		return 0;
+	case ENOENT:
+		/* end of this bq --> destroy */
+		bheap_remove_top(bheap);
+		bcomp_hist_iter_hent_free(hiter);
 		if (bheap_get_top(bheap) == NULL)
 			/* no more bq in the heap */
 			return ENOENT;
@@ -1474,6 +1695,138 @@ void extract_bq_store_routine()
 		berr("get_closest_img_store() error, rc: %d", rc);
 		exit(-1);
 	}
+}
+
+static
+void extract_routine_by_hist(bstore_t bs)
+{
+	int i, n, rc;
+	struct bimgquery *bq;
+	struct bpixel pixel;
+	struct bassocimg_pixel bassoc_pixel;
+	struct bhash_entry *hent;
+	struct ptrlist *list;
+	struct ptrlistentry *lent;
+	uint32_t npp = conf_handle->conf->npp;
+	uint32_t spp = conf_handle->conf->spp;
+	bcomp_hist_iter_t hiter;
+	struct bcomp_hist_s comp_hist = {0};
+	bcomp_hist_t hist;
+
+	hiter = bstore_comp_hist_iter_new(bs);
+	if (!hiter) {
+		perror("bcomp_hist_iter_hent_new()");
+		exit(-1);
+	}
+
+	comp_hist.bin_width = __get_bin_width();
+	if (time_begin)
+		comp_hist.time = time_begin;
+	hist = bstore_comp_hist_iter_find(hiter, &comp_hist);
+	if (!hist) {
+		bwarn("No data matching given criteria ...");
+		/* no need to continue ... */
+		return;
+	}
+
+loop:
+	/* hist ==> pixel */
+	pixel.comp_id = hist->comp_id;
+	pixel.ptn_id = hist->ptn_id;
+	pixel.sec = hist->time;
+	pixel.count = hist->msg_count;
+
+	/* get list of images associated with the pattern ID */
+	hent = bhash_entry_get(ptn2imglist, (void*)&pixel.ptn_id,
+							sizeof(pixel.ptn_id));
+	if (!hent)
+		goto next;
+	list = (void*)hent->value;
+	LIST_FOREACH(lent, list, entry) {
+		bassoc_pixel.sec = (pixel.sec / spp) * spp;
+		bassoc_pixel.comp_id = (pixel.comp_id / npp) * npp;
+		bassoc_pixel.count = pixel.count;
+		rc = bassocimg_add_count(lent->ptr, &bassoc_pixel);
+		if (rc) {
+			berr("bassocimg_add_count() error, rc: %d", rc);
+			exit(-1);
+		}
+	}
+
+next:
+	/* next entry */
+	hist = bstore_comp_hist_iter_next(hiter, &comp_hist);
+	if (!hist)
+		goto out;
+	if (time_end && hist->time > time_end)
+		goto out;
+	goto loop;
+out:
+	return;
+}
+
+static
+void extract_routine_by_msg4(bstore_t bs)
+{
+	berr("NOT IMPLEMENTED HAHAHAHAHA!");
+	exit(-1);
+}
+
+static
+struct bset_u64 * __get_comp_set(bstore_t bs)
+{
+	struct bset_u64 *set = NULL;
+	btkn_iter_t ti = NULL;
+	btkn_t tkn;
+
+	if (host_ids) {
+		set = bset_u64_from_numlist(host_ids, 65537);
+		goto out;
+	}
+
+	/* else, get all host IDs from the store */
+
+	set = bset_u64_alloc(65537);
+	if (!set)
+		goto out;
+
+	ti = bstore_tkn_iter_new(bs);
+	for (tkn = bstore_tkn_iter_first(ti);
+			tkn; tkn = bstore_tkn_iter_next(ti)) {
+		if (!btkn_has_type(tkn, BTKN_TYPE_HOSTNAME))
+			continue;
+		bset_u64_insert(set, tkn->tkn_id);
+	}
+	// bstore_tkn_iter_free(ti);
+out:
+	return set;
+}
+
+static
+void extract_bstore_routine()
+{
+	bstore_t bs = bstore_open(store_plugin, store_path, O_RDONLY);
+	if (!bs) {
+		berr("Cannot open store(%s): %s", store_plugin, store_path);
+		exit(-1);
+	}
+	bin_width = __get_bin_width();
+	comp_set = __get_comp_set(bs);
+	if (!comp_set) {
+		berr("Cannot create component set, errno: %d", errno);
+		exit(-1);
+	}
+	if (!comp_set->count) {
+		berr("Component set empty!");
+		exit(-1);
+	}
+	if (bin_width > 0) {
+		extract_routine_by_hist(bs);
+	} else {
+		extract_routine_by_msg4(bs);
+	}
+	bset_u64_free(comp_set);
+	bstore_close(bs);
 }
 
 static
@@ -1770,7 +2123,7 @@ void extract_routine()
 	process_recpies_routine();
 
 	if (store_path)
-		extract_bq_store_routine();
+		extract_bstore_routine();
 
 	if (enable_metric_stream)
 		extract_metric_routine();

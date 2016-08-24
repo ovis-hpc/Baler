@@ -64,6 +64,7 @@
 #include "baler/bmvec.h"
 #include "baler/bmqueue.h"
 #include "baler/butils.h"
+#include "baler/bstore.h"
 
 #include "bassocimg.h"
 #include "baler/barray.h"
@@ -123,5 +124,19 @@ struct bassocimgbin {
 	 * The last bin, bin[bin_len - 1], will have lower_bound == inf.
 	 */
 };
+
+typedef struct bcomp_hist_iter_hent {
+	bcomp_hist_iter_t iter;
+	struct bcomp_hist_s hist;
+	bcomp_id_t comp_id;
+	time_t ts_begin;
+	time_t ts_end;
+	uint32_t bin_width;
+	int valid;
+} *bcomp_hist_iter_hent_t;
+
+#define MINUTE 60
+#define HOUR (60*MINUTE)
+#define DAY (24*HOUR)
 
 #endif
