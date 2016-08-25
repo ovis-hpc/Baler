@@ -1148,13 +1148,13 @@ static bstore_iter_pos_t __iter_pos(bsos_iter_t iter)
 	pos = malloc(sizeof *pos);
 	if (!pos)
 		return NULL;
+	pos->iter_type = iter->iter_type;
 	rc = sos_iter_pos(iter->iter, &pos->sos_pos);
 	if (rc) {
 		errno = rc;
 		free(pos);
 		pos = NULL;
 	}
-	pos->iter_type = iter->iter_type;
 	return pos;
 }
 
@@ -1856,7 +1856,10 @@ static bmsg_t bs_msg_iter_obj(bmsg_iter_t iter)
 {
 	bsos_iter_t i = (bsos_iter_t)iter;
 	bstore_sos_t bss = (bstore_sos_t)i->bs;
-	return __make_msg(bss, i, sos_iter_obj(i->iter));
+	sos_obj_t obj = __next_matching_msg(0, i, 1);
+	if (obj)
+		return __make_msg(bss, i, sos_iter_obj(i->iter));
+	return NULL;
 }
 
 static bmsg_t bs_msg_iter_next(bmsg_iter_t iter)
