@@ -42,6 +42,9 @@
 #ifndef _MQ_H_
 #define _MQ_H_
 #include <inttypes.h>
+#ifndef BLOCKING_MQ
+#define BLOCKING_MQ	1
+#endif
 struct mq_s;
 typedef struct mq_msg_s {
 	uint32_t msg_id;
@@ -60,6 +63,10 @@ typedef struct mq_s {
 	uint32_t mq_msg_max;
 	uint8_t *mq_msg_mem;
 	mq_msg_t *mq_q;
+#if BLOCKING_MQ == 1
+	pthread_mutex_t mq_lock;
+	pthread_cond_t mq_cv;
+#endif
 } *mq_t;
 
 /**
