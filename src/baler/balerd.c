@@ -1513,13 +1513,20 @@ void thread_join()
 	int i;
 	/* Joining the input queue workers */
 	for (i=0; i<binqwkrN; i++){
+		pthread_cancel(binqwkr[i]);
 		pthread_join(binqwkr[i], NULL);
 	}
 
 	/* Joining the output queue workers */
 	for (i=0; i<boutqwkrN; i++){
+		pthread_cancel(boutqwkr[i]);
 		pthread_join(boutqwkr[i], NULL);
 	}
+	struct bplugin *p;
+	LIST_FOREACH(p, &bip_head_s, link)
+		p->stop(p);
+	LIST_FOREACH(p, &bop_head_s, link)
+		p->stop(p);
 }
 
 /**
@@ -1529,6 +1536,10 @@ void cleanup_daemon(int x)
 {
 	printf("Closing the store and syncing data...");
 	fflush(stdout);
+
+	/* Then join the worker threads. */
+	thread_join();
+
 	bstore_close(bstore);
 	printf("complete.\n");
 	exit(0);
@@ -1605,9 +1616,6 @@ int main(int argc, char **argv)
 
 	/* Main thread handle events pertaining to balerd */
 	main_event_routine();
-
-	/* Then join the worker threads. */
-	thread_join();
 
 	/* On exit, clean up the daemon. */
 	cleanup_daemon(0);

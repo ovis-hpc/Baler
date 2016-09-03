@@ -479,6 +479,8 @@ int plugin_stop(struct bplugin *this)
 	struct plugin_ctxt *ctxt = this->context;
 	pthread_cancel(ctxt->conn_req_thread);
 	pthread_cancel(ctxt->io_thread);
+	pthread_join(ctxt->conn_req_thread, NULL);
+	pthread_join(ctxt->io_thread, NULL);
 	return 0;
 }
 

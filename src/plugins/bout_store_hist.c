@@ -42,8 +42,14 @@ static int plugin_start(struct bplugin *this)
 static int plugin_stop(struct bplugin *this)
 {
 	struct bout_store_hist_plugin *mp = (typeof(mp))this;
+	int i;
 
 	pthread_mutex_lock(&mp->lock);
+	for (i = 0; i < mp->thread_count; i++) {
+		pthread_cancel(mp->threads[i]);
+		if (mp->threads[i])
+			pthread_join(mp->threads[i], NULL);
+	}
 	if (!mp->bs)
 		/* Not running */
 		goto out;
