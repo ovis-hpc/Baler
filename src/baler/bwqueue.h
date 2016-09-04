@@ -82,7 +82,7 @@ typedef struct binq_data {
 	} format;
 	struct bstr *hostname; /**< Hostname. */
 	struct timeval tv; /**< Time value. */
-	uint32_t tok_count; /**< Token count, for convenient ptn allocation.*/
+	uint32_t tkn_count; /**< Token count, for convenient ptn allocation.*/
 	struct bstr_list_head tokens; /**< Pointer to message strings. */
 	struct btkn_tailq_head tkn_q;
 } *binq_data_t;

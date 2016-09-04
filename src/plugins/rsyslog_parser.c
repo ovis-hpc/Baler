@@ -458,7 +458,7 @@ static binp_result_t rsyslog_parse(binp_parser_t p, struct bstr *s, struct bwq_e
 		/* Break out of the loop because lent == NULL ==> error */
 		goto err1;
 
-	d->tok_count = count;
+	d->tkn_count = count;
 	*pent = qent;
 	return BINP_OK;
 err1:

@@ -112,7 +112,7 @@ void *plugin_proc(void *arg)
 			}
 			tail = lent;
 		}
-		ent->data.in.tok_count = m;
+		ent->data.in.tkn_count = m;
 		ent->data.in.hostname = bstr_alloc_init_cstr(test_host);
 		assert(ent->data.in.hostname);
 		ent->data.in.type = BINQ_DATA_MSG;

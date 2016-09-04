@@ -481,52 +481,6 @@ struct bwq *boutq; /* array of boutq, one queue per worker */
 int *boutq_busy_count; /* queue busy count */
 
 /**
- * Baler Input Worker's Context.
- * Data in this structure will be reused repeatedly by the worker thread
- * that owns it. Repeatedly allocate and deallocate is much slower than
- * using stack or global variables. I do not put this in stack because
- * this is relatively huge.
- */
-struct bin_wkr_ctxt {
-	int worker_id; /**< Worker ID */
-	bstore_t store;
-	uint32_t comp_id;
-	uint32_t unresolved_count;
-	int rc;
-	int (*next_fn)(struct bwq_entry *);
-	union {
-		/**
-		 * Space for ptn_str.
-		 */
-		char _ptn_str[sizeof(struct bstr)+sizeof(uint32_t)*4096];
-		/**
-		 * Pattern string.
-		 */
-		struct bstr ptn_str;
-	};
-	union {
-		/**
-		 * Space for message structure.
-		 */
-		char _msg[sizeof(struct bmsg)+sizeof(uint32_t)*4096];
-		/**
-		 * Message.
-		 */
-		struct bmsg msg;
-	};
-	union {
-		/**
-		 * Space for zap message.
-		 */
-		char _zmsg[sizeof(struct bzmsg) + sizeof(uint32_t)*4096];
-		/**
-		 * zap message buffer.
-		 */
-		struct bzmsg zmsg;
-	};
-};
-
-/**
  * Context for Output Worker.
  */
 struct bout_wkr_ctxt {
@@ -725,16 +679,8 @@ void initialize_daemon()
 		berror("malloc for binqwkr");
 		exit(-1);
 	}
-	struct bin_wkr_ctxt *ictxt;
 	for (i=0; i<binqwkrN; i++) {
-		ictxt = calloc(1, sizeof(*ictxt));
-		if (!ictxt) {
-			berror("calloc for ictxt");
-			exit(-1);
-		}
-		ictxt->worker_id = i;
-		if ((rc = pthread_create(binqwkr+i, NULL, binqwkr_routine,
-						ictxt)) != 0) {
+		if ((rc = pthread_create(binqwkr+i, NULL, binqwkr_routine, NULL)) != 0) {
 			berr("pthread_create error code: %d\n", rc);
 			exit(-1);
 		}
@@ -1298,7 +1244,7 @@ arg_done:
 void binq_data_print(struct binq_data *d)
 {
 	printf("binq: %.*s %ld (%d): ", d->hostname->blen, d->hostname->cstr,
-			d->tv.tv_sec, d->tok_count);
+			d->tv.tv_sec, d->tkn_count);
 	struct bstr_list_entry *e;
 	LIST_FOREACH(e, &d->tokens, link) {
 		printf(" '%.*s'", e->str.blen, e->str.cstr);
@@ -1337,20 +1283,29 @@ static int queue_output(bmsg_t msg)
  * \return 0 on success.
  * \return errno on error.
  */
-static int process_input_entry(struct bwq_entry *bwq_ent, struct bin_wkr_ctxt *ctxt)
+static int process_input_entry(struct bwq_entry *bwq_ent, void *arg)
 {
-	int rc = 0;
+	int rc;
 	binq_data_t in_data = &bwq_ent->data.in;
 	bcomp_id_t comp_id;
 	uint64_t tkn_id;
 	int tkn_idx;
-
-	if (in_data->type != BINQ_DATA_MSG)
-		assert(1);
-
+	struct bstr *ptn;
+	struct bmsg *msg;
 	btkn_tailq_entry_t ent;
-	struct bstr *ptn = &ctxt->ptn_str;
-	struct bmsg *msg = &ctxt->msg;
+
+	rc = EINVAL;
+	if (in_data->type != BINQ_DATA_MSG)
+		goto err_0;
+
+	rc = ENOMEM;
+	ptn = bstr_alloc(in_data->tkn_count * sizeof(uint64_t));
+	if (!ptn)
+		goto err_0;
+
+	msg = bmsg_alloc(in_data->tkn_count);
+	if (!msg)
+		goto err_1;
 
 	/*
 	 * Add each token to the token store if not already present;
@@ -1395,6 +1350,8 @@ static int process_input_entry(struct bwq_entry *bwq_ent, struct bin_wkr_ctxt *c
 		default:
 			ptn->u64str[tkn_idx] = (tkn_type << 8) | tkn_type;
 		}
+		assert(((64 + 7 - __builtin_clzl(ptn->u64str[tkn_idx])) >> 3) < 8);
+
 		/* Message argument is always the token 'literal' */
 		msg->argv[tkn_idx] = (tkn_id << 8) | tkn_type;
 		tkn_idx++;
@@ -1420,6 +1377,10 @@ static int process_input_entry(struct bwq_entry *bwq_ent, struct bin_wkr_ctxt *c
 	rc = queue_output(msg);
 cleanup:
 	binq_entry_free(bwq_ent);
+	bmsg_free(msg);
+ err_1:
+	bstr_free(ptn);
+ err_0:
 	return rc;
 }
 
@@ -1428,7 +1389,7 @@ cleanup:
  * one of the input queue workers will get an access to the input queue.
  * It then consume the input entry and release the input queue lock so that
  * the other workers can work on the next entry.
- * \param arg A pointer to ::bin_wkr_ctxt.
+ * \param arg Ignored
  * \return NULL (should be ignored)
  */
 void* binqwkr_routine(void *arg)
@@ -1457,7 +1418,8 @@ loop:
 	double end = (double)end_time.tv_sec * 1.0e6 + (double)end_time.tv_usec;
 	double dur = (end - start) / 1.0e6;
 	if (dur > 1) {
-		printf("input messages/sec = %g\n", inp_count / dur);
+		printf("%p input messages/sec = %g\n",
+		       (void *)(unsigned long)pthread_self(), inp_count / dur);
 		inp_count = 0;
 	}
 	goto loop;

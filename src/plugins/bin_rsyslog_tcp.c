@@ -650,7 +650,7 @@ struct bwq_entry* prepare_bwq_entry(struct bplugin *p, struct bstr *s)
 		/* Break out of the loop because lent == NULL ==> error */
 		goto err1;
 
-	d->tok_count = count;
+	d->tkn_count = count;
 	return qent;
 err1:
 	binq_entry_free(qent);

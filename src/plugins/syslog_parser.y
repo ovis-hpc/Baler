@@ -493,6 +493,7 @@ void enqueue_token(struct bwq_entry *wqe, btkn_t tkn, btkn_type_t typ)
     e->tkn = tkn;
     tkn->tkn_type_mask = BTKN_TYPE_MASK(typ);
     TAILQ_INSERT_TAIL(&wqe->data.in.tkn_q, e, link);
+    wqe->data.in.tkn_count++;
     if (typ == BTKN_TYPE_HOSTNAME)
 	wqe->data.in.hostname = bstr_dup(tkn->tkn_str);
 }
