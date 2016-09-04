@@ -372,7 +372,7 @@ btkn_alloc(btkn_id_t tkn_id, btkn_type_mask_t mask, const char *str, size_t len)
 		t->tkn_type_mask = mask;
 		t->tkn_count = 0;
 		t->tkn_str = (struct bstr *)(t+1);
-		t->tkn_str->blen = len;
+		t->tkn_str->blen = len+1;
 		memcpy(t->tkn_str->cstr, str, len);
 		t->tkn_str->cstr[len] = '\0';
 	}
