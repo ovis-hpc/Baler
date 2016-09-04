@@ -9,10 +9,6 @@
 #include <assert.h>
 #include <endian.h>
 #include <sos/sos.h>
-#include <coll/rbt.h>
-#ifdef TKN_HASH
-#include "baler/bhash.h"
-#endif
 #include "baler/bstore.h"
 
 #ifdef __be64
@@ -63,10 +59,6 @@ typedef struct bstore_sos_s {
 	btkn_id_t next_tkn_id;
 	bptn_id_t next_ptn_id;
 
-	struct rbt tkn_tree;
-#ifdef TKN_HASH
-	struct bhash *tkn_hash;
-#endif
 	pthread_mutex_t dict_lock;
 	pthread_mutex_t msg_lock;
 	pthread_mutex_t ptn_lock;
@@ -74,7 +66,7 @@ typedef struct bstore_sos_s {
 	pthread_mutex_t hist_lock;
 } *bstore_sos_t;
 
-#define H2BXT_IDX_ARGS "ORDER=5 SIZE=7"
+#define H2BXT_IDX_ARGS "ORDER=5 SIZE=13"
 
 struct sos_schema_template token_value_schema = {
 	.name = "TokenValue",
@@ -181,7 +173,9 @@ struct sos_schema_template pattern_schema = {
 			.name = "ptn_id",
 			.type = SOS_TYPE_UINT64,
 			.indexed = 1,
-			// .idx_type = "HTBL",
+			.idx_type = "HTBL",
+			// .idx_type = "H2BXT",
+			// .idx_args = H2BXT_IDX_ARGS,
 		},
 		{
 			.name = "first_seen",
@@ -205,6 +199,8 @@ struct sos_schema_template pattern_schema = {
 			.type = SOS_TYPE_BYTE_ARRAY,
 			.indexed = 1,
 			.idx_type = "HTBL",
+			// .idx_type = "H2BXT",
+			// .idx_args = H2BXT_IDX_ARGS,
 		},
 		{ NULL }
 	}
@@ -343,14 +339,6 @@ typedef struct comp_hist_s {
 	// uint64_t count;
 } *comp_hist_t;
 #pragma pop()
-
-typedef struct tkn_ent {
-	tkn_value_t tv;
-	btkn_t tkn;
-	sos_obj_t obj;
-	struct rbn tkn_rbn;
-	struct rbn cnt_rbn;
-} *tkn_ent_t;
 
 static size_t encode_id(uint64_t id, uint8_t *s);
 static size_t encoded_id_len(uint64_t id);
@@ -687,10 +675,6 @@ static bstore_t bs_open(bstore_plugin_t plugin, const char *path, int flags, int
 		assert(0 == rc);
 		btkn_free(tkn);
 	}
-	rbt_init(&bs->tkn_tree, __tkn_cmp_fn);
-#ifdef TKN_HASH
-	bs->tkn_hash = bhash_new(524287, 11, NULL);
-#endif
  out:
 	return &bs->base;
  err_8:
@@ -905,57 +889,6 @@ static sos_visit_action_t tkn_add_cb(sos_index_t index,
 	return SOS_VISIT_NOP;
 }
 
-#ifndef TKN_HASH
-static tkn_ent_t find_tkn_by_name(bstore_sos_t bss, const char *text, size_t text_len)
-{
-	tkn_ent_t te;
-	struct rbn *rbn;
-	rbn = rbt_find(&bss->tkn_tree, text);
-	if (rbn) {
-		te = container_of(rbn, struct tkn_ent, tkn_rbn);
-	} else {
-		te = NULL;
-	}
-	return te;
-}
-#else
-static tkn_ent_t find_tkn_by_name(bstore_sos_t bss, const char *text, size_t text_len)
-{
-	struct bhash_entry *ent;
-	ent = bhash_entry_get(bss->tkn_hash, (void *)text, text_len);
-	if (!ent)
-		return NULL;
-	return (tkn_ent_t)ent->value;
-}
-#endif
-
-#ifndef TKN_HASH
-static void add_tkn(bstore_sos_t bss, btkn_t tkn, sos_obj_t obj)
-{
-	tkn_ent_t te = malloc(sizeof *te);
-	te->tkn = btkn_dup(tkn);
-	te->obj = sos_obj_get(obj);
-	te->tv = sos_obj_ptr(obj);
-	/* Add to the token tree */
-	rbn_init(&te->tkn_rbn, te->tkn->tkn_str->cstr);
-	rbt_ins(&bss->tkn_tree, &te->tkn_rbn);
-}
-#else
-static void add_tkn(bstore_sos_t bss, btkn_t tkn, sos_obj_t obj)
-{
-	tkn_ent_t te = malloc(sizeof(*te));
-	assert(te);
-
-	te->tkn = btkn_dup(tkn);
-	te->obj = obj;		/* inherit ctxt reference */
-	te->tv = sos_obj_ptr(obj);
-
-	bhash_entry_set(bss->tkn_hash,
-			tkn->tkn_str->cstr, tkn->tkn_str->blen,
-			(uint64_t)te);
-}
-#endif
-
 static btkn_id_t bs_tkn_add(bstore_t bs, btkn_t tkn)
 {
 	int rc;
@@ -963,30 +896,14 @@ static btkn_id_t bs_tkn_add(bstore_t bs, btkn_t tkn)
 	struct missing_cb_ctxt ctxt = {0};
 	SOS_KEY(text_key);
 	pthread_mutex_lock(&bss->dict_lock);
-#ifdef MEM_TOKENS
-	tkn_ent_t te = find_tkn_by_name(bss, tkn->tkn_str->cstr, tkn->tkn_str->blen);
-	if (te) {
-		assert(te->obj && te->tkn);
-		tkn_value_t tv = sos_obj_ptr(te->obj);
-		tv->tkn_count++;
-		tkn->tkn_type_mask |= tv->tkn_type_mask;
-		tv->tkn_type_mask = tv->tkn_type_mask;
-		pthread_mutex_unlock(&bss->dict_lock);
-		return te->tkn->tkn_id;
-	}
-#endif
+
 	/* If the token is already added, return it's id */
 	encode_tkn_key(text_key, tkn->tkn_str->cstr, tkn->tkn_str->blen);
 	ctxt.bss = bss;
 	ctxt.tkn = tkn;
 	rc = sos_index_visit(sos_attr_index(bss->tkn_text_attr), text_key,
 			     tkn_add_cb, &ctxt);
-#ifdef MEM_TOKENS
-	if (!rc)
-		add_tkn(bss, ctxt.tkn, ctxt.obj);
-	else
-		printf("insert returns %d\n", rc);
-#endif
+
 	sos_obj_put(ctxt.obj);
 	pthread_mutex_unlock(&bss->dict_lock);
 	return ctxt.tkn->tkn_id;
@@ -1742,8 +1659,9 @@ static sos_obj_t __next_matching_msg(int rc, bsos_iter_t i, int forwards)
 }
 
 static bmsg_t
-bs_msg_iter_find(bmsg_iter_t iter, bptn_id_t ptn_id, time_t start,
-		 bcomp_id_t comp_id, bmsg_cmp_fn_t cmp_fn, void *ctxt)
+bs_msg_iter_find(bmsg_iter_t iter,
+		 time_t start, bptn_id_t ptn_id, bcomp_id_t comp_id,
+		 bmsg_cmp_fn_t cmp_fn, void *ctxt)
 {
 	int rc;
 	sos_obj_t obj = NULL;
@@ -1913,6 +1831,7 @@ static size_t encode_id(btkn_id_t id, uint8_t *s)
 		return 1;
 	}
 	sz = (64 + 7 - __builtin_clzl(id)) >> 3;
+	assert(sz < 8);
 	register size_t cpy = sz;
 	if (cpy >= sizeof(uint32_t)) {
 		dst->u32 = src->u32;

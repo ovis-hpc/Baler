@@ -621,8 +621,9 @@ static sos_obj_t __next_matching_msg(int rc, bhtbl_iter_t hi, int forwards)
 }
 
 static bmsg_t
-bs_msg_iter_find(bmsg_iter_t iter, bptn_id_t ptn_id, time_t start,
-		 bcomp_id_t comp_id, bmsg_cmp_fn_t cmp_fn, void *ctxt)
+bs_msg_iter_find(bmsg_iter_t iter,
+		 time_t start, bptn_id_t ptn_id, bcomp_id_t comp_id,
+		 bmsg_cmp_fn_t cmp_fn, void *ctxt)
 {
 	bhtbl_iter_t hi = (bhtbl_iter_t)iter;
 	bstore_htbl_t hs = (bstore_htbl_t)iter->bs;

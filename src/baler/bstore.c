@@ -277,10 +277,10 @@ uint64_t bstore_msg_iter_card(bmsg_iter_t iter)
  * \retval A bmsg_t or NULL if not found.
  */
 bmsg_t bstore_msg_iter_find(bmsg_iter_t iter,
-			    bptn_id_t ptn_id, time_t start, bcomp_id_t comp_id,
+			    time_t start, bptn_id_t ptn_id, bcomp_id_t comp_id,
 			    bmsg_cmp_fn_t cmp_fn, void *ctxt)
 {
-	return iter->bs->plugin->msg_iter_find(iter, ptn_id, start, comp_id, cmp_fn, ctxt);
+	return iter->bs->plugin->msg_iter_find(iter, start, ptn_id, comp_id, cmp_fn, ctxt);
 }
 
 int bstore_msg_iter_pos_set(bmsg_iter_t iter, bstore_iter_pos_t pos)

@@ -110,7 +110,7 @@ typedef struct bstore_plugin_s {
 	void (*msg_iter_free)(bmsg_iter_t i);
 	uint64_t (*msg_iter_card)(bmsg_iter_t i);
 	bmsg_t (*msg_iter_find)(bmsg_iter_t i,
-				bptn_id_t ptn_id, time_t start, bcomp_id_t comp_id,
+				time_t start, bptn_id_t ptn_id, bcomp_id_t comp_id,
 				bmsg_cmp_fn_t cmp_fn, void *ctxt);
 	bmsg_t (*msg_iter_obj)(bmsg_iter_t i);
 	bmsg_t (*msg_iter_next)(bmsg_iter_t i);
@@ -251,7 +251,7 @@ bmsg_iter_t bstore_msg_iter_new(bstore_t bs);
 void bstore_msg_iter_free(bmsg_iter_t i);
 uint64_t bstore_msg_iter_card(bmsg_iter_t i);
 bmsg_t bstore_msg_iter_find(bmsg_iter_t i,
-			    bptn_id_t ptn_id, time_t start, bcomp_id_t comp_id,
+			    time_t start, bptn_id_t ptn_id, bcomp_id_t comp_id,
 			    bmsg_cmp_fn_t cmp_fn, void *ctxt);
 bmsg_t bstore_msg_iter_obj(bmsg_iter_t i);
 bmsg_t bstore_msg_iter_next(bmsg_iter_t i);
