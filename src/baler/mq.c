@@ -42,10 +42,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#define BLOCKING_MQ	1
-#if BLOCKING_MQ == 1
 #include <pthread.h>
-#endif
 #include <unistd.h>
 #include "mq.h"
 
@@ -69,37 +66,32 @@ mq_msg_t mq_get_cons_msg(mq_t mq)
 
 mq_msg_t mq_get_cons_msg_wait(mq_t mq)
 {
-#if BLOCKING_MQ == 1
-	pthread_mutex_lock(&mq->mq_lock);
-#endif
+	if (mq->block)
+		pthread_mutex_lock(&mq->mq_lock);
 	while (mq_is_empty(mq)) {
-		;
-#if BLOCKING_MQ == 1
-		pthread_cond_wait(&mq->mq_cv, &mq->mq_lock);
-#else
-		pthread_testcancel();
-#endif
+		if (mq->block)
+			pthread_cond_wait(&mq->mq_cv, &mq->mq_lock);
+		else
+			pthread_testcancel();
 	}
-#if BLOCKING_MQ == 1
-	pthread_mutex_unlock(&mq->mq_lock);
-#endif
+	if (mq->block)
+		pthread_mutex_unlock(&mq->mq_lock);
 	return mq->mq_q[mq->mq_cons];
 }
 
 void mq_post_cons_msg(mq_t mq)
 {
-#if BLOCKING_MQ == 1
-	pthread_mutex_lock(&mq->mq_lock);
-#endif
+	if (mq->block)
+		pthread_mutex_lock(&mq->mq_lock);
 	mq->mq_cons += 1;
 	if (mq->mq_cons >= mq->mq_depth) {
 		mq->mq_cons = 0;
 		mq->mq_cons_g = !mq->mq_cons_g;
 	}
-#if BLOCKING_MQ == 1
-	pthread_cond_broadcast(&mq->mq_cv);
-	pthread_mutex_unlock(&mq->mq_lock);
-#endif
+	if (mq->block) {
+		pthread_cond_broadcast(&mq->mq_cv);
+		pthread_mutex_unlock(&mq->mq_lock);
+	}
 }
 
 mq_msg_t mq_get_prod_msg(mq_t mq)
@@ -111,44 +103,39 @@ mq_msg_t mq_get_prod_msg(mq_t mq)
 
 mq_msg_t mq_get_prod_msg_wait(mq_t mq)
 {
-#if BLOCKING_MQ == 1
-	pthread_mutex_lock(&mq->mq_lock);
-#endif
+	if (mq->block)
+		pthread_mutex_lock(&mq->mq_lock);
 	while (mq_is_full(mq)) {
-#if BLOCKING_MQ == 1
-		pthread_cond_wait(&mq->mq_cv, &mq->mq_lock);
-#else
-		pthread_testcancel();
-#endif
-		;
+		if (mq->block)
+			pthread_cond_wait(&mq->mq_cv, &mq->mq_lock);
+		else
+			pthread_testcancel();
 	}
 	int prod = mq->mq_prod;
-#if BLOCKING_MQ == 1
-	pthread_mutex_unlock(&mq->mq_lock);
-#endif
+	if (mq->block)
+		pthread_mutex_unlock(&mq->mq_lock);
 	return mq->mq_q[prod];
 }
 
 int mq_post_prod_msg(mq_t mq)
 {
 	int rc;
-#if BLOCKING_MQ == 1
-	pthread_mutex_lock(&mq->mq_lock);
-#endif
+	if (mq->block)
+		pthread_mutex_lock(&mq->mq_lock);
 	rc = mq->mq_prod;
 	mq->mq_prod += 1;
 	if (mq->mq_prod >= mq->mq_depth) {
 		mq->mq_prod = 0;
 		mq->mq_prod_g = !mq->mq_prod_g;
 	}
-#if BLOCKING_MQ == 1
-	pthread_cond_broadcast(&mq->mq_cv);
-	pthread_mutex_unlock(&mq->mq_lock);
-#endif
+	if (mq->block) {
+		pthread_cond_broadcast(&mq->mq_cv);
+		pthread_mutex_unlock(&mq->mq_lock);
+	}
 	return rc;
 }
 
-mq_t mq_new(size_t q_depth, size_t max_msg_size)
+mq_t mq_new(size_t q_depth, size_t max_msg_size, int blocking)
 {
 	int i;
 	mq_t mq;
@@ -156,6 +143,7 @@ mq_t mq_new(size_t q_depth, size_t max_msg_size)
 	mq = malloc(sizeof(*mq));
 	if (!mq)
 		goto out;
+	mq->block = blocking;
 	mq->mq_msg_mem = malloc(msg_size);
 	if (!mq->mq_msg_mem)
 		goto err_0;
@@ -170,10 +158,8 @@ mq_t mq_new(size_t q_depth, size_t max_msg_size)
 		mq->mq_q[i] = (mq_msg_t)&mq->mq_msg_mem[i * max_msg_size];
 		mq->mq_q[i]->msg_id = i + 1;
 	}
-#if BLOCKING_MQ == 1
 	pthread_mutex_init(&mq->mq_lock, NULL);
 	pthread_cond_init(&mq->mq_cv, NULL);
-#endif
  out:
 	return mq;
  err_1:
@@ -181,4 +167,9 @@ mq_t mq_new(size_t q_depth, size_t max_msg_size)
  err_0:
 	free(mq);
 	return NULL;
+}
+
+void mq_finish(mq_t mq)
+{
+	pthread_mutex_unlock(&mq->mq_lock);
 }

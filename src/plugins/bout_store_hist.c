@@ -1,4 +1,5 @@
 /* -*- c-basic-offset: 8 -*- */
+#include <sys/syscall.h>
 #include <assert.h>
 #include "baler/bplugin.h"
 #include "baler/boutput.h"
@@ -43,12 +44,14 @@ static int plugin_stop(struct bplugin *this)
 {
 	struct bout_store_hist_plugin *mp = (typeof(mp))this;
 	int i;
-
+	printf("Stopping plugin!\n");
 	pthread_mutex_lock(&mp->lock);
 	for (i = 0; i < mp->thread_count; i++) {
-		pthread_cancel(mp->threads[i]);
-		if (mp->threads[i])
+		if (mp->threads[i]) {
+			mq_finish(mp->mqs[i]);
+			pthread_cancel(mp->threads[i]);
 			pthread_join(mp->threads[i], NULL);
+		}
 	}
 	if (!mp->bs)
 		/* Not running */
@@ -82,6 +85,7 @@ static void *thread_fn(void *arg)
 static int plugin_config(struct bplugin *this, struct bpair_str_head *arg_head)
 {
 	int i, rc;
+	int blocking_mq = 0;
 	struct bout_store_hist_plugin *mp = (typeof(mp))this;
 	struct bpair_str *bpstr;
 	char *thread_str = NULL;
@@ -91,6 +95,10 @@ static int plugin_config(struct bplugin *this, struct bpair_str_head *arg_head)
 		thread_str = strdup(bpstr->s1);
 		if (!thread_str)
 			return ENOMEM;
+	}
+	bpstr = bpair_str_search(arg_head, "blocking_mq", NULL);
+	if (bpstr) {
+		blocking_mq = strtol(bpstr->s1, NULL, 0);
 	}
 	bpstr = bpair_str_search(arg_head, "q_depth", NULL);
 	if (bpstr) {
@@ -113,7 +121,7 @@ static int plugin_config(struct bplugin *this, struct bpair_str_head *arg_head)
 	if (!mp->q_depth || !q_depth_str)
 		mp->q_depth = DEFAULT_Q_DEPTH;
 	for (i = 0; i < mp->thread_count; i++) {
-		mp->mqs[i] = mq_new(mp->q_depth, HIST_MAX_MSG);
+		mp->mqs[i] = mq_new(mp->q_depth, HIST_MAX_MSG, blocking_mq);
 		if (!mp->mqs[i])
 			return ENOMEM;
 		rc = pthread_create(&mp->threads[i], NULL,

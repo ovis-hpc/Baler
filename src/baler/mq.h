@@ -42,9 +42,6 @@
 #ifndef _MQ_H_
 #define _MQ_H_
 #include <inttypes.h>
-#ifndef BLOCKING_MQ
-#define BLOCKING_MQ	1
-#endif
 struct mq_s;
 typedef struct mq_msg_s {
 	uint32_t msg_id;
@@ -63,10 +60,9 @@ typedef struct mq_s {
 	uint32_t mq_msg_max;
 	uint8_t *mq_msg_mem;
 	mq_msg_t *mq_q;
-#if BLOCKING_MQ == 1
+	uint32_t block;
 	pthread_mutex_t mq_lock;
 	pthread_cond_t mq_cv;
-#endif
 } *mq_t;
 
 /**
@@ -172,8 +168,15 @@ void mq_post_cons_msg(mq_t mq);
  *
  * \param q_depth The depth of the queue-pair
  * \param max_msg_size The maximum size of a message
+ * \param blocking Set to a non-zero value for a blocking MQ
  * \retval !NULL Pointer to the message buffer
  */
-mq_t mq_new(size_t q_depth, size_t max_msg_size);
+mq_t mq_new(size_t q_depth, size_t max_msg_size, int blocking);
+
+/**
+ * \brief Notify consumer that the producer is no longer using the MQ
+ * \param mq The message queue
+ */
+void mq_finish(mq_t mq);
 
 #endif
