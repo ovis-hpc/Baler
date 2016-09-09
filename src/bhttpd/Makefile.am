@@ -2,7 +2,7 @@ lib_LTLIBRARIES =
 bin_PROGRAMS =
 sbin_PROGRAMS =
 
-AM_CFLAGS = -I$(srcdir)/../
+AM_CFLAGS = -I$(srcdir)/../ -D_GNU_SOURCE
 
 bhttpd_SOURCES = bq_fmt_json.c \
 		 bq_fmt_json.h \

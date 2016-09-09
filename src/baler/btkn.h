@@ -261,5 +261,7 @@ int btkn_store_refresh(struct btkn_store *store);
 void btkn_store_iterate(struct btkn_store *btkn_store,
 			int (*cb)(uint32_t id, const struct bstr *bstr,
 					const struct btkn_attr *attr));
+
+btkn_type_t btkn_type(const char *str);
 #endif /* __BTKN_H */
 /**\}*/

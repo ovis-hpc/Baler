@@ -30,7 +30,7 @@ static char *format_timestamp(struct timeval *ptv)
 	tstr += sz; len -= sz;
 	sz = strftime(tstr, len, "%z", ptm);
 #else
-	snprintf(time_str, sizeof(time_str), "%d.%06d", ptv->tv_sec, ptv->tv_usec);
+	snprintf(time_str, sizeof(time_str), "%ld.%06ld", ptv->tv_sec, ptv->tv_usec);
 #endif
 	return time_str;
 }
@@ -505,7 +505,7 @@ static PyObject *__make_ptn(Bstore_t bs, bptn_t ptn)
 				  PyInt_FromLong(ptn->ptn_id));
 	if (rc)
 		goto err_3;
-	snprintf(row_str, sizeof(row_str), "row_%d", ptn->ptn_id);
+	snprintf(row_str, sizeof(row_str), "row_%ld", ptn->ptn_id);
 	rc = PyDict_SetItemString(pptn, "DT_RowId", PyString_FromString(row_str));
 	if (rc)
 		goto err_3;
@@ -1150,7 +1150,7 @@ PyObject *Ptn_Hist(Bstore_t bs, PyObject * py_id_list, uint32_t bin_width,
 		hist[id].time = start_time;
 		hist[id].bin_width = bin_width;
 
-		rc = PyList_Append(py_row, PyString_FromFormat("%d", hist[id].ptn_id));
+		rc = PyList_Append(py_row, PyString_FromFormat("%ld", hist[id].ptn_id));
 
 		ptn_h[id] = bstore_ptn_hist_iter_find(i[id], &hist[id]);
 		if (ptn_h[id])

@@ -232,6 +232,7 @@ void bstore_close(bstore_t bs);
 btkn_type_t bstore_tkn_get_type(bstore_t bs, const char *name, size_t name_len);
 btkn_id_t bstore_tkn_add(bstore_t bs, btkn_t tkn);
 int bstore_tkn_add_with_id(bstore_t bs, btkn_t tkn);
+btkn_type_t bstore_tkn_type_get(bstore_t bs, const char *name, size_t len);
 
 btkn_t bstore_tkn_find_by_id(bstore_t bs, btkn_id_t tkn_id);
 btkn_t bstore_tkn_find_by_name(bstore_t bs, const char *name, size_t name_len);

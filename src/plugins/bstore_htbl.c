@@ -66,7 +66,7 @@ retry:
 			goto err0;
 		/* Create/set active partition */
 		time_t t = time(NULL);
-		snprintf(buff, sizeof(buff), "%d", t);
+		snprintf(buff, sizeof(buff), "%ld", t);
 		rc = sos_part_create(sos, buff, NULL);
 		if (rc)
 			goto err1;

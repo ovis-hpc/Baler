@@ -7,6 +7,7 @@
 #include <bstore.h>
 #include <butils.h>
 #include <stdarg.h>
+#include <pthread.h>
 
 struct plugin_entry {
 	bstore_plugin_t plugin;

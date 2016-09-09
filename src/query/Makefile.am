@@ -1,4 +1,4 @@
-AM_CFLAGS = -I@top_srcdir@/src/
+AM_CFLAGS = -I@top_srcdir@/src/ -D_GNU_SOURCE
 BALER = ../baler
 
 bquery_SOURCES = bquery.c bquery.h bquery_priv.h

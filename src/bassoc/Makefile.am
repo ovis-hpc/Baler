@@ -1,7 +1,7 @@
 lib_LTLIBRARIES =
 bin_PROGRAMS =
 
-AM_CFLAGS = -I$(srcdir)/../
+AM_CFLAGS = -I$(srcdir)/../ -D_GNU_SOURCE
 
 libbassocimg_la_SOURCES = bassocimg.c bassocimg.h
 libbassocimg_la_LIBADD = ../baler/libbaler.la

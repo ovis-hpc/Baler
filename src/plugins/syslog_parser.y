@@ -1,6 +1,7 @@
 %{
-#define _XOPEN_SOURCE
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 #include <time.h>
 #include <string.h>
 #include <assert.h>
@@ -10,6 +11,7 @@
 #include "baler/btkn_types.h"
 #include "syslog.h"
 #include <stdio.h>
+/* #include "syslog_parser.h" */
 
 #define YYDEBUG	1
 #define YYERROR_VERBOSE 1
@@ -240,6 +242,10 @@ static int parse_timestamp(char *time_str, struct timeval *tv)
 	bwarn("Error parsing the time string %s into a Unix timestamp\n", time_str);
 	return 1;
 }
+
+int yyparse(syslog_parser_t parser, struct bstr *input, bwq_entry_t *pwqe);
+void yy_delete_buffer(struct yy_buffer_state *);
+int yylex(void*, syslog_parser_t, struct bstr *);
 
 static binp_result_t
 syslog_parse(binp_parser_t p, struct bstr *s, struct bwq_entry **pent)

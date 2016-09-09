@@ -1,4 +1,4 @@
-#AM_CFLAGS = -g -O0 -Wunused-result
+AM_CFLAGS = -D_GNU_SOURCE
 #AM_LDFLAGS =
 
 lib_LTLIBRARIES =
@@ -30,7 +30,7 @@ lib_LTLIBRARIES += libbaler.la
 balerd_SOURCES = balerd.c
 balerd_LDADD = libbaler.la \
 	       -lcoll -levent -levent_pthreads -lzap -lpthread -ldl
-balerd_CFLAGS = @OVIS_LIB_INCDIR_FLAG@ @LIBEVENT_INCDIR_FLAG@
+balerd_CFLAGS = $(AM_CFLAGS) @OVIS_LIB_INCDIR_FLAG@ @LIBEVENT_INCDIR_FLAG@
 #balerd_CFLAGS = -pg @OVIS_LIB_INCDIR_FLAG@ @LIBEVENT_INCDIR_FLAG@
 balerd_LDFLAGS = @OVIS_LIB_LIBDIR_FLAG@ @OVIS_LIB_LIB64DIR_FLAG@ @EVENTLIBS@
 

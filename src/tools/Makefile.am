@@ -1,7 +1,7 @@
 lib_LTLIBRARIES =
 bin_PROGRAMS =
 
-AM_CFLAGS = -I$(srcdir)/../
+AM_CFLAGS = -I$(srcdir)/../ -D_GNU_SOURCE
 
 bcsv2bnumvec_SOURCES = bcsv2bnumvec.c bnum.h
 bcsv2bnumvec_LDADD = ../baler/libbaler.la

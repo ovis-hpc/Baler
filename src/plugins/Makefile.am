@@ -2,7 +2,7 @@ SUBDIRS = . test/
 
 bin_PROGRAMS =
 lib_LTLIBRARIES =
-AM_CFLAGS = -I@top_srcdir@/src/
+AM_CFLAGS = -I@top_srcdir@/src/ -D_GNU_SOURCE
 
 AM_YFLAGS = -d
 libsyslog_parser_la_SOURCES = syslog_parser.y syslog_lexer.l syslog.h

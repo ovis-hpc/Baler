@@ -1,4 +1,6 @@
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 #include <getopt.h>
 #include <errno.h>
 #include <wordexp.h>
@@ -173,10 +175,10 @@ void show_patterns(bstore_t bs)
 	       "------------ ------------\n");
 	for (ptn = bstore_ptn_iter_find(pi, ptn_id); ptn; ptn = bstore_ptn_iter_next(pi)) {
 		int arg;
-		printf("%8d ", ptn->ptn_id);
+		printf("%8lu ", ptn->ptn_id);
 		printf("%-24s ", fmt_date(&ptn->first_seen));
 		printf("%-24s ", fmt_date(&ptn->last_seen));
-		printf("%12d ", ptn->count);
+		printf("%12lu ", ptn->count);
 		for (arg = 0; arg < ptn->tkn_count; arg++) {
 			uint64_t tkn_id = (ptn->str->u64str[arg] >> 8);
 			btkn_type_t tkn_type = ptn->str->u64str[arg] & 0xFF;
@@ -194,8 +196,8 @@ void show_patterns(bstore_t bs)
 				break;
 			}
 			if (color)
-				printf(type_colors[tkn_type]);
-			printf(tkn_str);
+				printf("%s", type_colors[tkn_type]);
+			printf("%s", tkn_str);
 			if (color)
 				printf(RESET);
 			if (tkn)
@@ -231,9 +233,9 @@ void show_ptn_tkns(bstore_t bs, bptn_id_t ptn_id, int pos)
 			type_str = type_tkn->tkn_str->cstr;
 		if (color) {
 			if (type_id < BTKN_TYPE_LAST)
-				printf(type_colors[type_id]);
+				printf("%s", type_colors[type_id]);
 			else
-				printf(NORM);
+				printf("%s", NORM);
 		}
 		printf("%-12s '%s'", type_str, tkn->tkn_str->cstr);
 		if (color)
@@ -271,7 +273,7 @@ void show_ptn_hist(bstore_t bs)
 
 		tv.tv_sec = hist.time;
 		tv.tv_usec = 0;
-		printf("%12d %-32s %12d %12d\n",
+		printf("%12lu %-32s %12d %12lu\n",
 		       hist.ptn_id,
 		       fmt_date(&tv),
 		       hist.bin_width,
@@ -305,7 +307,7 @@ void show_tkn_hist(bstore_t bs)
 
 		tv.tv_sec = hist.time;
 		tv.tv_usec = 0;
-		printf("%-24s %12d %12d %12d %s\n",
+		printf("%-24s %12lu %12d %12lu %s\n",
 		       fmt_date(&tv),
 		       hist.tkn_id,
 		       hist.bin_width,
@@ -342,7 +344,7 @@ void show_comp_hist(bstore_t bs)
 		tv.tv_sec = hist.time;
 		tv.tv_usec = 0;
 
-		printf("%12d %-24s %12d %12d %12d\n",
+		printf("%12lu %-24s %12lu %12d %12lu\n",
 		       hist.comp_id,
 		       fmt_date(&tv),
 		       hist.ptn_id,
@@ -367,12 +369,12 @@ void show_messages(bstore_t bs)
 	for (msg = bstore_msg_iter_find(mi, begin_time, ptn_id, comp_id, NULL, NULL);
 	     msg; msg = bstore_msg_iter_next(mi)) {
 		int arg;
-		printf("%8d ", msg->ptn_id);
+		printf("%8lu ", msg->ptn_id);
 		tkn = bstore_tkn_find_by_id(bs, msg->comp_id);
 		if (tkn)
 			printf("%12s ", tkn->tkn_str->cstr);
 		else
-			printf("%12d ", msg->comp_id);
+			printf("%12lu ", msg->comp_id);
 		printf("%-20s ", fmt_date(&msg->timestamp));
 		for (arg = 0; arg < msg->argc; arg++) {
 			tkn_id = msg->argv[arg] >> 8;
@@ -380,9 +382,9 @@ void show_messages(bstore_t bs)
 			btkn_t tkn = bstore_tkn_find_by_id(bs, tkn_id);
 			if (color) {
 				if (type_id < BTKN_TYPE_LAST)
-					printf(type_colors[type_id]);
+					printf("%s", type_colors[type_id]);
 				else
-					printf(NORM);
+					printf("%s", NORM);
 			}
 			printf("%s", tkn->tkn_str->cstr);
 			if (color)
@@ -407,8 +409,8 @@ void show_tokens(bstore_t bs)
 			goto skip;
 		if (tkn_type_id && !btkn_has_type(tkn, tkn_type_id))
 			goto skip;
-		printf("%-12d ", tkn->tkn_id);
-		printf("%12d ", tkn->tkn_count);
+		printf("%-12lu ", tkn->tkn_id);
+		printf("%12lu ", tkn->tkn_count);
 		size_t sz = 0;
 		char *s = types_str;
 		btkn_type_mask_t mask = tkn->tkn_type_mask;
@@ -424,10 +426,10 @@ void show_tokens(bstore_t bs)
 					sz++;
 				}
 				if (color) {
-					cnt = sprintf(s, type_colors[i]);
+					cnt = sprintf(s, "%s", type_colors[i]);
 					s += cnt;
 				}
-				cnt = sprintf(s, type_strs[i]);
+				cnt = sprintf(s, "%s", type_strs[i]);
 				s += cnt;
 				sz += cnt;
 				if (color) {
@@ -436,7 +438,7 @@ void show_tokens(bstore_t bs)
 				}
 			}
 		}
-		printf(types_str);
+		printf("%s", types_str);
 		for (i = sz; i <= 20; i++)
 			printf(" ");
 		printf("%s\n", tkn->tkn_str->cstr);

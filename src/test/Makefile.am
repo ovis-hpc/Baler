@@ -1,6 +1,6 @@
 bin_PROGRAMS =
 
-AM_CFLAGS = -I$(top_srcdir)/src
+AM_CFLAGS = -I$(top_srcdir)/src -D_GNU_SOURCE
 
 bmap_test_SOURCES = bmap_test.c
 bmap_test_LDADD = ../baler/libbaler.la -lpthread -ldl

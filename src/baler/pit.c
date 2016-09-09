@@ -19,7 +19,7 @@ binp_parser_t loadit(char *lib)
 	binp_get_parser_fn_t get_parser;
 	void *d = dlopen(lib, RTLD_NOW);
 	if (!d) {
-		printf(dlerror());
+		printf("%s", dlerror());
 		return NULL;
 	}
 	get_parser = dlsym(d, "binp_get_parser");
