@@ -580,6 +580,8 @@ void* boutqwkr_routine(void *arg);
 
 void bconfig_list_free(struct bconfig_list *bl) {
 	struct bpair_str *bp;
+	if (bl->command)
+		free(bl->command);
 	while ((bp = LIST_FIRST(&bl->arg_head_s))) {
 		LIST_REMOVE(bp, link);
 		bpair_str_free(bp);
@@ -973,6 +975,7 @@ int __process_cmd_tokens_line_cb(char *line, void *_ctxt)
 			berr("error inserting token '%s'", line);
 		}
 	}
+	btkn_free(tkn);
 	return 0;
 }
 

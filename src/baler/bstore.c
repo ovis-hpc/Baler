@@ -508,3 +508,14 @@ void bstore_iter_pos_free(bstore_iter_t iter, bstore_iter_pos_t pos)
 {
 	return iter->bs->plugin->iter_pos_free(iter, pos);
 }
+
+static void __attribute__ ((destructor)) bstore_term(void)
+{
+	struct plugin_entry *pe;
+	struct rbn *rbn;
+	for (rbn = rbt_min(&plugin_tree); rbn; rbn = rbt_min(&plugin_tree)) {
+		rbt_del(&plugin_tree, rbn);
+		pe = container_of(rbn, struct plugin_entry, rbn);
+		free(pe);
+	}
+}

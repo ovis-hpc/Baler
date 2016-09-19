@@ -54,6 +54,9 @@
 #include "btkn.h"
 #include <ctype.h>
 
+pthread_mutex_t tkn_lock;
+struct btkn_list_head tkn_list;
+
 static int store_comparator(void *a, const void *b)
 {
 	return strcmp((char *)a, (char *)b);
@@ -92,6 +95,16 @@ const char *btkn_type_str[] = {
 	[BTKN_TYPE_WHITESPACE] = "WHITESPACE",
 	[BTKN_TYPE_TEXT] = "TEXT"
 };
+
+void btkn_dump()
+{
+	btkn_t tkn;
+	pthread_mutex_lock(&tkn_lock);
+	LIST_FOREACH(tkn, &tkn_list, entry) {
+		printf("%p call_0 %p call_1 %p str %s\n", tkn, tkn->call_0, tkn->call_1, tkn->tkn_str->cstr);
+	}
+	pthread_mutex_unlock(&tkn_lock);
+}
 
 btkn_type_t btkn_type(const char *str)
 {

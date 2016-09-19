@@ -129,7 +129,7 @@ void binq_entry_free(struct bwq_entry *ent)
 	bstr_list_free_entries(&ent->data.in.tokens);
 	btkn_tailq_free_entries(&ent->data.in.tkn_q);
 	if (ent->data.in.hostname)
-		free(ent->data.in.hostname);
+		bstr_free(ent->data.in.hostname);
 	free(ent);
 }
 

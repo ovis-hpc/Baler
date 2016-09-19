@@ -188,6 +188,9 @@ typedef struct btkn {
 	btkn_type_mask_t tkn_type_mask;
 	uint64_t tkn_count;
 	struct bstr *tkn_str;
+	void *call_0;
+	void *call_1;
+	LIST_ENTRY(btkn) entry;
 } *btkn_t;
 
 #define BMETRIC_LEAD_TKN "\001\001\001\001"
@@ -364,10 +367,13 @@ static btkn_type_t btkn_first_type(btkn_t tkn) {
 	return ffsl(tkn->tkn_type_mask);
 }
 
+LIST_HEAD(btkn_list_head, btkn);
 static btkn_t
 btkn_alloc(btkn_id_t tkn_id, btkn_type_mask_t mask, const char *str, size_t len) {
 	btkn_t t = malloc(sizeof *t + sizeof(struct bstr) + (len+1));
 	if (t) {
+		extern pthread_mutex_t tkn_lock;
+		extern struct btkn_list_head tkn_list;
 		t->tkn_id = tkn_id;
 		t->tkn_type_mask = mask;
 		t->tkn_count = 0;
@@ -375,6 +381,11 @@ btkn_alloc(btkn_id_t tkn_id, btkn_type_mask_t mask, const char *str, size_t len)
 		t->tkn_str->blen = len+1;
 		memcpy(t->tkn_str->cstr, str, len);
 		t->tkn_str->cstr[len] = '\0';
+		t->call_0 = __builtin_return_address(1);
+		t->call_1 = __builtin_return_address(2);
+		pthread_mutex_lock(&tkn_lock);
+		LIST_INSERT_HEAD(&tkn_list, t, entry);
+		pthread_mutex_unlock(&tkn_lock);
 	}
 	return t;
 }
@@ -393,6 +404,11 @@ static btkn_t btkn_dup(btkn_t src)
 
 static void btkn_free(btkn_t t)
 {
+	extern pthread_mutex_t tkn_lock;
+	extern struct btkn_list_head tkn_list;
+	pthread_mutex_lock(&tkn_lock);
+	LIST_REMOVE(t, entry);
+	pthread_mutex_unlock(&tkn_lock);
 	free(t);
 }
 

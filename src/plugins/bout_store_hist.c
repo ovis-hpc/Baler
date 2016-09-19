@@ -106,8 +106,10 @@ static int plugin_config(struct bplugin *this, struct bpair_str_head *arg_head)
 		if (!q_depth_str)
 			return ENOMEM;
 	}
-	if (thread_str)
+	if (thread_str) {
 		mp->thread_count = strtoul(thread_str, NULL, 0);
+		free(thread_str);
+	}
 	if (!mp->thread_count || !thread_str)
 		mp->thread_count = DEFAULT_THREAD_COUNT;
 	mp->threads = calloc(mp->thread_count, sizeof(pthread_t));
@@ -116,8 +118,10 @@ static int plugin_config(struct bplugin *this, struct bpair_str_head *arg_head)
 	mp->mqs = calloc(mp->thread_count, sizeof(struct mq_s *));
 	if (!mp->mqs)
 		return ENOMEM;
-	if (q_depth_str)
+	if (q_depth_str) {
 		mp->q_depth = strtoul(q_depth_str, NULL, 0);
+		free(q_depth_str);
+	}
 	if (!mp->q_depth || !q_depth_str)
 		mp->q_depth = DEFAULT_Q_DEPTH;
 	for (i = 0; i < mp->thread_count; i++) {
@@ -148,6 +152,14 @@ static int plugin_free(struct bplugin *this)
 	struct bout_store_hist_plugin *mp = (typeof(mp))this;
 	if (mp->bs)
 		plugin_stop(this);
+	if (mp->mqs) {
+		int i;
+		for (i = 0; i < mp->thread_count; i++)
+			free(mp->mqs[i]);
+		free(mp->mqs);
+	}
+	if (mp->threads)
+		free(mp->threads);
 	bplugin_free(this);
 	return 0;
 }

@@ -66,7 +66,7 @@ typedef struct bstore_sos_s {
 	pthread_mutex_t hist_lock;
 } *bstore_sos_t;
 
-#define H2BXT_IDX_ARGS "ORDER=5 SIZE=13"
+#define H2BXT_IDX_ARGS "ORDER=5 SIZE=3"
 
 struct sos_schema_template token_value_schema = {
 	.name = "TokenValue",
@@ -676,6 +676,7 @@ static bstore_t bs_open(bstore_plugin_t plugin, const char *path, int flags, int
 		btkn_free(tkn);
 	}
  out:
+	free(cpath);
 	return &bs->base;
  err_8:
 	sos_container_close(bs->hist_sos, SOS_COMMIT_ASYNC);
@@ -702,6 +703,7 @@ static void bs_close(bstore_t bs)
 	bstore_sos_t bss = (bstore_sos_t)bs;
 	if (!bs)
 		return;
+	free(bs->path);
 	sos_container_close(bss->dict_sos, SOS_COMMIT_ASYNC);
 	sos_container_close(bss->ptn_sos, SOS_COMMIT_ASYNC);
 	sos_container_close(bss->ptn_tkn_sos, SOS_COMMIT_ASYNC);
@@ -1968,16 +1970,22 @@ static bptn_id_t bs_ptn_add(bstore_t bs, struct timeval *tv, bstr_t ptn)
 	ptn_t ptn_value;
 	bstore_sos_t bss = (bstore_sos_t)bs;
 	sos_obj_t ptn_obj;
-	sos_key_t ptn_key = sos_key_new(ptn->blen);
+	SOS_KEY_SZ(stack_key, 2048);
+	sos_key_t ptn_key;
 	int rc;
 
+	if (ptn->blen <= 2048)
+		ptn_key = stack_key;
+	else
+		ptn_key = sos_key_new(ptn->blen);
 	/* If the pattern is already present, return it's ptn_id */
 	size_t tkn_count = ptn->blen / sizeof(ptn->u64str[0]);
 	size_t ptn_size = encode_ptn(ptn, tkn_count);
 	sos_key_set(ptn_key, ptn->cstr, ptn_size);
 	pthread_mutex_lock(&bss->ptn_lock);
 	ptn_obj = sos_obj_find(bss->tkn_type_ids_attr, ptn_key);
-	sos_key_put(ptn_key);
+	if (ptn_key != stack_key)
+		sos_key_put(ptn_key);
 	if (ptn_obj) {
 		struct timeval last_seen;
 		ptn_value = sos_obj_ptr(ptn_obj);

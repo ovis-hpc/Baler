@@ -338,16 +338,24 @@ timestamp: 	TIMESTAMP_TKN
 		    if (!yy_wqe)
 			yy_wqe = alloc_wqe();
 		    parse_timestamp($1->tkn_str->cstr, &yy_wqe->data.in.tv);
+		    btkn_free($1);
 		}
 		;
 
 ts_wspace:	timestamp WHITESPACE_TKN
+		{
+		    btkn_free($2);
+		}
 		;
 
 prio_vers:	PRIORITY_TKN DEC_INT_TKN WHITESPACE_TKN
 		{
 		    if (!yy_wqe)
 			yy_wqe = alloc_wqe();
+		    /* we don't enqueue these tokens to the token string */
+		    btkn_free($1);
+		    btkn_free($2);
+		    btkn_free($3);
 		}
 		;
 
@@ -373,6 +381,8 @@ hwerr_hdr: 	timestamp WHITESPACE_TKN SEPARATOR_TKN WHITESPACE_TKN
 
 bsd_hdr:	PRIORITY_TKN timestamp WHITESPACE_TKN BSD_SVC_TKN SEPARATOR_TKN
 		{
+		    btkn_free($1); /* free the PRIORITY_TKN */
+		    btkn_free($3); /* free the WHITESPACE_TKN */
 		    enqueue_token(yy_wqe, $4, BTKN_TYPE_SERVICE);
 		    enqueue_token(yy_wqe, $5, BTKN_TYPE_SEPARATOR);
 		}
@@ -381,25 +391,39 @@ bsd_hdr:	PRIORITY_TKN timestamp WHITESPACE_TKN BSD_SVC_TKN SEPARATOR_TKN
 /* log message w/o priority and version */
 ts_host:	timestamp WHITESPACE_TKN hostname
 		{
+		    btkn_free($2); /* free the WHITESPACE_TKN */
 		    enqueue_token(yy_wqe, $3, BTKN_TYPE_HOSTNAME);
 		}
 		| timestamp WHITESPACE_TKN encap_host
+		{
+		    btkn_free($2); /* free the WHITESPACE_TKN */
+		}
 		;
 
 /* Missing syslog version */
 prio_host:	PRIORITY_TKN timestamp WHITESPACE_TKN hostname
 		{
+		    btkn_free($1); /* free the PRIORITY_TKN */
+		    btkn_free($3); /* free the WHITESPACE_TKN */
 		    enqueue_token(yy_wqe, $4, BTKN_TYPE_HOSTNAME);
 		}
 		| PRIORITY_TKN timestamp WHITESPACE_TKN encap_host
+		{
+		    btkn_free($1); /* free the PRIORITY_TKN */
+		    btkn_free($3); /* free the WHITESPACE_TKN */
+		}
 		;
 
 /* log message with priority and version */
 pv_ts_host:	prio_vers timestamp WHITESPACE_TKN hostname
 		{
+		    btkn_free($3); /* free the WHITESPACE_TKN */
 		    enqueue_token(yy_wqe, $4, BTKN_TYPE_HOSTNAME);
 		}
 		| prio_vers timestamp WHITESPACE_TKN encap_host
+		{
+		    btkn_free($3); /* free the WHITESPACE_TKN */
+		}
 		;
 
 pv_ts_host_pid:		/* service name is missing/nul */
@@ -416,7 +440,6 @@ pv_ts_host_svc:	pv_ts_host WHITESPACE_TKN TEXT_TKN
 		    enqueue_token(yy_wqe, $3, BTKN_TYPE_SERVICE);
 		}
 		;
-
 
 pv_ts_host_svc_pid:
 		pv_ts_host_svc WHITESPACE_TKN DEC_INT_TKN
