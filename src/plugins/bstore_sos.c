@@ -784,12 +784,11 @@ static int __add_tkn_with_id(bstore_sos_t bss, btkn_t tkn, uint64_t count)
 	tkn_value = sos_obj_ptr(tkn_obj);
 	tkn_value->tkn_count = count;
 
-	sz = tkn->tkn_str->blen + 1;
+	sz = tkn->tkn_str->blen;
 	v = sos_array_new(&v_, bss->tkn_text_attr, tkn_obj, sz);
 	if (!v)
 		goto err_1;
-	memcpy(v->data->array.data.byte_, tkn->tkn_str->cstr, sz - 1);
-	v->data->array.data.byte_[sz-1] = '\0';
+	memcpy(v->data->array.data.byte_, tkn->tkn_str->cstr, sz);
 	sos_value_put(v);
 	tkn_value->tkn_id = tkn->tkn_id;
 	/* Squash BTKN_TYPE_TEXT (i.e. unrecognized) if WORD or
