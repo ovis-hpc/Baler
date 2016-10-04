@@ -364,7 +364,7 @@ void show_messages(bstore_t bs)
 	printf("%-8s %-12s %-20s %s\n",
 	       "Ptn Id", "Comp Id", "Timestamp", "Message");
 	printf("-------- ------------ -------------------- --------------------\n");
-	for (msg = bstore_msg_iter_find(mi, ptn_id, begin_time, comp_id, NULL, NULL);
+	for (msg = bstore_msg_iter_find(mi, begin_time, ptn_id, comp_id, NULL, NULL);
 	     msg; msg = bstore_msg_iter_next(mi)) {
 		int arg;
 		printf("%8d ", msg->ptn_id);
