@@ -18,7 +18,7 @@
 #include "baler/bheap.h"
 #include "baler/bstore.h"
 
-const char *short_opts = "s:S:P:n:y:B:E:A:W:I:Tmptcd123";
+const char *short_opts = "s:S:P:n:y:B:E:A:W:I:Tmptcd123r";
 struct option long_opts[] = {
 	{"begin",       required_argument,      0, 'B'},
 	{"color",	no_argument,		0, 'c'},
@@ -38,6 +38,7 @@ struct option long_opts[] = {
 	{"tkn",		no_argument,		0, 't'},
 	{"tkn_id",	required_argument,	0, 'I'},
 	{"type",	required_argument,	0, 'y'},
+	{"raw",	        required_argument,	0, 'r'},
 	{0,		0,			0, 0},
 };
 void usage(int argc, char *argv[])
@@ -60,19 +61,25 @@ void usage(int argc, char *argv[])
 	       " --ptn_hist, -1         Show the pattern history.\n"
 	       " --comp_hist, -2        Show the component history.\n"
 	       " --tkn_hist, -3         Show the token history.\n"
+	       " --raw, -r              Show time as raw Unix timestamps.\n"
 	       );
 	exit(1);
 }
 // #define OUTP_DATE_FMT "%F %T"
 #define OUTP_DATE_FMT "%c"
+int raw_time = 0;
 static const char *fmt_date(struct timeval *tv)
 {
 	size_t sz;
 	struct tm *tm;
 	static char date_str[80];
 	time_t t = tv->tv_sec;
-	tm = localtime(&t);
-	sz = strftime(date_str, sizeof(date_str), OUTP_DATE_FMT, tm);
+	if (!raw_time) {
+		tm = localtime(&t);
+		sz = strftime(date_str, sizeof(date_str), OUTP_DATE_FMT, tm);
+	} else {
+		sprintf(date_str, "%ld", t);
+	}
 	return date_str;
 }
 
@@ -159,8 +166,9 @@ const char *type_colors[] = {
 	[BTKN_TYPE_PATH] = BOLD YELLOW,
 	[BTKN_TYPE_URL] = BOLD YELLOW,
 	[BTKN_TYPE_WORD] = BOLD,
-	[BTKN_TYPE_TEXT] = BOLD RED,
+	[BTKN_TYPE_SEPARATOR] = NORM,
 	[BTKN_TYPE_WHITESPACE] = NORM,
+	[BTKN_TYPE_TEXT] = BOLD RED,
 	[BTKN_TYPE_LAST] = NULL,
 };
 
