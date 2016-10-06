@@ -62,11 +62,6 @@ libbout_store_hist_la_CFLAGS = $(AM_CFLAGS)
 libbout_store_hist_la_LIBADD = ../baler/libbaler.la -lpthread
 lib_LTLIBRARIES += libbout_store_hist.la
 
-libbout_store_ptn_tkn_la_SOURCES = bout_store_ptn_tkn.c bout_store_ptn_tkn.h
-libbout_store_ptn_tkn_la_CFLAGS = $(AM_CFLAGS)
-libbout_store_ptn_tkn_la_LIBADD = ../baler/libbaler.la -lpthread
-lib_LTLIBRARIES += libbout_store_ptn_tkn.la
-
 libbsos_msg_la_SOURCES = bsos_msg.c bsos_msg.h
 libbsos_msg_la_CFLAGS = $(AM_CFLAGS) @SOS_INCDIR_FLAG@
 libbsos_msg_la_LIBADD = -lsos -lods ../baler/libbaler.la -lpthread @SOS_LIBDIR_FLAG@ @SOS_LIB64DIR_FLAG@

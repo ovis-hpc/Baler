@@ -2042,9 +2042,11 @@ static sos_visit_action_t hist_cb(sos_index_t index,
 				  int found,
 				  void *arg)
 {
-	idx_data->uint64_[1]++;
-	if (!found)
+	if (!found) {
+		idx_data->uint64_[1] = 1;
 		return SOS_VISIT_ADD;
+	}
+	idx_data->uint64_[1]++;
 	return SOS_VISIT_UPD;
 }
 

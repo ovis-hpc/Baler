@@ -182,8 +182,6 @@ typedef struct ptn_tkn_add_s {
 	bptn_id_t ptn_id;
 	uint64_t tkn_pos;
 	btkn_id_t tkn_id;
-	time_t secs;
-	time_t bin_width;
 } *ptn_tkn_add_t;
 enum {
 	WQE_TKN_HIST,
@@ -247,8 +245,7 @@ static void do_tkn_hist(struct bout_store_hist_plugin *mp, bmsg_t msg, struct ti
 	mq_post_prod_msg(mp->mqs[mp->curr_nq]);
 }
 
-static void do_ptn_tkn_hist(struct bout_store_hist_plugin *mp, bmsg_t msg, struct timeval *tv,
-			    int bin, int pos)
+static void do_ptn_tkn_hist(struct bout_store_hist_plugin *mp, bmsg_t msg, int pos)
 {
 	hist_msg_t hist_msg;
 	mp->curr_nq = __sync_add_and_fetch(&mp->curr_nq, 1) % mp->thread_count;
@@ -257,8 +254,6 @@ static void do_ptn_tkn_hist(struct bout_store_hist_plugin *mp, bmsg_t msg, struc
 	hist_msg->hdr.msg_work_fn = ptn_tkn_hist_update;
 	hist_msg->hdr.msg_size = sizeof(hist_msg);
 	hist_msg->ptn_tkn.bs = mp->bs;
-	hist_msg->ptn_tkn.secs = clamp_time_to_bin(tv->tv_sec, hist_bins[bin]);
-	hist_msg->ptn_tkn.bin_width = hist_bins[bin];
 	hist_msg->ptn_tkn.ptn_id = msg->ptn_id;
 	hist_msg->ptn_tkn.tkn_id = msg->argv[pos] >> 8;
 	hist_msg->ptn_tkn.tkn_pos = pos;
@@ -301,10 +296,12 @@ static int plugin_process_output(struct boutplugin *this, struct boutq_data *oda
 			/* Global Token History */
 			if (mp->tkn_hist)
 				do_tkn_hist(mp, msg, tv, bin, pos);
-			/* Per-Pattern Token History */
-			if (mp->ptn_tkn_hist)
-				do_ptn_tkn_hist(mp, msg, tv, bin, pos);
 		}
+	}
+	/* Per-Pattern Token History */
+	for (pos = 0; pos < msg->argc; pos++) {
+		if (mp->ptn_tkn_hist)
+			do_ptn_tkn_hist(mp, msg, pos);
 	}
 	return rc;
 }
