@@ -2365,6 +2365,45 @@ static btkn_hist_t tkn_hist_next(bsos_iter_t i, btkn_hist_t tkn_h)
 	return NULL;
 }
 
+static btkn_hist_t tkn_hist_prev(bsos_iter_t i, btkn_hist_t tkn_h)
+{
+	int rc = 0;
+	tkn_hist_t tkn_o;
+	sos_key_t key_o = sos_iter_key(i->iter);
+	time_t hist_time;
+	time_t start_time = be32toh(i->start);
+	sos_obj_ref_t ref;
+	for ( ; 0 == rc;
+	      sos_key_put(key_o),
+		      key_o = (0 == (rc = sos_iter_prev(i->iter))?sos_iter_key(i->iter):NULL)) {
+
+		tkn_o = (tkn_hist_t)sos_key_value(key_o);
+		if (i->bin_width && (i->bin_width != tkn_o->key.bin_width))
+			/* Bin width doesn't match, no more matches */
+			break;
+
+		hist_time = be32toh(tkn_o->key.time);
+		if (start_time && start_time < hist_time)
+			/* Time doesn't match, no more matches */
+			break;
+
+		if (i->tkn_id && (i->tkn_id != tkn_o->key.tkn_id))
+			/* tkn id doesn't match, keep looking */
+			continue;
+
+		/* Everything matches, return it */
+		tkn_h->tkn_id = be64toh(tkn_o->key.tkn_id);
+		tkn_h->bin_width = be32toh(tkn_o->key.bin_width);
+		tkn_h->time = be32toh(tkn_o->key.time);
+		ref = sos_iter_ref(i->iter);
+		tkn_h->tkn_count = ref.idx_data.uint64_[1];
+		return tkn_h;
+	}
+	if (key_o)
+		sos_key_put(key_o);
+	return NULL;
+}
+
 static btkn_hist_t
 bs_tkn_hist_iter_find(btkn_hist_iter_t iter, btkn_hist_t tkn_h)
 {
@@ -2390,6 +2429,32 @@ bs_tkn_hist_iter_find(btkn_hist_iter_t iter, btkn_hist_t tkn_h)
 		return NULL;
 
 	return tkn_hist_next(i, tkn_h);
+}
+static btkn_hist_t
+bs_tkn_hist_iter_last(btkn_hist_iter_t iter, btkn_hist_t tkn_h)
+{
+	bstore_sos_t bss = (bstore_sos_t)iter->bs;
+	bsos_iter_t i = (bsos_iter_t)iter;
+	SOS_KEY(key);
+	ods_key_value_t hist_k = key->as.ptr;
+	tkn_hist_t tkn_k = (tkn_hist_t)hist_k->value;
+	sos_obj_t hist_o;
+	int rc;
+
+	i->tkn_id = htobe64(tkn_h->tkn_id);
+	i->bin_width = htobe32(tkn_h->bin_width);
+	i->start = htobe32(clamp_time_to_bin(tkn_h->time, tkn_h->bin_width));
+
+	tkn_k->key.tkn_id = i->tkn_id;
+	tkn_k->key.bin_width = i->bin_width;
+	tkn_k->key.time = i->start;
+	hist_k->len = sizeof(tkn_k->key);
+
+	rc = sos_iter_inf(i->iter, key);
+	if (rc)
+		return NULL;
+
+	return tkn_hist_prev(i, tkn_h);
 }
 
 static btkn_hist_t bs_tkn_hist_iter_first(btkn_hist_iter_t iter, btkn_hist_t tkn_h)
@@ -2421,6 +2486,18 @@ static btkn_hist_t bs_tkn_hist_iter_next(btkn_hist_iter_t iter, btkn_hist_t tkn_
 		return NULL;
 
 	return tkn_hist_next(i, tkn_h);
+}
+
+static btkn_hist_t bs_tkn_hist_iter_prev(btkn_hist_iter_t iter, btkn_hist_t tkn_h)
+{
+	bsos_iter_t i = (bsos_iter_t)iter;
+	int rc;
+
+	rc = sos_iter_prev(i->iter);
+	if (rc)
+		return NULL;
+
+	return tkn_hist_prev(i, tkn_h);
 }
 
 static bstore_iter_pos_t bs_ptn_hist_iter_pos(bptn_hist_iter_t iter)
@@ -2518,6 +2595,46 @@ static bptn_hist_t ptn_hist_next(bsos_iter_t i, bptn_hist_t ptn_h)
 	return NULL;
 }
 
+static bptn_hist_t ptn_hist_prev(bsos_iter_t i, bptn_hist_t ptn_h)
+{
+	int rc = 0;
+	ptn_hist_t ptn_o;
+	sos_key_t key_o = sos_iter_key(i->iter);
+	sos_obj_ref_t ref;
+	time_t hist_time;
+	time_t start_time = be32toh(i->start);
+	for ( ; 0 == rc;
+	      sos_key_put(key_o),
+		      key_o = (0 == (rc = sos_iter_prev(i->iter))?sos_iter_key(i->iter):NULL)) {
+
+		ptn_o = (typeof(ptn_o))sos_key_value(key_o);
+		if (i->bin_width && (i->bin_width != ptn_o->key.bin_width))
+			/* Bin width doesn't match, no more matches */
+			break;
+
+		hist_time = be32toh(ptn_o->key.time);
+		if (start_time && start_time < hist_time)
+			/* Time doesn't match, no more matches */
+			break;
+
+		if (i->ptn_id && (i->ptn_id != ptn_o->key.ptn_id))
+			/* ptn id doesn't match, skip mismatch */
+			continue;
+
+		/* Everything matches, return it */
+		ptn_h->ptn_id = be64toh(ptn_o->key.ptn_id);
+		ptn_h->bin_width = be32toh(ptn_o->key.bin_width);
+		ptn_h->time = be32toh(ptn_o->key.time);
+		sos_key_put(key_o);
+		ref = sos_iter_ref(i->iter);
+		ptn_h->msg_count = ref.idx_data.uint64_[1];
+		return ptn_h;
+	}
+	if (key_o)
+		sos_key_put(key_o);
+	return NULL;
+}
+
 static bptn_hist_t
 bs_ptn_hist_iter_find(bptn_hist_iter_t iter, bptn_hist_t ptn_h)
 {
@@ -2564,6 +2681,32 @@ static bptn_hist_t bs_ptn_hist_iter_first(bptn_hist_iter_t iter, bptn_hist_t ptn
 	return ptn_hist_next(i, ptn_h);
 }
 
+static bptn_hist_t bs_ptn_hist_iter_last(bptn_hist_iter_t iter, bptn_hist_t ptn_h)
+{
+	bstore_sos_t bss = (bstore_sos_t)iter->bs;
+	bsos_iter_t i = (bsos_iter_t)iter;
+	SOS_KEY(key);
+	ods_key_value_t hist_k = key->as.ptr;
+	ptn_hist_t ptn_k = (ptn_hist_t)hist_k->value;
+	sos_obj_t hist_o;
+	int rc;
+
+	i->ptn_id = htobe64(ptn_h->ptn_id);
+	i->bin_width = htobe32(ptn_h->bin_width);
+	i->start = 0xffffffff;
+
+	ptn_k->key.ptn_id = i->ptn_id;
+	ptn_k->key.bin_width = i->bin_width;
+	ptn_k->key.time = i->start;
+	hist_k->len = sizeof(ptn_k->key);
+
+	rc = sos_iter_inf(i->iter, key);
+	if (rc)
+		return NULL;
+
+	return ptn_hist_prev(i, ptn_h);
+}
+
 static bptn_hist_t bs_ptn_hist_iter_obj(bptn_hist_iter_t iter, bptn_hist_t ptn_h)
 {
 	bsos_iter_t i = (bsos_iter_t)iter;
@@ -2580,6 +2723,18 @@ static bptn_hist_t bs_ptn_hist_iter_next(bptn_hist_iter_t iter, bptn_hist_t ptn_
 		return NULL;
 
 	return ptn_hist_next(i, ptn_h);
+}
+
+static bptn_hist_t bs_ptn_hist_iter_prev(bptn_hist_iter_t iter, bptn_hist_t ptn_h)
+{
+	bsos_iter_t i = (bsos_iter_t)iter;
+	int rc;
+
+	rc = sos_iter_prev(i->iter);
+	if (rc)
+		return NULL;
+
+	return ptn_hist_prev(i, ptn_h);
 }
 
 static bstore_iter_pos_t bs_comp_hist_iter_pos(bcomp_hist_iter_t iter)
@@ -2672,6 +2827,49 @@ static bcomp_hist_t comp_hist_next(bsos_iter_t i, bcomp_hist_t comp_h)
 	return NULL;
 }
 
+static bcomp_hist_t comp_hist_prev(bsos_iter_t i, bcomp_hist_t comp_h)
+{
+	int rc = 0;
+	comp_hist_t comp_o;
+	sos_key_t key_o = sos_iter_key(i->iter);
+	sos_obj_ref_t ref;
+	time_t hist_time;
+	time_t start_time = be32toh(i->start);
+	for ( ; 0 == rc;
+	      sos_key_put(key_o),
+		      key_o = (0 == (rc = sos_iter_prev(i->iter))?sos_iter_key(i->iter):NULL)) {
+		comp_o = (typeof(comp_o))sos_key_value(key_o);
+		if (i->bin_width && (i->bin_width != comp_o->key.bin_width))
+			/* Bin width is primary order, no more matches */
+			break;
+
+		hist_time = be32toh(comp_o->key.time);
+		if (start_time && start_time <hist_time)
+			/* Time doesn't match and is secondary, no more matches */
+			break;
+
+		if (i->comp_id && (i->comp_id != comp_o->key.comp_id))
+			/* comp id doesn't match */
+			continue;
+
+		if (i->ptn_id && (i->ptn_id != comp_o->key.ptn_id))
+			continue;
+
+		/* Everything matches, return it */
+		comp_h->comp_id = be64toh(comp_o->key.comp_id);
+		comp_h->ptn_id = be64toh(comp_o->key.ptn_id);
+		comp_h->bin_width = be32toh(comp_o->key.bin_width);
+		comp_h->time = be32toh(comp_o->key.time);
+		sos_key_put(key_o);
+		ref = sos_iter_ref(i->iter);
+		comp_h->msg_count = ref.idx_data.uint64_[1];
+		return comp_h;
+	}
+	if (key_o)
+		sos_key_put(key_o);
+	return NULL;
+}
+
 static bcomp_hist_t
 bs_comp_hist_iter_find(bcomp_hist_iter_t iter, bcomp_hist_t comp_h)
 {
@@ -2714,6 +2912,33 @@ static bcomp_hist_t bs_comp_hist_iter_first(bcomp_hist_iter_t iter, bcomp_hist_t
 	return comp_hist_next(i, comp_h);
 }
 
+static bcomp_hist_t bs_comp_hist_iter_last(bcomp_hist_iter_t iter, bcomp_hist_t comp_h)
+{
+	bstore_sos_t bss = (bstore_sos_t)iter->bs;
+	bsos_iter_t i = (bsos_iter_t)iter;
+	SOS_KEY(key);
+	ods_key_value_t hist_k = key->as.ptr;
+	comp_hist_t comp_k = (comp_hist_t)hist_k->value;
+	int rc;
+
+	i->comp_id = htobe64(comp_h->comp_id);
+	i->ptn_id = htobe64(comp_h->ptn_id);
+	i->start = 0xffffffff;
+	i->bin_width = htobe32(comp_h->bin_width);
+
+	comp_k->key.comp_id = i->comp_id;
+	comp_k->key.ptn_id = i->ptn_id;
+	comp_k->key.bin_width = i->bin_width;
+	comp_k->key.time = i->start;
+	hist_k->len = sizeof(comp_k->key);
+
+	rc = sos_iter_inf(i->iter, key);
+	if (rc)
+		return NULL;
+
+	return comp_hist_prev(i, comp_h);
+}
+
 static bcomp_hist_t bs_comp_hist_iter_obj(bcomp_hist_iter_t iter, bcomp_hist_t comp_h)
 {
 	return comp_hist_next((bsos_iter_t)iter, comp_h);
@@ -2729,6 +2954,18 @@ static bcomp_hist_t bs_comp_hist_iter_next(bcomp_hist_iter_t iter, bcomp_hist_t 
 		return NULL;
 
 	return comp_hist_next(i, comp_h);
+}
+
+static bcomp_hist_t bs_comp_hist_iter_prev(bcomp_hist_iter_t iter, bcomp_hist_t comp_h)
+{
+	bsos_iter_t i = (bsos_iter_t)iter;
+	int rc;
+
+	rc = sos_iter_prev(i->iter);
+	if (rc)
+		return NULL;
+
+	return comp_hist_prev(i, comp_h);
 }
 
 static struct bstore_plugin_s plugin = {
@@ -2794,11 +3031,12 @@ static struct bstore_plugin_s plugin = {
 	.tkn_hist_iter_pos_set = bs_tkn_hist_iter_pos_set,
 	.tkn_hist_iter_new = bs_tkn_hist_iter_new,
 	.tkn_hist_iter_free = bs_tkn_hist_iter_free,
-	.tkn_hist_iter_find = bs_tkn_hist_iter_find,
+	// .tkn_hist_iter_find = bs_tkn_hist_iter_find,
 	.tkn_hist_iter_obj = bs_tkn_hist_iter_obj,
 	.tkn_hist_iter_next = bs_tkn_hist_iter_next,
-	// .tkn_hist_iter_prev = bs_tkn_hist_iter_prev,
-	.tkn_hist_iter_first = bs_tkn_hist_iter_first,
+	.tkn_hist_iter_prev = bs_tkn_hist_iter_prev,
+	.tkn_hist_iter_first = bs_tkn_hist_iter_find,
+	.tkn_hist_iter_last = bs_tkn_hist_iter_last,
 
 	.ptn_hist_update = bs_ptn_hist_update,
 	.ptn_tkn_add = bs_ptn_tkn_add,
@@ -2806,21 +3044,23 @@ static struct bstore_plugin_s plugin = {
 	.ptn_hist_iter_pos_set = bs_ptn_hist_iter_pos_set,
 	.ptn_hist_iter_new = bs_ptn_hist_iter_new,
 	.ptn_hist_iter_free = bs_ptn_hist_iter_free,
-	.ptn_hist_iter_find = bs_ptn_hist_iter_find,
+	// .ptn_hist_iter_find = bs_ptn_hist_iter_find,
 	.ptn_hist_iter_obj = bs_ptn_hist_iter_obj,
 	.ptn_hist_iter_next = bs_ptn_hist_iter_next,
-	// .ptn_hist_iter_prev = bs_ptn_hist_iter_prev,
-	.ptn_hist_iter_first = bs_ptn_hist_iter_first,
+	.ptn_hist_iter_prev = bs_ptn_hist_iter_prev,
+	.ptn_hist_iter_first = bs_ptn_hist_iter_find,
+	.ptn_hist_iter_last = bs_ptn_hist_iter_last,
 
 	.comp_hist_iter_pos = bs_comp_hist_iter_pos,
 	.comp_hist_iter_pos_set = bs_comp_hist_iter_pos_set,
 	.comp_hist_iter_new = bs_comp_hist_iter_new,
 	.comp_hist_iter_free = bs_comp_hist_iter_free,
-	.comp_hist_iter_find = bs_comp_hist_iter_find,
+	// .comp_hist_iter_find = bs_comp_hist_iter_find,
 	.comp_hist_iter_obj = bs_comp_hist_iter_obj,
 	.comp_hist_iter_next = bs_comp_hist_iter_next,
-	// .comp_hist_iter_prev = bs_comp_hist_iter_prev,
-	.comp_hist_iter_first = bs_comp_hist_iter_first,
+	.comp_hist_iter_prev = bs_comp_hist_iter_prev,
+	.comp_hist_iter_first = bs_comp_hist_iter_find,
+	.comp_hist_iter_last = bs_comp_hist_iter_last,
 
 	.iter_pos_to_str = bs_iter_pos_to_str,
 	.iter_pos_from_str = bs_iter_pos_from_str,
@@ -2831,3 +3071,4 @@ bstore_plugin_t init_store(void)
 {
 	return &plugin;
 }
+

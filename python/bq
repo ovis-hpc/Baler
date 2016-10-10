@@ -1,0 +1,662 @@
+#!/usr/bin/env python
+from __future__ import print_function
+import datetime as dt
+import matplotlib.pyplot as plt
+import matplotlib.mlab as mlab
+import matplotlib.dates as mdates
+from matplotlib.ticker import Formatter
+import argparse
+from baler import Bq
+
+def xlate_bin_width(args):
+    bw = args.bin_width
+    if bw == 'd':
+        return 86400
+    elif bw == 'h':
+        return 3600
+    elif bw == 'm':
+        return 60
+    raise ValueError("{0} is an invalid bin width specification".format(bw))
+
+def default_bin_width(dur):
+    if dur  / 3600 > 60:
+        bin_width = 86400
+    elif dur / 60 > 60:
+        bin_width = 3600
+    else:
+        bin_width = 60
+    return bin_width
+
+def get_times(args):
+    if args.begin:
+        start = int(args.begin.strftime("%s"))
+    else:
+        start = 0
+
+    if args.end:
+        end = int(args.end.strftime("%s"))
+    else:
+        end = 0
+
+    return (start, end)
+
+def get_plot_args(it, key, args):
+    start, end = get_times(args)
+    if args.bin_width:
+        bin_width = xlate_bin_width(args)
+    else:
+        if start != 0 and end != 0:
+            dur = end - start
+        else:
+            dur = it.duration(key)
+            # in case one or the other of start/end were specified
+            dur = dur - start - end
+        bin_width = default_bin_width(dur)
+    return (start, end, bin_width)
+
+def bin_name(bin_width):
+    if bin_width == 86400:
+        return "1 day"
+    elif bin_width == 3600:
+        return "1 hour"
+    else:
+        return "1 minute"
+
+class MyXFormatter(Formatter):
+    def __init__(self, fmt='%m/%d %H:%M'):
+        self.fmt = fmt
+
+    def __call__(self, x, pos=0):
+        x = int(x)
+        d = dt.datetime.fromtimestamp(x)
+        return d.strftime(self.fmt)
+
+def autolabel(ax, rects, max_y, args):
+    # attach some text labels
+    if args.y_scale != 'log':
+        offset = max_y * .025
+
+    for rect in rects:
+        height = rect.get_height()
+        if args.y_scale == 'log':
+            y = height * 1.1
+        else:
+            y = height + offset
+
+        ax.text(rect.get_x() + rect.get_width()/2., y,
+                '%d' % int(height),
+                rotation='vertical',
+                ha='center', va='bottom',
+                size=args.label_size
+            )
+
+def plot_xy(x, y, title_str, bin_width, args):
+    min_x = min(x)
+    max_x = max(x) + bin_width
+    max_y = max(y)
+    if args.y_scale == 'log':
+        max_y *= 10
+    else:
+        max_y += max_y * .2
+
+    figure = plt.figure(figsize=(12,4))
+    axis = figure.add_axes([0.075, 0.225, 0.875, 0.65], axisbg='w')
+    axis.tick_params(labelsize=10, direction='out')
+    axis.xaxis.set_major_formatter(MyXFormatter())
+    figure.autofmt_xdate()
+
+    rects = plt.bar(x, y, bin_width / 2, color='y')
+    autolabel(axis, rects, max_y, args)
+
+    axis.xaxis.set_major_formatter(MyXFormatter())
+
+    s = dt.datetime.fromtimestamp(min_x)
+    year_str = str(s.year)
+    e = dt.datetime.fromtimestamp(max_x)
+    if e.year != s.year:
+        year_str += "-"+str(e.year)
+    plt.xlabel('Date/Time ({0})'.format(year_str))
+    plt.ylabel('Msg Count')
+    plt.title(title_str)
+    if args.y_scale == 'log':
+        min_y = 1.0
+    else:
+        min_y = 0.
+    plt.axis([min_x, max_x, min_y, max_y])
+    plt.yscale(args.y_scale, nonposy='clip')
+    plt.grid(True)
+    plt.show()
+
+def plot_comp_hist(bs, args):
+    comp_id = tkn_id_from_args(args)
+    if not comp_id:
+        raise ValueError("The --comp_id or --comp_str arguments must be " \
+                         "specified with --comp")
+    tkn = bs.tkn_by_id(comp_id)
+
+    if not args.ptn_id:
+        ptn_id = 0
+    else:
+        ptn_id = args.ptn_id
+
+    it = Bq.Bcomp_hist_iter(bs)
+
+    start, end, bin_width = get_plot_args(it, comp_id, args)
+
+    cnt, x, y = it.as_xy_arrays(comp_id, ptn_id, bin_width,
+                                start_time=start, end_time=end)
+    if cnt == 0:
+        print("No history information found for component {0} and pattern {1}". \
+              format(comp_id, ptn_id))
+        return
+
+    ptn = bs.ptn_by_id(ptn_id)
+    title_str = 'Pattern: {0}\nHost: {1}, Bin Width: {2}'. \
+                format(str(ptn), tkn.tkn_str(), bin_name(bin_width))
+    plot_xy(x,y, title_str, bin_width, args)
+
+def plot_ptn_hist(bs, args):
+    ptn_id = args.ptn_id
+    if not ptn_id:
+        raise ValueError("The --ptn_id arguments must be " \
+                         "specified with --ptn --hist")
+    it = Bq.Bptn_hist_iter(bs)
+
+    start, end, bin_width = get_plot_args(it, ptn_id, args)
+
+    cnt, x, y = it.as_xy_arrays(ptn_id, bin_width,
+                                start_time=start, end_time=end)
+
+    if cnt == 0:
+        print("No history information found for pattern {0}".format(ptn_id))
+        return
+
+    if ptn_id == 1:             # ptn #1 is the wild-card
+        ptn_str = "ALL"
+    else:
+        ptn = bs.ptn_by_id(ptn_id)
+        ptn_str = str(ptn)
+    title_str = 'Pattern: {0}\nHost: ALL, Bin Width: {1}'. \
+                format(ptn_str, bin_name(bin_width))
+    plot_xy(x,y, title_str, bin_width, args)
+
+def fmt_tstamp(ts, args):
+    if args.unix_time:
+        t = str(ts)
+    else:
+        t = str(dt.datetime.fromtimestamp(ts))
+    if args.color:
+       return BOLD + YELLOW + t + RESET + " "
+    return t
+
+def skip_token(tkn):
+    if tkn.has_type(Bq.BTKN_TYPE_SEPARATOR):
+        return True
+    elif tkn.has_type(Bq.BTKN_TYPE_WHITESPACE):
+        return True
+    elif tkn.has_type(Bq.BTKN_TYPE_HEX_INT):
+        return True
+    elif tkn.has_type(Bq.BTKN_TYPE_DEC_INT):
+        return True
+    elif tkn.has_type(Bq.BTKN_TYPE_FLOAT):
+        return True
+    return False
+
+def do_header(hdr_str, args):
+    if args.header:
+        print(hdr_str)
+
+def do_footer(ftr_str, args):
+    if args.header:
+        print(ftr_str)
+
+def show_ptn_tkns(bs, args):
+    if not args.ptn_id:
+        print("The --ptn_id argument is required with --ptn_tkn")
+        return
+
+    ptn = bs.ptn_by_id(args.ptn_id)
+    if not ptn:
+        print("A pattern with id {0} was not found".format(args.ptn_id))
+        return
+
+    tkn_count = ptn.tkn_count()
+    pti = []
+    for pos in range(0, tkn_count):
+        pti.append(Bq.Bptn_tkn_iter(bs, ptn, pos))
+
+    more = True
+    while more:
+        more = False
+        for pos in range(0, tkn_count):
+            try:
+                if pti[pos]:
+                    tkn = pti[pos].next()
+                else:
+                    tkn = None
+            except:
+                pti[pos] = None
+                tkn = None
+            if tkn:
+                if skip_token(tkn):
+                    continue
+                more = True
+                print("{0:12}".format(tkn.tkn_str()), end='')
+            else:
+                print("{0:12}".format(""), end='')
+        print("")
+
+def show_msgs(bs, args):
+    if not args.ptn_id:
+        ptn_id = 0
+    else:
+        ptn_id = args.ptn_id
+
+    comp_id = tkn_id_from_args(args)
+    if not comp_id:
+        comp_id = 0
+
+    start, end = get_times(args)
+
+    do_header("{0:12} {1:12} {2:20} {3}". \
+              format("Ptn Id", "Component", "Timestamp", "Message"), args)
+    hf = "{0} {1} {2} {3}".format(
+        '-'.ljust(12, '-'), '-'.ljust(12, '-'), '-'.ljust(20, '-'),
+        '-'.ljust(32, '-'))
+    do_header(hf, args)
+    mi = Bq.Bmsg_iter(bs)
+    mi.start(comp_id, ptn_id, start)
+    msg_count = 0
+    for m in mi:
+        if end > 0 and m.tv_sec() > end:
+            break
+        msg_count += 1
+        comp_str = fmt_comp_str(bs, m.comp_id(), args)
+        print("{0:12} {1:12} {2:20}".format(m.ptn_id(), comp_str,
+                                            fmt_tstamp(m.tv_sec(), args)),
+              end=' ')
+        for tkn in m:
+            tkn_str = fmt_tkn_str(tkn, args)
+            print("{0}".format(tkn_str), end='')
+        print("")
+    do_footer(hf, args)
+    do_footer("{0} Record(s)".format(msg_count), args)
+
+NORM = ""
+BLUE = "\033[34m"
+RED = "\033[31m"
+GREEN = "\033[32m"
+YELLOW = "\033[33m"
+RESET = "\033[0m"
+BOLD =  "\033[1m"
+UNDERLINE = "\033[4m"
+
+type_colors = {
+    Bq.BTKN_TYPE_TYPE : NORM,
+    Bq.BTKN_TYPE_PRIORITY : NORM,
+    Bq.BTKN_TYPE_VERSION : NORM,
+    Bq.BTKN_TYPE_TIMESTAMP : BOLD + YELLOW,
+    Bq.BTKN_TYPE_HOSTNAME : BOLD+GREEN,
+    Bq.BTKN_TYPE_SERVICE : GREEN,
+    Bq.BTKN_TYPE_PID : YELLOW,
+    Bq.BTKN_TYPE_IP4_ADDR : NORM,
+    Bq.BTKN_TYPE_IP6_ADDR : NORM,
+    Bq.BTKN_TYPE_ETH_ADDR : NORM,
+    Bq.BTKN_TYPE_HEX_INT : BOLD+BLUE,
+    Bq.BTKN_TYPE_DEC_INT : BOLD+BLUE,
+    Bq.BTKN_TYPE_FLOAT : BOLD+BLUE,
+    Bq.BTKN_TYPE_PATH : BOLD+YELLOW,
+    Bq.BTKN_TYPE_URL : BOLD+YELLOW,
+    Bq.BTKN_TYPE_WORD : BOLD,
+    Bq.BTKN_TYPE_SEPARATOR : NORM,
+    Bq.BTKN_TYPE_WHITESPACE : NORM,
+    Bq.BTKN_TYPE_TEXT : BOLD+RED,
+}
+
+tkn_type_ids = {
+    "TYPE" : Bq.BTKN_TYPE_TYPE,
+    "PRIO" : Bq.BTKN_TYPE_PRIORITY,
+    "VERS" : Bq.BTKN_TYPE_VERSION,
+    "TS" : Bq.BTKN_TYPE_TIMESTAMP,
+    "HOST" : Bq.BTKN_TYPE_HOSTNAME,
+    "SVC" : Bq.BTKN_TYPE_SERVICE,
+    "PID" : Bq.BTKN_TYPE_PID,
+    "IP4" : Bq.BTKN_TYPE_IP4_ADDR,
+    "IP6" : Bq.BTKN_TYPE_IP6_ADDR,
+    "MAC" : Bq.BTKN_TYPE_ETH_ADDR,
+    "HEX" : Bq.BTKN_TYPE_HEX_INT,
+    "DEC" : Bq.BTKN_TYPE_DEC_INT,
+    "SEP" : Bq.BTKN_TYPE_SEPARATOR,
+    "FLOAT" : Bq.BTKN_TYPE_FLOAT,
+    "PATH" : Bq.BTKN_TYPE_PATH,
+    "URL" : Bq.BTKN_TYPE_URL,
+    "WORD" : Bq.BTKN_TYPE_WORD,
+    "SPACE" : Bq.BTKN_TYPE_WHITESPACE,
+    "TEXT" : Bq.BTKN_TYPE_TEXT
+}
+
+def show_tkns(bs, args):
+    if args.tkn_type:
+        typ_str = args.tkn_type.upper()
+        try:
+            tkn_type = tkn_type_ids[typ_str]
+        except:
+            raise NameError("{0} is an invalid type name")
+    else:
+        tkn_type = None
+
+    ti = Bq.Btkn_iter(bs)
+    print("{0:12} {1:32} {2:12} {3}".format(
+        "Tkn Id", "Tkn String", "Tkn Seen", "Types"))
+    hf = "{0} {1} {2} {3}".format(
+        '-'.ljust(12, '-'), '-'.ljust(32, '-'), '-'.ljust(12, '-'),
+        '-'.ljust(32, '-'))
+    print(hf)
+    tkn_count = 0
+    for tkn in ti:
+        if tkn_type and not tkn.has_type(tkn_type):
+            continue
+        tkn_count += 1
+        print("{0:12} {1:32} {2:12}". \
+              format(tkn.tkn_id(), tkn.tkn_str(), tkn.tkn_count()), end=' ')
+        for typ in tkn:
+            print("{0}".format(typ), end=' ')
+        print("")
+    print(hf)
+    print("{0} Record(s)".format(tkn_count))
+
+def fmt_comp_str(bs, comp_id, args):
+    if args.raw_id:
+        return str(comp_id)
+    tkn = bs.tkn_by_id(comp_id)
+    return tkn.tkn_str()
+
+def fmt_tkn_str(tkn, args):
+    tkn_str = ""
+    if args.color:
+        if tkn.tkn_id() in type_colors:
+            tkn_str = type_colors[tkn.tkn_id()]
+        else:
+            tkn_str = type_colors[tkn.first_type()]
+    tkn_str += tkn.ptn_tkn_str()
+    if args.color:
+        tkn_str += RESET
+    return tkn_str
+
+def show_ptns(bs, args):
+    pi = Bq.Bptn_iter(bs)
+    start, end = get_times(args)
+    do_header("{0:12} {1:20} {2:20} {3}".format(
+        "Ptn Id", "First Seen", "Last Seen", "Pattern"), args)
+    hf = "{0} {1} {2} {3}".format(
+        '-'.ljust(12, '-'), '-'.ljust(20, '-'), '-'.ljust(20, '-'),
+        '-'.ljust(32, '-'))
+    do_header(hf, args)
+
+    pi.find(start)
+    ptn_count = 0
+    for p in pi:
+        if end > 0 and p.first_seen() > end:
+            break
+        ptn_count += 1
+        print("{0:12} {1:20} {2:20}". \
+              format(p.ptn_id(),
+                     fmt_tstamp(p.first_seen(), args),
+                     fmt_tstamp(p.last_seen(), args)), end=' ')
+        for tkn in p:
+            tkn_str = fmt_tkn_str(tkn, args)
+            print("{0}".format(tkn_str), end='')
+        print("")
+
+    do_footer(hf, args)
+    do_footer("{0} Record(s)".format(ptn_count), args)
+
+def show_ptn_hist(bs, args):
+    if not args.ptn_id:
+        ptn_id = 0
+    else:
+        ptn_id = args.ptn_id
+    if args.bin_width:
+        bin_width = xlate_bin_width(args)
+    else:
+        bin_width = 3600        # hours
+
+    start, end = get_times(args)
+
+    phi = Bq.Bptn_hist_iter(bs)
+    phi.start(ptn_id, bin_width, start)
+
+    if not args.csv:
+        hf = "{0:12} {1:20} {2:12} {3:12}".format("Ptn Id", "Timestamp",
+                                                  "Bin Width", "Msg Count")
+        sep = "{0} {1} {2} {3}".format('-'.ljust(12,'-'), '-'.ljust(20,'-'),
+                                       '-'.ljust(12,'-'), '-'.ljust(12,'-'))
+        do_header(hf, args)
+        do_header(sep, args)
+    else:
+        hf = "# {0},{1},{2},{3}".format("Ptn Id", "Timestamp",
+                                        "Bin Width", "Msg Count")
+        do_header(hf, args)
+
+    msg_count = 0
+    rec_count = 0
+    for h in phi:
+        if end > 0 and h.time() > end:
+            break
+        if not args.csv:
+            print("{0:12} {1:20} {2:12} {3:12}" \
+                  .format(h.ptn_id(), fmt_tstamp(h.time(), args),
+                          h.bin_width(), h.msg_count()))
+        else:
+            print("{0},{1},{2},{3}" \
+                  .format(h.ptn_id(), fmt_tstamp(h.time(), args),
+                          h.bin_width(), h.msg_count()))
+        rec_count += 1
+        msg_count += h.msg_count()
+    if not args.csv:
+        do_footer(sep, args)
+        do_footer("{0:46} {1:12}".format("{0} Record(s)".format(rec_count),
+                                         msg_count), args)
+
+def tkn_id_from_args(args):
+    if args.tkn_str:
+        tkn = bs.tkn_by_name(args.tkn_str)
+        if tkn:
+            return tkn.tkn_id()
+        else:
+            raise NameError("There is no token with the name {0}".format(args.tkn_str))
+    elif args.tkn_id:
+        tkn = bs.tkn_by_id(args.tkn_id)
+        if tkn:
+            return tkn.tkn_id()
+        else:
+            raise NameError("There is no token with the id {0}".format(args.tkn_id))
+    return None
+
+def show_tkn_hist(bs, args):
+    start, end = get_times(args)
+    bin_width = args.bin_width
+    tkn_id = tkn_id_from_args(args)
+    if not tkn_id:
+        raise ValueError("The --tkn_id or --tkn_str arguments must be " \
+                         "specified with --tkn")
+
+    ti = Bq.Btkn_hist_iter(bs)
+    ti.start(tkn_id, bin_width, start)
+    if not args.csv:
+        do_header("{0:12} {1:20} {2:12} {3:12}".format("Tkn Id", "Timestamp",
+                                                       "Bin Width", "Msg Count"), args)
+        hf = "{0} {1} {2} {3}".format('-'.ljust(12,'-'),
+                                      '-'.ljust(20,'-'), '-'.ljust(12,'-'),
+                                      '-'.ljust(12,'-'))
+        do_header(hf, args)
+    else:
+        do_header("# {0},{1},{2},{3}".format("Tkn Id", "Timestamp",
+                                             "Bin Width", "Msg Count"), args)
+    msg_count = 0
+    rec_count = 0
+    for h in ti:
+        if end > 0 and h.time() > end:
+            break
+        if not args.csv:
+            do_header("{0:12} {1:20} {2:12} {3:12}" \
+                  .format(h.tkn_id(),
+                          fmt_tstamp(h.time(), args),
+                          h.bin_width(), h.tkn_count()), args)
+        else:
+            print("{0},{1},{2},{3}" \
+                  .format(h.tkn_id(), fmt_tstamp(h.time(), args),
+                          h.bin_width(), h.tkn_count()))
+        rec_count += 1
+        msg_count += h.tkn_count()
+    if not args.csv:
+        do_footer(hf, args)
+        do_footer("{0:46} {1:12}". \
+                  format("{0} Record(s)". format(rec_count), msg_count), args)
+
+def show_comp_hist(bs, args):
+    start, end = get_times(args)
+    if not args.ptn_id:
+        ptn_id = 0
+    else:
+        ptn_id = args.ptn_id
+    comp_id = tkn_id_from_args(args)
+    if not comp_id:
+        comp_id = 0
+        # raise ValueError("The --comp_id or --comp_str arguments must be " \
+        # "specified with --comp")
+    if args.bin_width:
+        bin_width = xlate_bin_width(args)
+    else:
+        bin_width = 3600        # hours
+
+    chi = Bq.Bcomp_hist_iter(bs)
+    chi.start(comp_id, ptn_id, bin_width, start)
+    comp_str = fmt_comp_str(bs, comp_id, args)
+    if not args.csv:
+        do_header("{0:12} {1:12} {2:20} {3:12} {4:12}". \
+                  format("Component", "Ptn Id", "Timestamp",
+                         "Bin Width", "Msg Count"), args)
+        hf = "{0} {1} {2} {3} {4}".format('-'.ljust(12,'-'), '-'.ljust(12,'-'),
+                                          '-'.ljust(20,'-'), '-'.ljust(12,'-'),
+                                          '-'.ljust(12,'-'))
+        do_header(hf, args)
+    else:
+        do_header("# {0},{1},{2},{3},{4}". \
+                  format("Component", "Ptn Id", "Timestamp",
+                         "Bin Width", "Msg Count"), args)
+    msg_count = 0
+    rec_count = 0
+    for h in chi:
+        if end > 0 and h.time() > end:
+            break
+        if not args.csv:
+            print("{0:12} {1:12} {2:20} {3:12} {4:12}" \
+                  .format(comp_str, h.ptn_id(),
+                          fmt_tstamp(h.time(), args),
+                          h.bin_width(), h.msg_count()))
+        else:
+            print("{0},{1},{2},{3},{4}" \
+                  .format(h.comp_id(), h.ptn_id(), fmt_tstamp(h.time(), args),
+                          h.bin_width(), h.msg_count()))
+        rec_count += 1
+        msg_count += h.msg_count()
+    if not args.csv:
+        do_footer(hf, args)
+        do_footer("{0:59} {1:12}".format("{0} Record(s)". \
+                                         format(rec_count), msg_count), args)
+
+def valid_date(date_str):
+    try:
+        return dt.datetime.strptime(date_str, "%Y/%m/%d %H:%M")
+    except:
+        msg = "{0} is not a valid date".format(date_str)
+        raise argparse.ArgumentTypeError(msg)
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Query Baler data")
+    parser.add_argument("-p", "--path", required=True,
+                        help="The path to the Baler store")
+    parser.add_argument("-m", "--msg", action="store_true",
+                        help="Query messages")
+    parser.add_argument("--begin", type=valid_date,
+                        help="Specify the start time/date for the query. " \
+                        "Format is YYYY/MM/DD HH:MM")
+    parser.add_argument("--end", type=valid_date,
+                        help="Specify the start time/date for the query. " \
+                        "Format is YYYY/MM/DD HH:MM")
+    parser.add_argument("--ptn", action="store_true",
+                        help="Query patterns.")
+    parser.add_argument("--comp", action="store_true",
+                        help="Query component histories")
+    parser.add_argument("--tkn", action="store_true",
+                        help="Query tokens")
+    parser.add_argument("--tkn_type",
+                        help="Specifies the type of a token")
+    parser.add_argument("--tkn_id", type=int,
+                        help="Specifies the integer id for a token")
+    parser.add_argument("--tkn_str",
+                        help="Specifies the string value of a token.")
+    parser.add_argument("--hist", action="store_true",
+                        help="Query the occurance histogram for --tkn, --ptn, and --comp")
+    parser.add_argument("--ptn_tkn", action="store_true",
+                        help="Query the tokens that appear in a pattern")
+    parser.add_argument("--ptn_id", type=int,
+                        help="The pattern id. Required for --ptn_hist and --ptn_tkn")
+    parser.add_argument("--comp_id", dest="tkn_id", type=int,
+                        help="Specifies a component id")
+    parser.add_argument("--comp_str", dest="tkn_str",
+                        help="Specifies the component name")
+    parser.add_argument("--bin_width", choices=['d', 'h', 'm'],
+                        help="Specifies the histogram bin width")
+    parser.add_argument("--color", action="store_true",
+                        help="Set to color code tokens.")
+    parser.add_argument("--csv", action="store_true",
+                        help="Format the output as a comma separated text")
+    parser.add_argument("--unix_time", action="store_true",
+                        help="Format time as a Unix timestamp")
+    parser.add_argument("--raw_id", action="store_true",
+                        help="Show token id for component name instead of text")
+    parser.add_argument("--plot", action="store_true",
+                        help="Plot the data instead of displaying it as text")
+    parser.add_argument("--label_size", type=int, default=9,
+                        help="Specify the bar label font size")
+    parser.add_argument("--y_scale", default='linear',
+                        help="Specify the y-scale as 'log' or 'linear'")
+    header = parser.add_mutually_exclusive_group(required=False)
+    header.add_argument("--header", dest="header", action="store_true",
+                        help="Enable table headers")
+    header.add_argument("--no-header", dest="header", action="store_false",
+                        help="Disable table headers")
+    parser.set_defaults(header=True)
+
+    args = parser.parse_args()
+    bs = Bq.Bstore()
+    bs.open(args.path)
+
+    if args.tkn:
+        if args.hist:
+            show_tkn_hist(bs, args)
+        else:
+            show_tkns(bs, args)
+
+    if args.ptn:
+        if args.hist:
+            if args.plot:
+                plot_ptn_hist(bs, args)
+            else:
+                show_ptn_hist(bs, args)
+        else:
+            show_ptns(bs, args)
+
+    if args.comp:
+        if not args.plot:
+            show_comp_hist(bs, args)
+        else:
+            plot_comp_hist(bs, args)
+
+    if args.ptn_tkn:
+        show_ptn_tkns(bs, args)
+
+    if args.msg:
+        show_msgs(bs, args)

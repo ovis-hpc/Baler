@@ -10,29 +10,6 @@ typedef struct bstore_s {
 	char *path;
 } *bstore_t;
 
-#if 0
-typedef struct btkn_iter_s {
-	bstore_t bs;
-} *btkn_iter_t;
-typedef struct bptn_iter_s {
-	bstore_t bs;
-} *bptn_iter_t;
-typedef struct bptn_tkn_iter_s {
-	bstore_t bs;
-} *bptn_tkn_iter_t;
-typedef struct bmsg_iter_s {
-	bstore_t bs;
-} *bmsg_iter_t;
-typedef struct btkn_hist_iter_s {
-	bstore_t bs;
-} *btkn_hist_iter_t;
-typedef struct bptn_hist_iter_s {
-	bstore_t bs;
-} *bptn_hist_iter_t;
-typedef struct bcomp_hist_iter_s {
-	bstore_t bs;
-} *bcomp_hist_iter_t;
-#else
 typedef struct bstore_iter_s {
 	bstore_t bs;
 } *bstore_iter_t;
@@ -43,7 +20,6 @@ typedef bstore_iter_t bptn_tkn_iter_t;
 typedef bstore_iter_t bcomp_hist_iter_t;
 typedef bstore_iter_t bptn_hist_iter_t;
 typedef bstore_iter_t btkn_hist_iter_t;
-#endif
 typedef void *bstore_iter_pos_t;
 
 /**
@@ -188,7 +164,9 @@ typedef struct bstore_plugin_s {
 	btkn_hist_t (*tkn_hist_iter_find)(btkn_hist_iter_t iter, btkn_hist_t tkn_h);
 	btkn_hist_t (*tkn_hist_iter_obj)(btkn_hist_iter_t iter, btkn_hist_t tkn_h);
 	btkn_hist_t (*tkn_hist_iter_next)(btkn_hist_iter_t iter, btkn_hist_t tkn_h);
+	btkn_hist_t (*tkn_hist_iter_prev)(btkn_hist_iter_t iter, btkn_hist_t tkn_h);
 	btkn_hist_t (*tkn_hist_iter_first)(btkn_hist_iter_t iter, btkn_hist_t tkn_h);
+	btkn_hist_t (*tkn_hist_iter_last)(btkn_hist_iter_t iter, btkn_hist_t tkn_h);
 
 	/**
 	 * Maintain the pattern histograms
@@ -208,7 +186,9 @@ typedef struct bstore_plugin_s {
 	bptn_hist_t (*ptn_hist_iter_find)(bptn_hist_iter_t iter, bptn_hist_t ptn_h);
 	bptn_hist_t (*ptn_hist_iter_obj)(bptn_hist_iter_t iter, bptn_hist_t ptn_h);
 	bptn_hist_t (*ptn_hist_iter_next)(bptn_hist_iter_t iter, bptn_hist_t ptn_h);
+	bptn_hist_t (*ptn_hist_iter_prev)(bptn_hist_iter_t iter, bptn_hist_t ptn_h);
 	bptn_hist_t (*ptn_hist_iter_first)(bptn_hist_iter_t iter, bptn_hist_t ptn_h);
+	bptn_hist_t (*ptn_hist_iter_last)(bptn_hist_iter_t iter, bptn_hist_t ptn_h);
 
 	bstore_iter_pos_t (*comp_hist_iter_pos)(bcomp_hist_iter_t);
 	int (*comp_hist_iter_pos_set)(bcomp_hist_iter_t, bstore_iter_pos_t);
@@ -217,7 +197,9 @@ typedef struct bstore_plugin_s {
 	bcomp_hist_t (*comp_hist_iter_find)(bcomp_hist_iter_t iter, bcomp_hist_t comp_h);
 	bcomp_hist_t (*comp_hist_iter_obj)(bcomp_hist_iter_t iter, bcomp_hist_t comp_h);
 	bcomp_hist_t (*comp_hist_iter_next)(bcomp_hist_iter_t iter, bcomp_hist_t comp_h);
+	bcomp_hist_t (*comp_hist_iter_prev)(bcomp_hist_iter_t iter, bcomp_hist_t comp_h);
 	bcomp_hist_t (*comp_hist_iter_first)(bcomp_hist_iter_t iter, bcomp_hist_t comp_h);
+	bcomp_hist_t (*comp_hist_iter_last)(bcomp_hist_iter_t iter, bcomp_hist_t comp_h);
 	/**
 	 * Iterator postion management routines
 	 */
@@ -293,6 +275,8 @@ btkn_hist_t bstore_tkn_hist_iter_find(btkn_hist_iter_t iter, btkn_hist_t tkn_h);
 btkn_hist_t bstore_tkn_hist_iter_obj(btkn_hist_iter_t iter, btkn_hist_t tkn_h);
 btkn_hist_t bstore_tkn_hist_iter_next(btkn_hist_iter_t iter, btkn_hist_t tkn_h);
 btkn_hist_t bstore_tkn_hist_iter_first(btkn_hist_iter_t iter, btkn_hist_t tkn_h);
+btkn_hist_t bstore_tkn_hist_iter_prev(btkn_hist_iter_t iter, btkn_hist_t tkn_h);
+btkn_hist_t bstore_tkn_hist_iter_last(btkn_hist_iter_t iter, btkn_hist_t tkn_h);
 
 /* Pattern History */
 int bstore_ptn_hist_update(bstore_t bs, bptn_id_t ptn_id, bcomp_id_t comp_id,
@@ -305,7 +289,9 @@ void bstore_ptn_hist_iter_free(bptn_hist_iter_t iter);
 bptn_hist_t bstore_ptn_hist_iter_find(bptn_hist_iter_t iter, bptn_hist_t ptn_h);
 bptn_hist_t bstore_ptn_hist_iter_obj(bptn_hist_iter_t iter, bptn_hist_t ptn_h);
 bptn_hist_t bstore_ptn_hist_iter_next(bptn_hist_iter_t iter, bptn_hist_t ptn_h);
+bptn_hist_t bstore_ptn_hist_iter_prev(bptn_hist_iter_t iter, bptn_hist_t ptn_h);
 bptn_hist_t bstore_ptn_hist_iter_first(bptn_hist_iter_t iter, bptn_hist_t ptn_h);
+bptn_hist_t bstore_ptn_hist_iter_last(bptn_hist_iter_t iter, bptn_hist_t ptn_h);
 
 /* Component History */
 bstore_iter_pos_t bstore_comp_hist_iter_pos(bcomp_hist_iter_t);
@@ -315,7 +301,9 @@ void bstore_comp_hist_iter_free(bcomp_hist_iter_t iter);
 bcomp_hist_t bstore_comp_hist_iter_find(bcomp_hist_iter_t iter, bcomp_hist_t comp_h);
 bcomp_hist_t bstore_comp_hist_iter_obj(bcomp_hist_iter_t iter, bcomp_hist_t comp_h);
 bcomp_hist_t bstore_comp_hist_iter_next(bcomp_hist_iter_t iter, bcomp_hist_t comp_h);
+bcomp_hist_t bstore_comp_hist_iter_prev(bcomp_hist_iter_t iter, bcomp_hist_t comp_h);
 bcomp_hist_t bstore_comp_hist_iter_first(bcomp_hist_iter_t iter, bcomp_hist_t comp_h);
+bcomp_hist_t bstore_comp_hist_iter_last(bcomp_hist_iter_t iter, bcomp_hist_t comp_h);
 
 /* Iterator position management routines */
 const char *bstore_iter_pos_to_str(bstore_iter_t iter, bstore_iter_pos_t pos);

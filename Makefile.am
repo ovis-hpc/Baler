@@ -3,7 +3,8 @@ if ENABLE_BALER
 EXTRA_DIST = baler.cfg hosts.txt SHA.txt TAG.txt
 
 ACLOCAL_AMFLAGS = -I m4
-SUBDIRS = src
+
+SUBDIRS = src python
 
 if ENABLE_SWIG
 SUBDIRS += swig

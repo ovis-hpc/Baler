@@ -3,7 +3,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.63])
-AC_INIT([baler], 2.3.0, narate@ogc.us)
+AC_INIT([baler], 4.0, narate@ogc.us)
 AC_CONFIG_MACRO_DIR([m4])
 AC_CONFIG_SRCDIR([src/baler/balerd.c])
 AC_CONFIG_AUX_DIR(config)
@@ -145,7 +145,8 @@ AC_CONFIG_FILES([Makefile docs/Makefile src/Makefile
 	src/bhttpd/Makefile
 	src/bassoc/Makefile
 	src/tools/Makefile
-	src/plugins/test/Makefile swig/Makefile
+	src/plugins/test/Makefile
+	swig/Makefile
 	etc/Makefile
 	etc/baler/Makefile
 	etc/systemd/Makefile
