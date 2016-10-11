@@ -209,6 +209,7 @@ def fmt_tstamp(ts, args):
     return t
 
 def skip_token(tkn):
+    return False
     if tkn.has_type(Bq.BTKN_TYPE_SEPARATOR):
         return True
     elif tkn.has_type(Bq.BTKN_TYPE_WHITESPACE):
@@ -241,10 +242,17 @@ def show_ptn_tkns(bs, args):
 
     tkn_count = ptn.tkn_count()
     pti = []
+    col = []
+    cnt = []
     for pos in range(0, tkn_count):
-        pti.append(Bq.Bptn_tkn_iter(bs, ptn, pos))
+        it = Bq.Bptn_tkn_iter(bs)
+        it.find(ptn.ptn_id(), pos)
+        pti.append(it)
+        col.append(4)
+        cnt.append(0)
 
     more = True
+    # determine the column widths for each position
     while more:
         more = False
         for pos in range(0, tkn_count):
@@ -252,18 +260,61 @@ def show_ptn_tkns(bs, args):
                 if pti[pos]:
                     tkn = pti[pos].next()
                 else:
-                    tkn = None
+                    continue
             except:
                 pti[pos] = None
-                tkn = None
+                continue
             if tkn:
                 if skip_token(tkn):
+                    pti[pos] = None
                     continue
                 more = True
-                print("{0:12}".format(tkn.tkn_str()), end='')
+                l = len(tkn.tkn_str())
+                if l > col[pos]:
+                    col[pos] = l
+                cnt[pos] += 1
+
+    # Print the header
+    print("Ptn Id: {0} {1}".format(ptn.ptn_id(), str(ptn).center(sum(col)+len(col), ' ')))
+    for pos in range(0, tkn_count):
+        print("{0} ".format(str(pos).center(col[pos], ' ')), end='')
+    print("")
+    sep = ""
+    for pos in range(0, tkn_count):
+        sep += "{0} ".format('-'.ljust(col[pos],'-'))
+    print("{0}".format(sep))
+
+    # reset the iterators
+    for pos in range(0, tkn_count):
+        it = Bq.Bptn_tkn_iter(bs)
+        it.find(ptn.ptn_id(), pos)
+        pti[pos] = it
+
+    more = True
+    while more:
+        more = False
+        for pos in range(0, tkn_count):
+            tkn = None
+            try:
+                if pti[pos]:
+                    tkn = pti[pos].next()
+            except:
+                pti[pos] = None
+            if tkn:
+                if skip_token(tkn):
+                    pti[pos] = None
+                    tkn_str = " "
+                else:
+                    tkn_str = tkn.tkn_str()
+                    more = True
             else:
-                print("{0:12}".format(""), end='')
+                tkn_str = " "
+            print("{0:{width}s} ".format(tkn_str, width=col[pos]), end='')
         print("")
+    print("{0}".format(sep))
+    for pos in range(0, tkn_count):
+        print("{0} ".format(str(cnt[pos]).center(col[pos], ' ')), end='')
+    print("")
 
 def show_msgs(bs, args):
     if not args.ptn_id:

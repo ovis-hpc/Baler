@@ -368,14 +368,15 @@ cdef class Bptn_iter(Biter):
         return Bs.bstore_ptn_iter_pos_set(self.c_iter, c_pos)
 
 cdef class Bptn_tkn_iter(Biter):
-    cdef Bptn ptn
-    cdef uint64_t c_pos
-    def __init__(self, Bstore store, ptn, pos):
+    def __init__(self, Bstore store):
         Biter.__init__(self, store)
-        if pos >= ptn.tkn_count():
-            raise ValueError("The specified position is greater than the pattern token count")
-        self.ptn = ptn
-        self.c_pos = pos
+
+    def find(self, ptn_id, pos):
+        self.c_item = Bs.bstore_ptn_tkn_iter_find(self.c_iter,
+                                                  ptn_id, pos)
+        if self.c_item == NULL:
+            return False
+        return True
 
     cdef Bs.bstore_iter_t iterNew(self):
         return Bs.bstore_ptn_tkn_iter_new(self.store.c_store)
