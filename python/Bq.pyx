@@ -1,3 +1,4 @@
+from __future__ import print_function
 import cython
 from cpython cimport PyObject, Py_INCREF
 import datetime as dt
@@ -576,6 +577,19 @@ cdef class Hurry:
     #    ndarray.base = <PyObject *>self
     #    return ndarray
 
+    def __str__(self):
+        s = "Hurry@{0}[".format(self.el_cnt)
+        for i in range(0, self.el_cnt):
+            if i > 0:
+                s += ","
+            s += "{0}".format(self[i])
+            if i > 4:
+                break
+        if i < self.el_cnt:
+            s += ",..."
+        s += "]"
+        return s
+
     def __len__(self):
         return self.el_cnt
 
@@ -747,6 +761,7 @@ cdef class Bptn_hist_iter(Biter):
             return 0
         start = h.time
 
+        self.c_ptn_h.time = 0xffffffff;
         h = Bs.bstore_ptn_hist_iter_last(self.c_iter, &self.c_ptn_h)
         end = h.time
 
@@ -899,6 +914,7 @@ cdef class Bcomp_hist_iter(Biter):
             return 0
         start = h.time
 
+        self.c_comp_h.time = 0xffffffff;
         h = Bs.bstore_comp_hist_iter_last(self.c_iter, &self.c_comp_h)
         end = h.time
 
@@ -1050,6 +1066,7 @@ cdef class Btkn_hist_iter(Biter):
             return 0
         start = h.time
 
+        self.c_tkn_h.time = 0xffffffff;
         h = Bs.bstore_tkn_hist_iter_last(self.c_iter, &self.c_tkn_h)
         end = h.time
 
@@ -1085,8 +1102,9 @@ cdef class Btkn_hist_iter(Biter):
     def as_xy_arrays(self, tkn_id, bin_width, start_time=None, end_time=None):
         cdef uint32_t end
         cdef int rec_no
+
         self.c_tkn_h.tkn_id = tkn_id
-        self.c_tkn_h.msg_count = 0
+        self.c_tkn_h.tkn_count = 0
         if start_time:
             self.c_tkn_h.time = start_time
         else:
@@ -1101,16 +1119,12 @@ cdef class Btkn_hist_iter(Biter):
         x = Hurry()
         y = Hurry()
 
-        # shape = []
-        # shape.append(<np.npy_intp>sample_count)
-        # x = np.zeros(shape, dtype=np.float64, order='C')
-        # y = np.zeros(shape, dtype=np.float64, order='C')
         rec_no = 0
         while self.c_item != NULL:
             if end > 0 and end < self.c_tkn_h.time:
                 break
             x.append(self.c_tkn_h.time)
-            y.append(self.c_tkn_h.msg_count)
+            y.append(self.c_tkn_h.tkn_count)
             rec_no += 1
             self.c_item = Bs.bstore_tkn_hist_iter_next(self.c_iter, &self.c_tkn_h)
 

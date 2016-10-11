@@ -2693,7 +2693,7 @@ static bptn_hist_t bs_ptn_hist_iter_last(bptn_hist_iter_t iter, bptn_hist_t ptn_
 
 	i->ptn_id = htobe64(ptn_h->ptn_id);
 	i->bin_width = htobe32(ptn_h->bin_width);
-	i->start = 0xffffffff;
+	i->start = htobe32(ptn_h->time);
 
 	ptn_k->key.ptn_id = i->ptn_id;
 	ptn_k->key.bin_width = i->bin_width;
@@ -2923,7 +2923,7 @@ static bcomp_hist_t bs_comp_hist_iter_last(bcomp_hist_iter_t iter, bcomp_hist_t 
 
 	i->comp_id = htobe64(comp_h->comp_id);
 	i->ptn_id = htobe64(comp_h->ptn_id);
-	i->start = 0xffffffff;
+	i->start = htobe32(comp_h->time);
 	i->bin_width = htobe32(comp_h->bin_width);
 
 	comp_k->key.comp_id = i->comp_id;

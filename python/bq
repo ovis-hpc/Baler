@@ -40,7 +40,7 @@ def get_times(args):
 
     return (start, end)
 
-def get_plot_args(it, key, args):
+def get_hist_args(it, key, args):
     start, end = get_times(args)
     if args.bin_width:
         bin_width = xlate_bin_width(args)
@@ -91,7 +91,7 @@ def autolabel(ax, rects, max_y, args):
             )
 
 def plot_xy(x, y, title_str, bin_width, args):
-    min_x = min(x)
+    min_x = min(x) - (bin_width / 2)
     max_x = max(x) + bin_width
     max_y = max(y)
     if args.y_scale == 'log':
@@ -141,7 +141,7 @@ def plot_comp_hist(bs, args):
 
     it = Bq.Bcomp_hist_iter(bs)
 
-    start, end, bin_width = get_plot_args(it, comp_id, args)
+    start, end, bin_width = get_hist_args(it, comp_id, args)
 
     cnt, x, y = it.as_xy_arrays(comp_id, ptn_id, bin_width,
                                 start_time=start, end_time=end)
@@ -153,7 +153,7 @@ def plot_comp_hist(bs, args):
     ptn = bs.ptn_by_id(ptn_id)
     title_str = 'Pattern: {0}\nHost: {1}, Bin Width: {2}'. \
                 format(str(ptn), tkn.tkn_str(), bin_name(bin_width))
-    plot_xy(x,y, title_str, bin_width, args)
+    plot_xy(x, y, title_str, bin_width, args)
 
 def plot_ptn_hist(bs, args):
     ptn_id = args.ptn_id
@@ -162,7 +162,7 @@ def plot_ptn_hist(bs, args):
                          "specified with --ptn --hist")
     it = Bq.Bptn_hist_iter(bs)
 
-    start, end, bin_width = get_plot_args(it, ptn_id, args)
+    start, end, bin_width = get_hist_args(it, ptn_id, args)
 
     cnt, x, y = it.as_xy_arrays(ptn_id, bin_width,
                                 start_time=start, end_time=end)
@@ -178,7 +178,26 @@ def plot_ptn_hist(bs, args):
         ptn_str = str(ptn)
     title_str = 'Pattern: {0}\nHost: ALL, Bin Width: {1}'. \
                 format(ptn_str, bin_name(bin_width))
-    plot_xy(x,y, title_str, bin_width, args)
+    plot_xy(x, y, title_str, bin_width, args)
+
+def plot_tkn_hist(bs, args):
+    tkn_id = tkn_id_from_args(args)
+    if not tkn_id:
+        raise ValueError("The --tkn_id or --tkn_str arguments must be " \
+                         "specified with --tkn")
+    it = Bq.Btkn_hist_iter(bs)
+    start, end, bin_width = get_hist_args(it, tkn_id, args)
+    it.start(tkn_id, bin_width, start)
+    cnt, x, y = it.as_xy_arrays(tkn_id, bin_width,
+                                start_time=start, end_time=end)
+    if cnt == 0:
+        print("No history information found for token {0}".format(tkn_id))
+        return
+
+    tkn = bs.tkn_by_id(tkn_id)
+    title_str = 'Token: "{0}"\nHost: ALL, Bin Width: {1}'. \
+                format(tkn.tkn_str(), bin_name(bin_width))
+    plot_xy(x, y, title_str, bin_width, args)
 
 def fmt_tstamp(ts, args):
     if args.unix_time:
@@ -474,14 +493,14 @@ def tkn_id_from_args(args):
     return None
 
 def show_tkn_hist(bs, args):
-    start, end = get_times(args)
-    bin_width = args.bin_width
     tkn_id = tkn_id_from_args(args)
     if not tkn_id:
         raise ValueError("The --tkn_id or --tkn_str arguments must be " \
                          "specified with --tkn")
 
+
     ti = Bq.Btkn_hist_iter(bs)
+    start, end, bin_width = get_hist_args(ti, tkn_id, args)
     ti.start(tkn_id, bin_width, start)
     if not args.csv:
         do_header("{0:12} {1:20} {2:12} {3:12}".format("Tkn Id", "Timestamp",
@@ -636,7 +655,10 @@ if __name__ == "__main__":
 
     if args.tkn:
         if args.hist:
-            show_tkn_hist(bs, args)
+            if args.plot:
+                plot_tkn_hist(bs, args)
+            else:
+                show_tkn_hist(bs, args)
         else:
             show_tkns(bs, args)
 
