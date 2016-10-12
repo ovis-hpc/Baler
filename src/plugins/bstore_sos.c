@@ -2072,16 +2072,44 @@ static int bs_ptn_tkn_add(bstore_t bs, bptn_id_t ptn_id, uint64_t tkn_pos,
 	pthread_mutex_lock(&bss->ptn_tkn_lock);
 	idx = sos_attr_index(bss->ptn_pos_tkn_key_attr);
 	rc = sos_index_visit(idx, key, hist_cb, NULL);
- out:
-	pthread_mutex_unlock(&bss->ptn_tkn_lock);
-	return 0;
-#if 0
- err_1:
-	sos_obj_delete(obj);
-#endif
- err_0:
 	pthread_mutex_unlock(&bss->ptn_tkn_lock);
 	return rc;
+}
+
+static btkn_t bs_ptn_tkn_find(bstore_t bs, bptn_id_t ptn_id, uint64_t tkn_pos,
+			      btkn_id_t tkn_id)
+{
+	bstore_sos_t bss = (bstore_sos_t)bs;
+	SOS_KEY(key);
+	ods_key_value_t kv = key->as.ptr;
+	ptn_pos_tkn_t ppt_k = (ptn_pos_tkn_t)kv->value;
+	sos_obj_ref_t ref;
+	sos_index_t idx;
+	btkn_t tkn;
+	int rc;
+
+	ppt_k->key.ptn_id = htobe64(ptn_id);
+	ppt_k->key.pos = htobe64(tkn_pos);
+	ppt_k->key.tkn_id = htobe64(tkn_id);
+	kv->len = sizeof(ppt_k->key);
+
+	pthread_mutex_lock(&bss->ptn_tkn_lock);
+	idx = sos_attr_index(bss->ptn_pos_tkn_key_attr);
+	rc = sos_index_find_ref(idx, key, &ref);
+	if (!rc) {
+		tkn = bs_tkn_find_by_id(bs, tkn_id);
+		if (!tkn) {
+			errno = ENOMEM;
+			goto out;
+		}
+		tkn->tkn_count = ref.idx_data.uint64_[1];
+	} else {
+		errno = rc;
+		tkn = NULL;
+	}
+ out:
+	pthread_mutex_unlock(&bss->ptn_tkn_lock);
+	return tkn;
 }
 
 static int bs_ptn_hist_update(bstore_t bs,
@@ -3040,6 +3068,7 @@ static struct bstore_plugin_s plugin = {
 
 	.ptn_hist_update = bs_ptn_hist_update,
 	.ptn_tkn_add = bs_ptn_tkn_add,
+	.ptn_tkn_find = bs_ptn_tkn_find,
 	.ptn_hist_iter_pos = bs_ptn_hist_iter_pos,
 	.ptn_hist_iter_pos_set = bs_ptn_hist_iter_pos_set,
 	.ptn_hist_iter_new = bs_ptn_hist_iter_new,

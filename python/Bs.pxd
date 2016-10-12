@@ -112,7 +112,7 @@ cdef extern from "baler/bstore.h":
     btkn_t bstore_tkn_iter_obj(btkn_iter_t iter)
     btkn_t bstore_tkn_iter_next(btkn_iter_t iter)
 
-    bptn_t bstore_ptn_find(bstore_t bs, bptn_id_t ptn_id);
+    bptn_t bstore_ptn_find(bstore_t bs, bptn_id_t ptn_id)
     bstore_iter_t bstore_ptn_iter_new(bstore_t bs)
     void bstore_ptn_iter_free(bstore_iter_t iter)
     bptn_t bstore_ptn_iter_next(bstore_iter_t iter)
@@ -164,6 +164,9 @@ cdef extern from "baler/bstore.h":
     cdef bptn_hist_t bstore_ptn_hist_iter_last(bptn_hist_iter_t it, bptn_hist_t ptn_h)
 
     ctypedef bstore_iter_t bptn_tkn_iter_t
+    cdef btkn_t bstore_ptn_tkn_find(bstore_t bs,
+                                    bptn_id_t ptn_id, uint64_t tkn_pos,
+                                    btkn_id_t tkn_id)
     cdef bstore_iter_pos_t bstore_ptn_tkn_iter_pos(bptn_tkn_iter_t)
     cdef int bstore_ptn_tkn_iter_pos_set(bptn_tkn_iter_t, bstore_iter_pos_t)
     cdef bptn_tkn_iter_t bstore_ptn_tkn_iter_new(bstore_t bs)
@@ -181,10 +184,10 @@ cdef extern from "baler/bstore.h":
     ctypedef btkn_hist_s *btkn_hist_t
 
     ctypedef bstore_iter_t btkn_hist_iter_t
-    bstore_iter_pos_t bstore_tkn_hist_iter_pos(btkn_hist_iter_t);
-    int bstore_tkn_hist_iter_pos_set(btkn_hist_iter_t, bstore_iter_pos_t);
-    btkn_hist_iter_t bstore_tkn_hist_iter_new(bstore_t bs);
-    void bstore_tkn_hist_iter_free(btkn_hist_iter_t iter);
+    bstore_iter_pos_t bstore_tkn_hist_iter_pos(btkn_hist_iter_t)
+    int bstore_tkn_hist_iter_pos_set(btkn_hist_iter_t, bstore_iter_pos_t)
+    btkn_hist_iter_t bstore_tkn_hist_iter_new(bstore_t bs)
+    void bstore_tkn_hist_iter_free(btkn_hist_iter_t iter)
     btkn_hist_t bstore_tkn_hist_iter_find(btkn_hist_iter_t iter, btkn_hist_t tkn_h)
     btkn_hist_t bstore_tkn_hist_iter_obj(btkn_hist_iter_t iter, btkn_hist_t tkn_h)
     btkn_hist_t bstore_tkn_hist_iter_next(btkn_hist_iter_t iter, btkn_hist_t tkn_h)

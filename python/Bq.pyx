@@ -139,6 +139,9 @@ cdef class Btkn:
             return True
         return False
 
+    cpdef Bs.btkn_type_mask_t type_mask(self):
+        return self.c_tkn.tkn_type_mask
+
     cpdef Bs.btkn_type_t first_type(self):
         return Bs.btkn_first_type(self.c_tkn)
 
@@ -303,6 +306,19 @@ cdef class Bptn:
 
     cpdef count(self):
         return self.c_ptn.count
+
+    cpdef find_tkn(self, size_t pos, Bs.btkn_id_t tkn_id):
+        cdef Bs.btkn_t c_tkn
+        c_tkn = Bs.bstore_ptn_tkn_find(self.store.c_store,
+                                       self.c_ptn.ptn_id,
+                                       pos,
+                                       tkn_id)
+        if c_tkn != NULL:
+            tkn = Btkn()
+            tkn.c_tkn = c_tkn
+            return tkn
+
+        return None
 
     def __iter__(self):
         return self

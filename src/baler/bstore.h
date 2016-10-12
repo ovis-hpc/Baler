@@ -179,6 +179,8 @@ typedef struct bstore_plugin_s {
 	 */
 	int (*ptn_tkn_add)(bstore_t bs,
 			   bptn_id_t ptn_id, uint64_t tkn_pos, btkn_id_t tkn_id);
+	btkn_t (*ptn_tkn_find)(bstore_t bs,
+			       bptn_id_t ptn_id, uint64_t tkn_pos, btkn_id_t tkn_id);
 	bstore_iter_pos_t (*ptn_hist_iter_pos)(bptn_hist_iter_t);
 	int (*ptn_hist_iter_pos_set)(bptn_hist_iter_t, bstore_iter_pos_t);
 	bptn_hist_iter_t (*ptn_hist_iter_new)(bstore_t bs);
@@ -282,6 +284,8 @@ btkn_hist_t bstore_tkn_hist_iter_last(btkn_hist_iter_t iter, btkn_hist_t tkn_h);
 int bstore_ptn_hist_update(bstore_t bs, bptn_id_t ptn_id, bcomp_id_t comp_id,
 			   time_t secs, time_t bin_width);
 int bstore_ptn_tkn_add(bstore_t bs, bptn_id_t ptn_id, uint64_t tkn_pos, btkn_id_t tkn_id);
+btkn_t bstore_ptn_tkn_find(bstore_t bs,
+			   bptn_id_t ptn_id, uint64_t tkn_pos, btkn_id_t tkn_id);
 bstore_iter_pos_t bstore_ptn_hist_iter_pos(bptn_hist_iter_t);
 int bstore_ptn_hist_iter_pos_set(bptn_hist_iter_t, bstore_iter_pos_t);
 bptn_hist_iter_t bstore_ptn_hist_iter_new(bstore_t bs);

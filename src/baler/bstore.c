@@ -425,6 +425,12 @@ int bstore_ptn_tkn_add(bstore_t bs, bptn_id_t ptn_id, uint64_t tkn_pos, btkn_id_
 	return bs->plugin->ptn_tkn_add(bs, ptn_id, tkn_pos, tkn_id);
 }
 
+btkn_t bstore_ptn_tkn_find(bstore_t bs, bptn_id_t ptn_id,
+			   uint64_t tkn_pos, btkn_id_t tkn_id)
+{
+	return bs->plugin->ptn_tkn_find(bs, ptn_id, tkn_pos, tkn_id);
+}
+
 bstore_iter_pos_t bstore_ptn_hist_iter_pos(bptn_hist_iter_t iter)
 {
 	return iter->bs->plugin->ptn_hist_iter_pos(iter);

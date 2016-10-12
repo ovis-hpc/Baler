@@ -27,7 +27,22 @@ def default_bin_width(dur):
         bin_width = 60
     return bin_width
 
-def get_times(args):
+def tkn_id_from_args(args):
+    if args.tkn_str:
+        tkn = bs.tkn_by_name(args.tkn_str)
+        if tkn:
+            return tkn.tkn_id()
+        else:
+            raise NameError("There is no token with the name {0}".format(args.tkn_str))
+    elif args.tkn_id:
+        tkn = bs.tkn_by_id(args.tkn_id)
+        if tkn:
+            return tkn.tkn_id()
+        else:
+            raise NameError("There is no token with the id {0}".format(args.tkn_id))
+    return None
+
+def get_times_from_args(args):
     if args.begin:
         start = int(args.begin.strftime("%s"))
     else:
@@ -41,7 +56,7 @@ def get_times(args):
     return (start, end)
 
 def get_hist_args(it, key, args):
-    start, end = get_times(args)
+    start, end = get_times_from_args(args)
     if args.bin_width:
         bin_width = xlate_bin_width(args)
     else:
@@ -326,7 +341,7 @@ def show_msgs(bs, args):
     if not comp_id:
         comp_id = 0
 
-    start, end = get_times(args)
+    start, end = get_times_from_args(args)
 
     do_header("{0:12} {1:12} {2:20} {3}". \
               format("Ptn Id", "Component", "Timestamp", "Message"), args)
@@ -443,19 +458,103 @@ def fmt_comp_str(bs, comp_id, args):
 
 def fmt_tkn_str(tkn, args):
     tkn_str = ""
-    if args.color:
+    if args and args.color:
         if tkn.tkn_id() in type_colors:
             tkn_str = type_colors[tkn.tkn_id()]
         else:
             tkn_str = type_colors[tkn.first_type()]
     tkn_str += tkn.ptn_tkn_str()
-    if args.color:
+    if args and args.color:
         tkn_str += RESET
     return tkn_str
 
+def show_matching_ptns(bs, args):
+    tkn_id = tkn_id_from_args(args)
+    if not tkn_id:
+        raise ValueError("The --tkn_id or --tkn_str arguments must be " \
+                         "specified with --match")
+    match_tkn = bs.tkn_by_id(tkn_id)
+
+    pi = Bq.Bptn_iter(bs)
+    start, end = get_times_from_args(args)
+    do_header("{0:12} {1:20} {2:20} {3}".format(
+        "Ptn Id", "First Seen", "Last Seen", "Pattern"), args)
+    hf = "{0} {1} {2} {3}".format(
+        '-'.ljust(12, '-'), '-'.ljust(20, '-'), '-'.ljust(20, '-'),
+        '-'.ljust(32, '-'))
+    do_header(hf, args)
+
+    pi.find(start)
+    ptn_count = 0
+    matching_cols = {}
+    for p in pi:
+        if end > 0 and p.first_seen() > end:
+            break
+
+        # For each position in the pattern.
+        #   If the type in that position doesn't match any of the token's types,
+        #     skip this position
+        #   otherwise
+        #     search the pattern's ptn_tkn index for the token
+        #     if tkn is found
+        #         save the position
+        #
+        ptn_match = False
+        pos = 0
+        for tkn in p:
+            if 0 == (tkn.type_mask() & match_tkn.type_mask()):
+                pos += 1
+                continue
+
+            if tkn.tkn_id() == tkn_id:
+                ptn_tkn = tkn
+            else:
+                ptn_tkn = p.find_tkn(pos, tkn_id)
+            if ptn_tkn:
+                if not ptn_match:
+                    cols = []
+                    cols.append(pos)
+                    matching_cols[p.ptn_id()] = cols
+                    ptn_match = True
+                    pos += 1
+                else:
+                    matching_cols[p.ptn_id()].append(pos)
+            pos += 1
+
+        if not ptn_match:
+            # This pattern does not contain the match token
+            continue
+
+        ptn_count += 1
+        print("{0:12} {1:20} {2:20}". \
+              format(p.ptn_id(),
+                     fmt_tstamp(p.first_seen(), args),
+                     fmt_tstamp(p.last_seen(), args)), end=' ')
+        pos = 0
+        cpos = 56
+        matches = []
+        for tkn in p:
+            if pos in matching_cols[p.ptn_id()]:
+                tkn_str = UNDERLINE + fmt_tkn_str(tkn, args) + RESET
+                matches.append(cpos+len(fmt_tkn_str(tkn, None))/2)
+                cpos = 0
+            else:
+                tkn_str = fmt_tkn_str(tkn, args)
+            print("{0}".format(tkn_str), end='')
+            cpos += len(fmt_tkn_str(tkn, None))
+            pos += 1
+        print("")
+        if args.loc:
+            for col in matches:
+                print("^".rjust(col, " "), end='')
+            print("")
+
+    do_footer(hf, args)
+    do_footer("{0} Record(s)".format(ptn_count), args)
+
 def show_ptns(bs, args):
     pi = Bq.Bptn_iter(bs)
-    start, end = get_times(args)
+    start, end = get_times_from_args(args)
     do_header("{0:12} {1:20} {2:20} {3}".format(
         "Ptn Id", "First Seen", "Last Seen", "Pattern"), args)
     hf = "{0} {1} {2} {3}".format(
@@ -491,7 +590,7 @@ def show_ptn_hist(bs, args):
     else:
         bin_width = 3600        # hours
 
-    start, end = get_times(args)
+    start, end = get_times_from_args(args)
 
     phi = Bq.Bptn_hist_iter(bs)
     phi.start(ptn_id, bin_width, start)
@@ -527,21 +626,6 @@ def show_ptn_hist(bs, args):
         do_footer(sep, args)
         do_footer("{0:46} {1:12}".format("{0} Record(s)".format(rec_count),
                                          msg_count), args)
-
-def tkn_id_from_args(args):
-    if args.tkn_str:
-        tkn = bs.tkn_by_name(args.tkn_str)
-        if tkn:
-            return tkn.tkn_id()
-        else:
-            raise NameError("There is no token with the name {0}".format(args.tkn_str))
-    elif args.tkn_id:
-        tkn = bs.tkn_by_id(args.tkn_id)
-        if tkn:
-            return tkn.tkn_id()
-        else:
-            raise NameError("There is no token with the id {0}".format(args.tkn_id))
-    return None
 
 def show_tkn_hist(bs, args):
     tkn_id = tkn_id_from_args(args)
@@ -585,7 +669,7 @@ def show_tkn_hist(bs, args):
                   format("{0} Record(s)". format(rec_count), msg_count), args)
 
 def show_comp_hist(bs, args):
-    start, end = get_times(args)
+    start, end = get_times_from_args(args)
     if not args.ptn_id:
         ptn_id = 0
     else:
@@ -667,6 +751,8 @@ if __name__ == "__main__":
                         help="Specifies the integer id for a token")
     parser.add_argument("--tkn_str",
                         help="Specifies the string value of a token.")
+    parser.add_argument("--match", action="store_true",
+                        help="Show the patterns that contain a token")
     parser.add_argument("--hist", action="store_true",
                         help="Query the occurance histogram for --tkn, --ptn, and --comp")
     parser.add_argument("--ptn_tkn", action="store_true",
@@ -698,6 +784,14 @@ if __name__ == "__main__":
                         help="Enable table headers")
     header.add_argument("--no-header", dest="header", action="store_false",
                         help="Disable table headers")
+    locator = parser.add_mutually_exclusive_group(required=False)
+    locator.add_argument("--loc", dest="loc", action="store_true",
+                        help="Put a ^ character beneath the matching " \
+                         "token in a pattern")
+    locator.add_argument("--no-loc", dest="loc", action="store_false",
+                        help="Do not put a ^ character beneath the matching " \
+                         "token in a pattern")
+    parser.set_defaults(loc=True)
     parser.set_defaults(header=True)
 
     args = parser.parse_args()
@@ -719,6 +813,8 @@ if __name__ == "__main__":
                 plot_ptn_hist(bs, args)
             else:
                 show_ptn_hist(bs, args)
+        elif args.match:
+            show_matching_ptns(bs, args)
         else:
             show_ptns(bs, args)
 
