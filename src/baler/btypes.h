@@ -66,6 +66,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <pthread.h>
 #include "btkn_types.h"
 
 /**
