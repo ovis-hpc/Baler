@@ -1049,7 +1049,7 @@ void config_file_handling(const char *path)
 {
 	FILE *fin = fopen(path, "rt");
 	if (!fin) {
-		perror("fopen");
+		perror("Cannot open configuration file");
 		exit(-1);
 	}
 	char buff[1024];
