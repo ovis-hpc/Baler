@@ -1,11 +1,8 @@
 #!/usr/bin/env python
 from __future__ import print_function
 import datetime as dt
-import matplotlib.pyplot as plt
-import matplotlib.mlab as mlab
-import matplotlib.dates as mdates
-from matplotlib.ticker import Formatter
 import argparse
+from matplotlib.ticker import Formatter
 from baler import Bq
 
 def xlate_bin_width(args):
@@ -555,10 +552,10 @@ def show_matching_ptns(bs, args):
 def show_ptns(bs, args):
     pi = Bq.Bptn_iter(bs)
     start, end = get_times_from_args(args)
-    do_header("{0:12} {1:20} {2:20} {3}".format(
-        "Ptn Id", "First Seen", "Last Seen", "Pattern"), args)
-    hf = "{0} {1} {2} {3}".format(
-        '-'.ljust(12, '-'), '-'.ljust(20, '-'), '-'.ljust(20, '-'),
+    do_header("{0:12} {1:12} {2:20} {3:20} {4}".format(
+        "Ptn Id", "Msg Count", "First Seen", "Last Seen", "Pattern"), args)
+    hf = "{0} {1} {2} {3} {4}".format(
+        '-'.ljust(12, '-'), '-'.ljust(12, '-'), '-'.ljust(20, '-'), '-'.ljust(20, '-'),
         '-'.ljust(32, '-'))
     do_header(hf, args)
 
@@ -568,8 +565,8 @@ def show_ptns(bs, args):
         if end > 0 and p.first_seen() > end:
             break
         ptn_count += 1
-        print("{0:12} {1:20} {2:20}". \
-              format(p.ptn_id(),
+        print("{0:12} {1:12} {2:20} {3:20}". \
+              format(p.ptn_id(), p.msg_count(),
                      fmt_tstamp(p.first_seen(), args),
                      fmt_tstamp(p.last_seen(), args)), end=' ')
         for tkn in p:
@@ -797,6 +794,11 @@ if __name__ == "__main__":
     args = parser.parse_args()
     bs = Bq.Bstore()
     bs.open(args.path)
+
+    if args.plot:
+        import matplotlib.pyplot as plt
+        import matplotlib.mlab as mlab
+        import matplotlib.dates as mdates
 
     if args.tkn:
         if args.hist:
