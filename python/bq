@@ -474,11 +474,11 @@ def show_matching_ptns(bs, args):
 
     pi = Bq.Bptn_iter(bs)
     start, end = get_times_from_args(args)
-    do_header("{0:12} {1:20} {2:20} {3}".format(
-        "Ptn Id", "First Seen", "Last Seen", "Pattern"), args)
-    hf = "{0} {1} {2} {3}".format(
-        '-'.ljust(12, '-'), '-'.ljust(20, '-'), '-'.ljust(20, '-'),
-        '-'.ljust(32, '-'))
+    do_header("{0:12} {1:12} {2:20} {3:20} {4}".format(
+        "Ptn Id", "Msg Count", "First Seen", "Last Seen", "Pattern"), args)
+    hf = "{0} {1} {2} {3} {4}".format(
+        '-'.ljust(12, '-'), '-'.ljust(12, '-'), '-'.ljust(20, '-'),
+        '-'.ljust(20, '-'), '-'.ljust(32, '-'))
     do_header(hf, args)
 
     pi.find(start)
@@ -523,12 +523,12 @@ def show_matching_ptns(bs, args):
             continue
 
         ptn_count += 1
-        print("{0:12} {1:20} {2:20}". \
-              format(p.ptn_id(),
+        print("{0:12} {1:12} {2:20} {3:20}". \
+              format(p.ptn_id(), p.msg_count(),
                      fmt_tstamp(p.first_seen(), args),
                      fmt_tstamp(p.last_seen(), args)), end=' ')
         pos = 0
-        cpos = 56
+        cpos = 13 + 13 + 21 + 21
         matches = []
         for tkn in p:
             if pos in matching_cols[p.ptn_id()]:
@@ -808,6 +808,9 @@ if __name__ == "__main__":
                 show_tkn_hist(bs, args)
         else:
             show_tkns(bs, args)
+
+    if args.match and not args.ptn:
+        print("The --match option is ignored without the --ptn option")
 
     if args.ptn:
         if args.hist:
