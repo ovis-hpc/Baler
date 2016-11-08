@@ -177,6 +177,8 @@ cdef class Biter:
         cdef Bs.bstore_iter_t c_it
         self.c_item = NULL
         self.store = store
+        if self.store.c_store == NULL:
+            raise ValueError("The specified store is not open")
         c_it = self.iterNew()
         if c_it is NULL:
             raise MemoryError()
@@ -209,14 +211,34 @@ cdef class Biter:
         return self.iterItem()
 
     def get_pos(self):
+        """Return the current iterator position
+
+        Returns a string that represents the current iterator
+        position. This string can be passed to set_pos() in order to
+        start an iterator at a previously saved position. This is
+        useful for handling pagination for a web back-end.
+
+        The get_pos() function must be called before the call to
+        next() in order to return the iterator position associated
+        with the object returned by next(). Since the Python:
+
+            for x in y:
+                # ...
+
+        paradigm calls next() implicitly, calling get_pos() inside the
+        for loop will return the _next_ position on the iterator, not
+        the one associated with the current object. This may be
+        desireable in the case where the goal is to restart the
+        iterator _after_ the last object previously returned.
+        """
         cdef const char *pos_str
         cdef Bs.bstore_iter_pos_t c_pos = self.iterPosGet()
         if c_pos is NULL:
-            raise ValueError("There is no current iterator position")
+            return None
         pos_str = Bs.bstore_iter_pos_to_str(self.c_iter, c_pos)
         Bs.bstore_iter_pos_free(self.c_iter, c_pos)
         if pos_str is NULL:
-            raise MemoryError("Could not encode the iterator position")
+            return None
         return pos_str
 
     def set_pos(self, pos):
@@ -293,21 +315,27 @@ cdef class Bptn:
             self.c_ptn = NULL
 
     cpdef ptn_id(self):
+        """Returns the unique Pattern Identifier"""
         return self.c_ptn.ptn_id
 
     cpdef first_seen(self):
+        """Returns the first time this pattern was seen"""
         return self.c_ptn.first_seen.tv_sec
 
     cpdef last_seen(self):
+        """Returns the last time this pattern was seen"""
         return self.c_ptn.last_seen.tv_sec
 
     cpdef tkn_count(self):
+        """Returns the number of token postions in the pattern"""
         return self.c_ptn.tkn_count
 
-    cpdef count(self):
+    cpdef msg_count(self):
+        """Returns the number of messages matching this pattern"""
         return self.c_ptn.count
 
     cpdef find_tkn(self, size_t pos, Bs.btkn_id_t tkn_id):
+        """Search the pattern history at the specified position for a token"""
         cdef Bs.btkn_t c_tkn
         c_tkn = Bs.bstore_ptn_tkn_find(self.store.c_store,
                                        self.c_ptn.ptn_id,
@@ -349,6 +377,42 @@ cdef class Bptn_iter(Biter):
     def __init__(self, Bstore store):
         Biter.__init__(self, store)
 
+    @cython.cdivision(True)
+    def count(self, start_time, end_time = None):
+        """Return the number of messages patterns the condition
+
+        Positional Parameters:
+        -- The Unix timestamp for the start of the time period
+
+        Keyword Parameters:
+        end_time   -- The Unix timestamp for the end of the time period
+        """
+        cdef uint32_t start, end
+        cdef int rec_count = 0
+        cdef Bs.bptn_t ptn
+        cdef int more
+        start = start_time
+        if end_time:
+            end = <uint32_t>end_time
+        else:
+            end = 0
+
+        more = self.find(start_time)
+        while more != 0:
+            try:
+                ptn = Bs.bstore_ptn_iter_next(self.c_iter)
+                if ptn == NULL:
+                    more = 0
+                elif end != 0 and ptn.first_seen.tv_sec > end:
+                    more = 0
+                else:
+                    rec_count += 1
+                if ptn != NULL:
+                    Bs.bptn_free(ptn)
+            except StopIteration:
+                more = 0
+        return rec_count
+
     def find(self, start_time):
         self.c_item = Bs.bstore_ptn_iter_find(self.c_iter, start_time)
         if self.c_item != NULL:
@@ -387,9 +451,19 @@ cdef class Bptn_tkn_iter(Biter):
     def __init__(self, Bstore store):
         Biter.__init__(self, store)
 
-    def find(self, ptn_id, pos):
+    def find(self, ptn_id, tkn_pos):
+        """Initialize the pattern token iterator position
+
+        Position the pattern-token iterator at the first token of the
+        specified position in the pattern. Token positions are
+        numbered from 0 to ptn.tkn_count() - 1.
+
+        Positional Parameters:
+        -- The pattern id
+        -- The token position in the pattern 0.. ptn.tkn_count() - 1
+        """
         self.c_item = Bs.bstore_ptn_tkn_iter_find(self.c_iter,
-                                                  ptn_id, pos)
+                                                  ptn_id, tkn_pos)
         if self.c_item == NULL:
             return False
         return True
@@ -410,7 +484,7 @@ cdef class Bptn_tkn_iter(Biter):
         return None
 
     cdef void *iterFirst(self):
-        return Bs.bstore_ptn_tkn_iter_find(self.c_iter, self.ptn.ptn_id(), self.c_pos)
+        return Bs.bstore_ptn_tkn_iter_find(self.c_iter, self.ptn.ptn_id(), 0)
 
     cdef void *iterNext(self):
         return Bs.bstore_ptn_tkn_iter_next(self.c_iter)
@@ -509,17 +583,36 @@ cdef class Bmsg_iter(Biter):
         return Bs.bstore_msg_iter_pos_set(self.c_iter, c_pos)
 
     cpdef Bmsg start(self, Bs.bcomp_id_t comp_id, Bs.bptn_id_t ptn_id, Bs.time_t start):
+        """Postion the iterator at a matching message
+
+        Search the index for a message that matches the specified
+        start condition and position the iterator at or before this
+        message.
+
+        Positional Parameters:
+        -- The component id on which the message was reported
+        -- The pattern id that this message matches
+        -- The start time in seconds since the Epoch
+        """
         cdef Bs.bmsg_t c_msg = Bs.bstore_msg_iter_find(self.c_iter,
                                                        start, ptn_id, comp_id,
                                                        NULL, NULL)
         self.c_item = c_msg
-        if c_msg is not NULL:
-            return True
-        return False
+        if c_msg == NULL:
+            return False
+        return True
 
     @cython.cdivision(True)
-    def count(self, ptn_id, start_ = None, end_ = None):
-        """Return the number of messages matching a condition"""
+    def count(self, ptn_id, start_time = None, end_time = None):
+        """Return the number of messages matching a condition
+
+        Positional Parameters:
+        -- The id for the pattern this message matches
+
+        Keyword Parameters:
+        start_time -- The Unix timestamp of the first message
+        end_time   -- The Unix timestamp of the last message
+        """
         cdef uint32_t start, end, delta, bin_width
         cdef Bs.bptn_hist_iter_t it
         cdef Bs.bptn_hist_s hist
@@ -527,18 +620,20 @@ cdef class Bmsg_iter(Biter):
         cdef size_t msg_count
         cdef Bmsg m
 
-        if not start_:
+        if not start_time:
             m = self.first()
             if not m:
                 return 0
-            start_ = m.tv_sec()
+            start = m.tv_sec()
+        else:
+            start = start_time
 
-        if not end_:
+        if not end_time:
             m = self.last()
-            end_ = m.tv_sec()
+            end = m.tv_sec()
+        else:
+            end = end_time
 
-        start = start_
-        end = end_
         delta = end - start
         if delta > 3600:
             bin_width = 3600
@@ -1015,13 +1110,23 @@ cdef class Btkn_hist:
         return self.c_hist.tkn_count
 
 cdef class Btkn_hist_iter(Biter):
-    """Tknonent History Iterator"""
+    """Btkn History Iterator"""
     cdef Bs.btkn_hist_s c_tkn_h
 
     def __init__(self, Bstore store):
         Biter.__init__(self, store)
 
     def start(self, tkn_id, bin_width, time):
+        """Set the iterator at the entry matching the start condition
+
+        Set the iterator at the position of the token history entry
+        that matches the specified start condition.
+
+        Positional Parameters:
+        -- The token id
+        -- The bin width
+        -- The start time as a Unix timestamp
+        """
         self.c_tkn_h.tkn_id = tkn_id
         self.c_tkn_h.bin_width = bin_width
         self.c_tkn_h.time = time
@@ -1069,6 +1174,14 @@ cdef class Btkn_hist_iter(Biter):
         return Bs.bstore_tkn_hist_iter_pos_set(self.c_iter, c_pos)
 
     def duration(self, tkn_id, start=None):
+        """Return the duration in seconds of the token history
+
+        Positional Parameters:
+        -- The token id
+
+        Keyword Parameters:
+        start -- The Unix timestamp of the first history entry
+        """
         cdef Bs.btkn_hist_t h
         self.c_tkn_h.tkn_id = tkn_id
         self.c_tkn_h.bin_width = 60
