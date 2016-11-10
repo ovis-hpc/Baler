@@ -1187,7 +1187,7 @@ void args_handling(int argc, char **argv)
 	int rc;
 
 	bset_store_path("./store");
-	bset_store_plugin("bstore_htbl");
+	bset_store_plugin("bstore_sos");
 	blog_set_level(BLOG_LV_WARN);
 
 next_arg:
