@@ -343,24 +343,24 @@ def show_msgs(bs, args):
     do_header("{0:12} {1:12} {2:20} {3}". \
               format("Ptn Id", "Component", "Timestamp", "Message"), args)
     hf = "{0} {1} {2} {3}".format(
-        '-'.ljust(12, '-'), '-'.ljust(12, '-'), '-'.ljust(20, '-'),
-        '-'.ljust(32, '-'))
+        '-'.ljust(12, '-'), '-'.ljust(12, '-'),
+        '-'.ljust(20, '-'), '-'.ljust(32, '-'))
     do_header(hf, args)
     mi = Bq.Bmsg_iter(bs)
-    mi.start(comp_id, ptn_id, start)
-    msg_count = 0
-    for m in mi:
-        if end > 0 and m.tv_sec() > end:
-            break
-        msg_count += 1
-        comp_str = fmt_comp_str(bs, m.comp_id(), args)
-        print("{0:12} {1:12} {2:20}".format(m.ptn_id(), comp_str,
-                                            fmt_tstamp(m.tv_sec(), args)),
-              end=' ')
-        for tkn in m:
-            tkn_str = fmt_tkn_str(tkn, args)
-            print("{0}".format(tkn_str), end='')
-        print("")
+    if mi.start(comp_id, ptn_id, start):
+        msg_count = 0
+        for m in mi:
+            if end > 0 and m.tv_sec() > end:
+                break
+            msg_count += 1
+            comp_str = fmt_comp_str(bs, m.comp_id(), args)
+            print("{0:12} {1:12} {2:20}".format(m.ptn_id(), comp_str,
+                                                fmt_tstamp(m.tv_sec(), args)),
+                  end=' ')
+            for tkn in m:
+                tkn_str = fmt_tkn_str(tkn, args)
+                print("{0}".format(tkn_str), end='')
+            print("")
     do_footer(hf, args)
     do_footer("{0} Record(s)".format(msg_count), args)
 
