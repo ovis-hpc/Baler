@@ -6,6 +6,7 @@ import numpy as np
 cimport numpy as np
 from libc.stdint cimport *
 from libc.stdlib cimport *
+from sos import Array
 cimport Bs
 
 cdef class Bstore:
@@ -582,7 +583,7 @@ cdef class Bmsg_iter(Biter):
     cdef int iterPosSet(self, Bs.bstore_iter_pos_t c_pos):
         return Bs.bstore_msg_iter_pos_set(self.c_iter, c_pos)
 
-    cpdef Bmsg start(self, Bs.bcomp_id_t comp_id, Bs.bptn_id_t ptn_id, Bs.time_t start):
+    cpdef start(self, Bs.bcomp_id_t comp_id, Bs.bptn_id_t ptn_id, Bs.time_t start):
         """Postion the iterator at a matching message
 
         Search the index for a message that matches the specified
@@ -659,133 +660,6 @@ cdef class Bmsg_iter(Biter):
         Bs.bstore_ptn_hist_iter_free(it)
 
         return msg_count
-
-# Initialize the numpy array support. Hurry arrays can be cast to Numpy arrays
-# without copying the data
-np.import_array()
-
-cdef class Hurry:
-    cdef void **pgs             # Array of ptrs to 4K blocks
-    cdef int pg_cnt             # Pages in the pgs array
-    cdef int el_cap             # Capacity of the array
-    cdef int el_cnt             # Elements that have been appended to the array
-    cdef el_type                # The NumPy type for the array
-    cdef int el_sz
-    cdef int el_pp              # # of elements per page
-
-    def __init__(self, el_type=np.double):
-        self.pg_cnt = 16
-        self.pgs = <void **>calloc(self.pg_cnt, 8)
-        self.el_type = np.dtype(el_type)
-        self.el_sz = self.el_type.itemsize
-        self.el_pp = 4096 / self.el_sz
-        self.el_cap = 0
-        self.el_cnt = 0
-
-    # cpdef as_ndarray(self):
-    #    cdef np.ndarray ndarray
-    #    ndarray = np.array(self, copy=False, subok=True)
-    #    Py_INCREF(self)
-    #    ndarray.base = <PyObject *>self
-    #    return ndarray
-
-    def __str__(self):
-        s = "Hurry@{0}[".format(self.el_cnt)
-        for i in range(0, self.el_cnt):
-            if i > 0:
-                s += ","
-            s += "{0}".format(self[i])
-            if i > 4:
-                break
-        if i < self.el_cnt:
-            s += ",..."
-        s += "]"
-        return s
-
-    def __len__(self):
-        return self.el_cnt
-
-    def capacity(self):
-        return self.el_cap
-
-    def __array__(self):
-        cdef np.npy_intp shape[1]
-        shape[0] = <np.npy_intp> self.el_cnt
-        ndarray = np.PyArray_SimpleNewFromData(1, shape,
-                                               self.el_type.num,
-                                               self.pgs[0])
-        return ndarray
-
-    cdef ___getitem___(self, int pg, int idx):
-        cdef double *p = <double*>self.pgs[pg]
-        return p[idx]
-
-    cdef ___setitem___(self, int pg, int idx, v):
-        cdef double *p = <double*>self.pgs[pg]
-        p[idx] = <double>v
-
-    @cython.cdivision(True)
-    cpdef append(self, v):
-        cdef int pg
-        cdef int idx
-        cdef int i = self.el_cnt
-
-        pg = i / self.el_pp
-        idx = i % self.el_pp
-
-        if pg >= self.pg_cnt:
-            # Allocate a batch of new page slots to hold the additonal pages
-            self.pgs = <void **>realloc(self.pgs,
-                                        (self.pg_cnt + 16) * 8)
-            if self.pgs == NULL:
-                raise MemoryError
-            pg = self.pg_cnt
-            self.pg_cnt += 16
-            for pg in range(pg, self.pg_cnt):
-                self.pgs[pg] = NULL
-
-        # If the target page is empty, allocate a new page
-        if self.pgs[pg] == NULL:
-            self.pgs[pg] = malloc(4096)
-            if self.pgs[pg] == NULL:
-                raise MemoryError
-            self.el_cap += self.el_pp
-
-        self.el_cnt += 1
-        self.___setitem___(pg, idx, v)
-
-    def __getitem__(self, i):
-        cdef int pg
-        cdef int idx
-        cdef double *pd
-
-        if i >= self.el_cnt:
-            raise IndexError
-
-        pg = i / self.el_pp
-        idx = i % self.el_pp
-        return self.___getitem___(pg, idx)
-
-    def __setitem__(self, i, v):
-        cdef int pg
-        cdef int idx
-        cdef int c_i = <int>i
-
-        if c_i >= self.el_cnt:
-            raise IndexError
-
-        pg = c_i / self.el_pp
-        idx = c_i % self.el_pp
-
-        self.___setitem___(pg, idx, v)
-
-    def __dealloc__(self):
-        for pg in range(0, self.pg_cnt):
-            if self.pgs[pg]:
-                free(self.pgs[pg])
-            else:
-                break
-        free(self.pgs)
 
 cdef class Bptn_hist:
     cpdef Bs.bptn_hist_s c_hist
@@ -919,8 +793,8 @@ cdef class Bptn_hist_iter(Biter):
         self.c_ptn_h.bin_width = bin_width
         self.c_item = Bs.bstore_ptn_hist_iter_first(self.c_iter, &self.c_ptn_h)
 
-        x = Hurry()
-        y = Hurry()
+        x = Array.Array()
+        y = Array.Array()
 
         # shape = []
         # shape.append(<np.npy_intp>sample_count)
@@ -935,7 +809,7 @@ cdef class Bptn_hist_iter(Biter):
             rec_no += 1
             self.c_item = Bs.bstore_ptn_hist_iter_next(self.c_iter, &self.c_ptn_h)
 
-        return (rec_no, x, y)
+        return (rec_no, x.as_ndarray(), y.as_ndarray())
 
 cdef class Bcomp_hist:
     cpdef Bs.bcomp_hist_s c_hist
@@ -1080,8 +954,8 @@ cdef class Bcomp_hist_iter(Biter):
 
         self.c_item = Bs.bstore_comp_hist_iter_first(self.c_iter, &self.c_comp_h)
 
-        x = Hurry()
-        y = Hurry()
+        x = Array.Array()
+        y = Array.Array()
 
         rec_no = 0
         while self.c_item != NULL:
@@ -1092,7 +966,7 @@ cdef class Bcomp_hist_iter(Biter):
             rec_no += 1
             self.c_item = Bs.bstore_comp_hist_iter_next(self.c_iter, &self.c_comp_h)
 
-        return (rec_no, x, y)
+        return (rec_no, x.as_ndarray(), y.as_ndarray())
 
 cdef class Btkn_hist:
     cpdef Bs.btkn_hist_s c_hist
@@ -1246,8 +1120,8 @@ cdef class Btkn_hist_iter(Biter):
         self.c_tkn_h.bin_width = bin_width
         self.c_item = Bs.bstore_tkn_hist_iter_first(self.c_iter, &self.c_tkn_h)
 
-        x = Hurry()
-        y = Hurry()
+        x = Array.Array()
+        y = Array.Array()
 
         rec_no = 0
         while self.c_item != NULL:
@@ -1258,4 +1132,4 @@ cdef class Btkn_hist_iter(Biter):
             rec_no += 1
             self.c_item = Bs.bstore_tkn_hist_iter_next(self.c_iter, &self.c_tkn_h)
 
-        return (rec_no, x, y)
+        return (rec_no, x.as_ndarray(), y.as_ndarray())

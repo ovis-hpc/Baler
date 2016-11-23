@@ -3,6 +3,9 @@ from __future__ import print_function
 import datetime as dt
 import argparse
 from matplotlib.ticker import Formatter
+from matplotlib import cm
+import numpy as np
+import textwrap
 from baler import Bq
 
 def xlate_bin_width(args):
@@ -53,6 +56,7 @@ def get_times_from_args(args):
     return (start, end)
 
 def get_hist_args(it, key, args):
+    key = int(key)
     start, end = get_times_from_args(args)
     if args.bin_width:
         bin_width = xlate_bin_width(args)
@@ -139,6 +143,87 @@ def plot_xy(x, y, title_str, bin_width, args):
     plt.grid(True)
     plt.show()
 
+def multi_bar(x, y, title_str, bin_width, args):
+    """Create a Bar from multiple series
+
+    Positional Arguments:
+    --- Array of arrays of timestamps
+    --- Array of arrays of bar values
+    --- The width in seconds of each bin.
+    --- The argument tuple passed in to main
+    """
+    if len(x) != len(y):
+        raise ValueError("The x and y input vectors must be equal length.")
+    # Determine min an max Time and Y value across the input vectors
+    max_x = 0.0
+    min_x = 99999999999
+    for X in x:
+        mx = min(X) - (bin_width / 2)
+        if min_x > mx:
+            min_x = mx
+        mx = max(X) + bin_width
+        if max_x < mx:
+            max_x = mx
+    max_y = 0.0
+    for Y in y:
+        my = max(Y)
+        if max_y < my:
+            max_y = my
+    if args.y_scale == 'log':
+        max_y *= 10
+    else:
+        max_y += max_y * .2
+
+    height = 6.
+    width = 16.
+    bottom = 1.
+    title_lines = len(title_str.split('\n'))
+    top = title_lines * .25
+    right = .5
+    left = .75
+    W = width - left - right
+    H = height - top - bottom
+    figure = plt.figure(figsize=(width, height))
+    axis = figure.add_axes([left / width, bottom / height,
+                            W / width, H / height], axisbg='w')
+    axis.tick_params(labelsize=10, direction='out')
+    figure.autofmt_xdate()
+
+    ind = 0
+    offset = 0
+    width = bin_width / len(x)
+    l = float(len(x))
+    colors = cm.Set1(np.arange(l) / l)
+    rects = []
+    for X in x:
+        Y = y[ind]
+        ind += 1
+        r = plt.bar(X+offset, Y, width, color=colors[ind % len(colors)])
+        rects.append(r)
+        offset += width
+        autolabel(axis, r, max_y, args)
+
+    axis.xaxis.set_major_formatter(MyXFormatter())
+    lr = tuple(r[0] for r in rects)
+    ll = tuple(ptn for ptn in args.ptn_ids.split(','))
+    axis.legend(lr, ll)
+    s = dt.datetime.fromtimestamp(min_x)
+    year_str = str(s.year)
+    e = dt.datetime.fromtimestamp(max_x)
+    if e.year != s.year:
+        year_str += "-"+str(e.year)
+    plt.xlabel('Date/Time ({0})'.format(year_str))
+    plt.ylabel('Msg Count')
+    plt.title(title_str) #, loc='left')
+    if args.y_scale == 'log':
+        min_y = 1.0
+    else:
+        min_y = 0.
+    plt.axis([min_x, max_x, min_y, max_y])
+    plt.yscale(args.y_scale, nonposy='clip')
+    plt.grid(True)
+    plt.show()
+
 def plot_comp_hist(bs, args):
     comp_id = tkn_id_from_args(args)
     if not comp_id:
@@ -168,29 +253,43 @@ def plot_comp_hist(bs, args):
     plot_xy(x, y, title_str, bin_width, args)
 
 def plot_ptn_hist(bs, args):
-    ptn_id = args.ptn_id
-    if not ptn_id:
-        raise ValueError("The --ptn_id arguments must be " \
+    if not args.ptn_id and not args.ptn_ids:
+        raise ValueError("The --ptn_id or --ptn_ids argument must be " \
                          "specified with --ptn --hist")
+    if args.ptn_ids:
+        ptn_ids = str(args.ptn_ids).split(',')
+    else:
+        ptn_ids = [ str(args.ptn_id) ]
     it = Bq.Bptn_hist_iter(bs)
 
-    start, end, bin_width = get_hist_args(it, ptn_id, args)
+    start, end, bin_width = get_hist_args(it, ptn_ids[0], args)
 
-    cnt, x, y = it.as_xy_arrays(ptn_id, bin_width,
-                                start_time=start, end_time=end)
+    x = []
+    y = []
+    cnt = 0.0
+    title_str = ""
+    for pi in ptn_ids:
+        pi = int(pi)
+        n, X, Y = it.as_xy_arrays(pi, bin_width,
+                                  start_time=start, end_time=end)
+        cnt += n
+        if n != 0:
+            x.append(X)
+            y.append(Y)
+            if pi == 1:             # ptn #1 is the wild-card
+                ptn_str = "ALL"
+            else:
+                ptn = bs.ptn_by_id(pi)
+                ptn_str = str(ptn)
+            title_str += '{0}: {1}\n'.format(pi, textwrap.fill(ptn_str,120))
 
     if cnt == 0:
         print("No history information found for pattern {0}".format(ptn_id))
         return
 
-    if ptn_id == 1:             # ptn #1 is the wild-card
-        ptn_str = "ALL"
-    else:
-        ptn = bs.ptn_by_id(ptn_id)
-        ptn_str = str(ptn)
-    title_str = 'Pattern: {0}\nHost: ALL, Bin Width: {1}'. \
-                format(ptn_str, bin_name(bin_width))
-    plot_xy(x, y, title_str, bin_width, args)
+    title_str += "Host: ALL, Bin Width: {0}\n".format(bin_width)
+
+    multi_bar(x, y, title_str, bin_width, args)
 
 def plot_tkn_hist(bs, args):
     tkn_id = tkn_id_from_args(args)
@@ -327,6 +426,59 @@ def show_ptn_tkns(bs, args):
     for pos in range(0, tkn_count):
         print("{0} ".format(str(cnt[pos]).center(col[pos], ' ')), end='')
     print("")
+
+def plot_ptn_dist(bs, args):
+    if not args.ptn_id:
+        print("The --ptn_id argument is required with --dist")
+        return
+
+    ptn = bs.ptn_by_id(args.ptn_id)
+    if not ptn:
+        print("A pattern with id {0} was not found".format(args.ptn_id))
+        return
+
+    start, end = get_times_from_args(args)
+    if args.bin_width:
+        bin_width = xlate_bin_width(args)
+    else:
+        bin_width = 3600        # hours
+
+    # Gather the components
+    comp_count = ptn.tkn_count()
+    hit = Bq.Bptn_tkn_iter(bs)
+    hit.find(ptn.ptn_id(), 0)
+    comps = []
+    for tkn in hit:
+        comps.append(tkn)
+
+    # Compute the message count for each component
+    counts = []
+    ind = 0
+    for c in comps:
+        comp_id = comps[ind].tkn_id()
+        hit = Bq.Bcomp_hist_iter(bs)
+        hit.start(comp_id, ptn.ptn_id(), bin_width, start)
+        counts.append(0)
+        for h in hit:
+            if end > 0 and h.time() > end:
+                break
+            counts[ind] += h.msg_count()
+
+        print("comp_id {0} ptn_id {1} count {2}".format(comp_id, ptn.ptn_id(), counts[ind]))
+        ind += 1
+    labels = []
+    for tkn in comps:
+        labels.append(tkn.tkn_str())
+    figure = plt.figure(figsize=(8,8))
+    l = float(len(comps))
+    cs=cm.Set1(np.arange(l) / l)
+    title_str = '{0}[{1}]: {2}'.format(ptn.ptn_id(), bin_name(bin_width), str(ptn))
+    plt.title(textwrap.fill(title_str, 60))
+    plt.pie(counts, labels=labels, colors=cs, autopct='%1.1f%%', shadow=True)
+    plt.text(0., 0., "{0} total messages".format(sum(counts)),
+             horizontalalignment='center',
+             verticalalignment='bottom')
+    plt.show()
 
 def show_msgs(bs, args):
     if not args.ptn_id:
@@ -752,10 +904,14 @@ if __name__ == "__main__":
                         help="Show the patterns that contain a token")
     parser.add_argument("--hist", action="store_true",
                         help="Query the occurance histogram for --tkn, --ptn, and --comp")
+    parser.add_argument("--dist", action="store_true",
+                        help="Query the disrtribution --tkn, --ptn, and --comp")
     parser.add_argument("--ptn_tkn", action="store_true",
                         help="Query the tokens that appear in a pattern")
     parser.add_argument("--ptn_id", type=int,
-                        help="The pattern id. Required for --ptn_hist and --ptn_tkn")
+                        help="The pattern id.")
+    parser.add_argument("--ptn_ids",
+                        help="A comma separated list of pattern ids.")
     parser.add_argument("--comp_id", dest="tkn_id", type=int,
                         help="Specifies a component id")
     parser.add_argument("--comp_str", dest="tkn_str",
@@ -818,6 +974,8 @@ if __name__ == "__main__":
                 plot_ptn_hist(bs, args)
             else:
                 show_ptn_hist(bs, args)
+        elif args.dist:
+            plot_ptn_dist(bs, args)
         elif args.match:
             show_matching_ptns(bs, args)
         else:
