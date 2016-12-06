@@ -8,6 +8,15 @@
 #include <butils.h>
 #include <stdarg.h>
 #include <pthread.h>
+#include <assert.h>
+
+#ifdef DEBUG_BLEN
+#  define BLEN_ASSERT(bstr) assert(strlen((bstr)->cstr) == (bstr)->blen)
+#  define STRLEN_ASSERT(str, len) assert(strlen(str)==len)
+#else
+#  define BLEN_ASSERT(bstr) /* noop */
+#  define STRLEN_ASSERT(str, len) /* noop */
+#endif
 
 struct plugin_entry {
 	bstore_plugin_t plugin;
@@ -106,6 +115,7 @@ void bstore_close(bstore_t bs)
 
 btkn_id_t bstore_tkn_add(bstore_t bs, btkn_t tkn)
 {
+	BLEN_ASSERT(tkn->tkn_str);
 	return bs->plugin->tkn_add(bs, tkn);
 }
 
@@ -121,6 +131,7 @@ btkn_t bstore_tkn_find_by_id(bstore_t bs, btkn_id_t tkn_id)
 
 btkn_t bstore_tkn_find_by_name(bstore_t bs, const char *text, size_t text_len)
 {
+	STRLEN_ASSERT(text, text_len);
 	return bs->plugin->tkn_find_by_name(bs, text, text_len);
 }
 

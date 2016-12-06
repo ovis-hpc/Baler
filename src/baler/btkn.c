@@ -111,6 +111,19 @@ btkn_type_t btkn_type(const char *str)
 	return bget_str_idx(btkn_type_str, BTKN_TYPE_LAST, str);
 }
 
+void btkn_dprint(btkn_t tkn)
+{
+	binfo("id: %lu, count: %lu, type_mask: %lx, str: \"%.*s\"",
+			tkn->tkn_id,
+			tkn->tkn_count,
+			tkn->tkn_type_mask,
+			tkn->tkn_str->blen, tkn->tkn_str->cstr);
+	int len = strlen(tkn->tkn_str->cstr);
+	if (tkn->tkn_str->blen != len) {
+		bwarn("blen(%d) != strlen(%d)", tkn->tkn_str->blen, len);
+	}
+}
+
 struct btkn_store* btkn_store_open(const char *path, int flag)
 {
 	struct btkn_store *ts = NULL;

@@ -48,7 +48,7 @@ cdef class Bstore:
     cpdef tkn_by_name(self, tkn_name):
         cdef Bs.btkn_t btkn
         cdef Btkn tkn
-        btkn = Bs.bstore_tkn_find_by_name(self.c_store, tkn_name, len(tkn_name)+1)
+        btkn = Bs.bstore_tkn_find_by_name(self.c_store, tkn_name, len(tkn_name))
         if btkn != NULL:
             tkn = Btkn()
             tkn.c_tkn = btkn

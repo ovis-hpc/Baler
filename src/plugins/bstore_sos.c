@@ -346,6 +346,7 @@ static size_t decode_ptn(bstr_t ptn, const uint8_t *tkn_str, size_t tkn_count);
 static size_t decode_msg(bmsg_t msg, const uint8_t *tkn_str, size_t tkn_count);
 static btkn_id_t bs_tkn_add(bstore_t bs, btkn_t tkn);
 static int bs_tkn_add_with_id(bstore_t bs, btkn_t tkn);
+static size_t encode_ptn(bstr_t ptn, size_t tkn_count);
 
 static sos_t create_container(const char *path, int o_mode)
 {
@@ -764,7 +765,7 @@ static void encode_tkn_key(sos_key_t key, const char *text, size_t text_len)
 	ods_key_value_t kv = key->as.ptr;
 	memcpy(kv->value, text, text_len);
 	kv->value[text_len] = '\0';
-	kv->len = text_len;
+	kv->len = text_len + 1;
 }
 
 static int __add_tkn_with_id(bstore_sos_t bss, btkn_t tkn, uint64_t count)
@@ -784,7 +785,7 @@ static int __add_tkn_with_id(bstore_sos_t bss, btkn_t tkn, uint64_t count)
 	tkn_value = sos_obj_ptr(tkn_obj);
 	tkn_value->tkn_count = count;
 
-	sz = tkn->tkn_str->blen;
+	sz = tkn->tkn_str->blen + 1;
 	v = sos_array_new(&v_, bss->tkn_text_attr, tkn_obj, sz);
 	if (!v)
 		goto err_1;
@@ -953,7 +954,7 @@ static btkn_t bs_tkn_find_by_id(bstore_t bs, btkn_id_t tkn_id)
 	tkn_str = sos_value(tkn_obj, bss->tkn_text_attr);
 	char *text = tkn_str->data->array.data.char_;
 	token = btkn_alloc(tkn_value->tkn_id, tkn_value->tkn_type_mask,
-			   text, tkn_str->data->array.count);
+			   text, tkn_str->data->array.count - 1);
 	if (token)
 		token->tkn_count = tkn_value->tkn_count;
 	else
@@ -1192,7 +1193,8 @@ static btkn_t __make_tkn(bstore_sos_t bss, sos_obj_t tkn_obj)
 	if (!v)
 		goto out;
 
-	txt_len = sos_array_count(v);
+	txt_len = sos_array_count(v) - 1; /* the null byte '\0' is included
+					   * in the array_count */
 	tkn = btkn_alloc(tv->tkn_id, tv->tkn_type_mask,
 			 v->data->array.data.char_,
 			 txt_len);

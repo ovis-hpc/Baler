@@ -378,8 +378,13 @@ btkn_alloc(btkn_id_t tkn_id, btkn_type_mask_t mask, const char *str, size_t len)
 		t->tkn_id = tkn_id;
 		t->tkn_type_mask = mask;
 		t->tkn_count = 0;
+		/*
+		 * tkn_str convention:
+		 *   - blen is strlen
+		 *   - cstr is null terminated (cstr[blen] == '\0')
+		 */
 		t->tkn_str = (struct bstr *)(t+1);
-		t->tkn_str->blen = len+1;
+		t->tkn_str->blen = len;
 		memcpy(t->tkn_str->cstr, str, len);
 		t->tkn_str->cstr[len] = '\0';
 		#ifndef __OPTIMIZE__
@@ -395,14 +400,13 @@ btkn_alloc(btkn_id_t tkn_id, btkn_type_mask_t mask, const char *str, size_t len)
 
 static btkn_t btkn_dup(btkn_t src)
 {
-	btkn_t dst = malloc(sizeof *dst);
-	if (dst) {
-		*dst = *src;
-		dst->tkn_str = bstr_alloc(src->tkn_str->blen+1);
-		memcpy(dst->tkn_str->cstr, src->tkn_str->cstr, src->tkn_str->blen);
-		dst->tkn_str->cstr[src->tkn_str->blen] = '\0';
+	btkn_t tkn =  btkn_alloc(src->tkn_id, src->tkn_type_mask,
+				 src->tkn_str->cstr, src->tkn_str->blen);
+	if (tkn) {
+		tkn->tkn_count = src->tkn_count;
+		/* other attributes are assigned in btkn_alloc() */
 	}
-	return dst;
+	return tkn;
 }
 
 static void btkn_free(btkn_t t)
