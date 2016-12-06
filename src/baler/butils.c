@@ -543,7 +543,7 @@ int bstr_lev_dist_u32(const struct bstr *a, const struct bstr *b, void *buff,
 	}
 
 	if (2*na*sizeof(*x0) > buffsz) {
-		berr("%s: Not enough buffsz: %d, required: %d", __func__,
+		berr("%s: Not enough buffsz: %zu, required: %zu", __func__,
 				buffsz, 2*na*sizeof(*x0));
 		errno = ENOMEM;
 		return -1;
@@ -590,7 +590,7 @@ int bstr_lcs_u32(const struct bstr *a, const struct bstr *b, void *buff,
 	}
 
 	if (2*na*sizeof(*x0) > buffsz) {
-		berr("%s: Not enough buffsz: %d, required: %d", __func__,
+		berr("%s: Not enough buffsz: %zu, required: %zu", __func__,
 				buffsz, 2*na*sizeof(*x0));
 		errno = ENOMEM;
 		return -1;

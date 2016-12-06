@@ -77,7 +77,7 @@
 extern FILE *blog_file;
 extern int __blog_level;
 
-extern void __blog(const char *fmt, ...);
+extern void __blog(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 
 enum blog_level {
 	BLOG_LV_DEBUG = 0,

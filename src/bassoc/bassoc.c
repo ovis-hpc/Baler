@@ -1157,13 +1157,13 @@ void open_cache_routine()
 	img_cache = bassocimg_cache_open(paths.img_cache_path->str, 0);
 	if (!img_cache) {
 		berr("bassocimg_cache_open() failed, errno: %d, path: %s\n",
-				paths.img_cache_path->str, errno);
+				errno, paths.img_cache_path->str);
 		exit(-1);
 	}
 	target_cache = bassocimg_cache_open(paths.target_cache_path->str, 0);
 	if (!target_cache) {
 		berr("bassocimg_cache_open() failed, errno: %d, path: %s\n",
-				paths.img_cache_path->str, errno);
+				errno, paths.img_cache_path->str);
 		exit(-1);
 	}
 }

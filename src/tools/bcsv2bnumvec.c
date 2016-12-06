@@ -215,7 +215,7 @@ void process_input()
 			i++;
 		}
 		if (i != count) {
-			berr("Input error line %d: "
+			berr("Input error line %lu: "
 				"expecting %d columns, "
 				"but got only %d columns",
 						line, count, i);
