@@ -240,6 +240,11 @@ bptn_t bstore_ptn_find(bstore_t bs, bptn_id_t ptn_id)
 	return bs->plugin->ptn_find(bs, ptn_id);
 }
 
+int bstore_ptn_find_by_ptnstr(bstore_t bs, bptn_t ptn)
+{
+	return bs->plugin->ptn_find_by_ptnstr(bs, ptn);
+}
+
 int bstore_msg_add(bstore_t bs, struct timeval *tv, bmsg_t msg)
 {
 	return bs->plugin->msg_add(bs, tv, msg);

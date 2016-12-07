@@ -1359,6 +1359,70 @@ static bptn_t bs_ptn_find(bstore_t bs, bptn_id_t ptn_id)
 	return ptn;
 }
 
+static int bs_ptn_find_by_ptnstr(bstore_t bs, bptn_t ptn)
+{
+	bptn_id_t ptn_id;
+	ptn_t ptn_value;
+	bstore_sos_t bss = (bstore_sos_t)bs;
+	sos_obj_t ptn_obj;
+	SOS_KEY_SZ(stack_key, 2048);
+	sos_key_t ptn_key;
+	bstr_t tmp_bstr;
+	int rc;
+
+	if (ptn->tkn_count != ptn->str->blen/sizeof(uint64_t)) {
+		assert(0); /* for debugging */
+		return EINVAL;
+	}
+
+	/* dup ptn because we will modify ptn->str */
+	tmp_bstr = bstr_dup(ptn->str);
+	if (!tmp_bstr) {
+		rc = ENOMEM;
+		goto out;
+	}
+
+	if (ptn->str->blen <= 2048)
+		ptn_key = stack_key;
+	else
+		ptn_key = sos_key_new(tmp_bstr->blen);
+	if (!ptn_key) {
+		rc = ENOMEM;
+		goto cleanup_1;
+	}
+
+	size_t ptn_size = encode_ptn(tmp_bstr, ptn->tkn_count);
+
+	sos_key_set(ptn_key, tmp_bstr->cstr, ptn_size);
+	pthread_mutex_lock(&bss->ptn_lock);
+
+	/* find & copy ptn info from the store to ptn */
+	ptn_obj = sos_obj_find(bss->tkn_type_ids_attr, ptn_key);
+	if (ptn_key != stack_key)
+		sos_key_put(ptn_key);
+	if (!ptn_obj) {
+		rc = ENOENT;
+		goto cleanup_2;
+	}
+	ptn_value = sos_obj_ptr(ptn_obj);
+	ptn->ptn_id = ptn_value->ptn_id;
+	ptn->count = ptn_value->count;
+	ptn->first_seen.tv_sec = ptn_value->first_seen.secs;
+	ptn->first_seen.tv_usec = ptn_value->first_seen.usecs;
+	ptn->last_seen.tv_sec = ptn_value->last_seen.secs;
+	ptn->last_seen.tv_usec = ptn_value->last_seen.usecs;
+	sos_obj_put(ptn_obj);
+	rc = 0;
+	/* let-through for clean-up */
+
+ cleanup_2:
+	pthread_mutex_unlock(&bss->ptn_lock);
+ cleanup_1:
+	bstr_free(tmp_bstr);
+ out:
+	return rc;
+}
+
 static bptn_t bs_ptn_iter_find(bptn_iter_t iter, time_t start)
 {
 	SOS_KEY(time_key);
@@ -3034,6 +3098,7 @@ static struct bstore_plugin_s plugin = {
 
 	.ptn_add = bs_ptn_add,
 	.ptn_find = bs_ptn_find,
+	.ptn_find_by_ptnstr = bs_ptn_find_by_ptnstr,
 	.ptn_iter_pos = bs_ptn_iter_pos,
 	.ptn_iter_pos_set = bs_ptn_iter_pos_set,
 	.ptn_iter_new = bs_ptn_iter_new,

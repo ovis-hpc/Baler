@@ -102,6 +102,16 @@ typedef struct bstore_plugin_s {
 	 */
 	bptn_t (*ptn_find)(bstore_t bs, bptn_id_t ptn_id);
 	/**
+	 * Find a pattern by `ptn->str`.
+	 *
+	 * If the pattern is found, \c ptn attributes will be populated with the
+	 * information from the store.
+	 *
+	 * \returns 0 if found
+	 * \returns ENOENT if not found
+	 */
+	int (*ptn_find_by_ptnstr)(bstore_t bs, bptn_t ptn);
+	/**
 	 * Create/destroy a pattern iterator
 	 */
 	bstore_iter_pos_t (*ptn_iter_pos)(bptn_iter_t);
@@ -246,6 +256,7 @@ bmsg_t bstore_msg_iter_last(bmsg_iter_t i);
 
 bptn_id_t bstore_ptn_add(bstore_t bs, struct timeval *tv, bstr_t ptn);
 bptn_t bstore_ptn_find(bstore_t bs, bptn_id_t ptn_id);
+int bstore_ptn_find_by_ptnstr(bstore_t bs, bptn_t ptn);
 bstore_iter_pos_t bstore_ptn_iter_pos(bptn_iter_t);
 int bstore_ptn_iter_pos_set(bptn_iter_t, bstore_iter_pos_t);
 bptn_iter_t bstore_ptn_iter_new(bstore_t bs);
