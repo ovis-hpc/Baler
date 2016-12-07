@@ -543,6 +543,20 @@ static inline bptn_t bptn_alloc(size_t tkn_count) {
 	}
 	return p;
 }
+
+static inline bptn_t bptn_dup(bptn_t ptn)
+{
+	bptn_t p = malloc(sizeof(*p));
+	if (p) {
+		p->str = bstr_dup(ptn->str);
+		if (!p->str) {
+			free(p);
+			p = NULL;
+		}
+	}
+	return p;
+}
+
 static inline void bptn_free(bptn_t ptn) {
 	free(ptn->str);
 	free(ptn);
