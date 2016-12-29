@@ -6,7 +6,7 @@ import numpy as np
 cimport numpy as np
 from libc.stdint cimport *
 from libc.stdlib cimport *
-from sos import Array
+from sosdb import Array
 cimport Bs
 
 cdef class Bstore:
