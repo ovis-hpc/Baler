@@ -1841,9 +1841,9 @@ static bmsg_t bs_msg_iter_obj(bmsg_iter_t iter)
 {
 	bsos_iter_t i = (bsos_iter_t)iter;
 	bstore_sos_t bss = (bstore_sos_t)i->bs;
-	sos_obj_t obj = __next_matching_msg(0, i, 1);
+	sos_obj_t obj = sos_iter_obj(i->iter);
 	if (obj)
-		return __make_msg(bss, i, sos_iter_obj(i->iter));
+		return __make_msg(bss, i, obj);
 	return NULL;
 }
 
