@@ -2539,9 +2539,9 @@ bs_tkn_hist_iter_last(btkn_hist_iter_t iter, btkn_hist_t tkn_h)
 	i->bin_width = htobe32(tkn_h->bin_width);
 	i->start = htobe32(clamp_time_to_bin(tkn_h->time, tkn_h->bin_width));
 
-	tkn_k->key.tkn_id = i->tkn_id;
+	tkn_k->key.tkn_id = (i->tkn_id)?(i->tkn_id):(-1);
 	tkn_k->key.bin_width = i->bin_width;
-	tkn_k->key.time = i->start;
+	tkn_k->key.time = (i->start)?(i->start):(-1);
 	hist_k->len = sizeof(tkn_k->key);
 
 	rc = sos_iter_inf(i->iter, key);
