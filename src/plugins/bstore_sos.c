@@ -2791,7 +2791,7 @@ static bptn_hist_t bs_ptn_hist_iter_last(bptn_hist_iter_t iter, bptn_hist_t ptn_
 
 	ptn_k->key.ptn_id = i->ptn_id;
 	ptn_k->key.bin_width = i->bin_width;
-	ptn_k->key.time = i->start;
+	ptn_k->key.time = (i->start)?(i->start):(-1);
 	hist_k->len = sizeof(ptn_k->key);
 
 	rc = sos_iter_inf(i->iter, key);
