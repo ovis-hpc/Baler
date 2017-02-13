@@ -3020,10 +3020,10 @@ static bcomp_hist_t bs_comp_hist_iter_last(bcomp_hist_iter_t iter, bcomp_hist_t 
 	i->start = htobe32(comp_h->time);
 	i->bin_width = htobe32(comp_h->bin_width);
 
-	comp_k->key.comp_id = i->comp_id;
-	comp_k->key.ptn_id = i->ptn_id;
+	comp_k->key.comp_id = (i->comp_id)?(i->comp_id):(-1);
+	comp_k->key.ptn_id = (i->ptn_id)?(i->ptn_id):(-1);
 	comp_k->key.bin_width = i->bin_width;
-	comp_k->key.time = i->start;
+	comp_k->key.time = (i->start)?(i->start):(-1);
 	hist_k->len = sizeof(comp_k->key);
 
 	rc = sos_iter_inf(i->iter, key);
