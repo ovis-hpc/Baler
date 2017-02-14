@@ -182,3 +182,20 @@ int bheap_verify(struct bheap *h)
 	}
 	return 0;
 }
+
+void bheap_heapify(struct bheap *h)
+{
+	int i;
+	int len = h->len;
+	/* reset && reinsert */
+	h->len = 0;
+	for (i = 0; i < len; i++) {
+		bheap_insert(h, h->array[i]);
+	}
+}
+
+void bheap_set_cmp(struct bheap *h, int (*cmp)(void*,void*))
+{
+	h->cmp = cmp;
+	bheap_heapify(h);
+}

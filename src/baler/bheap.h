@@ -71,6 +71,10 @@ struct bheap {
 	void **array;
 };
 
+#define BHEAP_FOREACH(hent, heap) for (int $idx=0; \
+		$idx<(heap)->len && ((hent)=(heap)->array[$idx]); \
+		$idx++)
+
 /**
  * Create ::bheap container with \c cmp compare function and \c alloc_len
  * length array.
@@ -119,5 +123,20 @@ void bheap_percolate_top(struct bheap *h);
  * \retval 1 if the heap is not verified.
  */
 int bheap_verify(struct bheap *h);
+
+/**
+ * Heapify the \c h->array.
+ *
+ * This is used in the case that \c h->array has been scrambled and the heap is
+ * broken.
+ */
+void bheap_heapify(struct bheap *h);
+
+/**
+ * Set new comparator.
+ *
+ * This also heapify the \c h->array to restore the heap property.
+ */
+void bheap_set_cmp(struct bheap *h, int (*cmp)(void*,void*));
 
 #endif
