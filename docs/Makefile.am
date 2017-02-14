@@ -68,6 +68,10 @@ man/man5/%.5: man/man3/%.3
 	mkdir -p man/man5
 	sed -r 's/^(.TH) ([^ ]+) 3 (.*)/\1 \2 5 \3/' $< > $@
 
+man/man7/%.7: man/man3/%.3
+	mkdir -p man/man7
+	sed -r 's/^(.TH) ([^ ]+) 3 (.*)/\1 \2 5 \3/' $< > $@
+
 # Doxygen generate only one section (default: 3), which makes sense since a lot
 # of documentation is development documentation.
 #
@@ -89,6 +93,12 @@ man5_files = man/man5/bin_rsyslog_tcp.config.5 \
 $(man5_files): doxygen-out
 
 man5_MANS = $(man5_files)
+
+man7_files = man/man7/bstore_agg.7
+
+$(man7_files): doxygen-out
+
+man7_MANS = $(man7_files)
 
 endif
 

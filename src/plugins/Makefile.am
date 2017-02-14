@@ -18,6 +18,13 @@ libbstore_sos_la_LIBADD = ../baler/libbaler.la -lsos @SOS_LIBDIR_FLAG@ @SOS_LIB6
 lib_LTLIBRARIES += libbstore_sos.la
 
 
+libbstore_agg_la_SOURCES = bstore_agg.c
+libbstore_agg_la_CFLAGS = $(AM_CFLAGS) @SOS_INCDIR_FLAG@ @OVIS_LIB_INCDIR_FLAG@
+libbstore_agg_la_LIBADD = ../baler/libbaler.la -lsos -lcoll -lpthread \
+			  @OVIS_LIB_LIBDIR_FLAG@ @OVIS_LIB_LIB64DIR_FLAG@ \
+			  @SOS_LIBDIR_FLAG@ @SOS_LIB64DIR_FLAG@
+lib_LTLIBRARIES += libbstore_agg.la
+
 librsyslog_parser_la_SOURCES = rsyslog_parser.c
 librsyslog_parser_la_CFLAGS = $(AM_CFLAGS)
 librsyslog_parser_la_LIBADD = ../baler/libbaler.la
