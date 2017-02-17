@@ -1654,16 +1654,24 @@ static bmsg_t __make_msg(bstore_sos_t bss, bsos_iter_t i, sos_obj_t msg_obj)
 	bmsg_t dmsg;
 	msg_t smsg;
 	size_t txt_len;
+	bptn_id_t ptn_id;
+	bptn_t ptn = NULL;
+	int x, y;
 
 	if (!msg_obj)
 		return NULL;
-
 	smsg = sos_obj_ptr(msg_obj);
+
+	ptn_id = be64toh(smsg->pt_key.ptn_id);
+	ptn = bs_ptn_find(&bss->base, ptn_id);
+	if (!ptn)
+		goto out;
+
 	tkn_ids = sos_value_init(&v_, msg_obj, bss->tkn_ids_attr);
 	if (!tkn_ids)
 		goto out;
 
-	dmsg = malloc(sizeof(*dmsg) + (smsg->tkn_count * sizeof(uint64_t)));
+	dmsg = malloc(sizeof(*dmsg) + (ptn->tkn_count * sizeof(uint64_t)));
 	if (!dmsg)
 		goto out;
 
@@ -1674,12 +1682,30 @@ static bmsg_t __make_msg(bstore_sos_t bss, bsos_iter_t i, sos_obj_t msg_obj)
 	dmsg->comp_id = be64toh(smsg->ct_key.comp_id);
 	dmsg->argc = smsg->tkn_count;
 	decode_msg(dmsg, tkn_ids->data->array.data.byte_, smsg->tkn_count);
+	/* fill from the back */
+	x = dmsg->argc - 1;
+	for (y = ptn->tkn_count - 1; x >= 0 && y >= 0; y--) {
+		assert( y >= x );
+		btkn_type_t tkn_type = ptn->str->u64str[y] & 0xFF;
+		if (btkn_type_is_wildcard(tkn_type)) {
+			dmsg->argv[y] = dmsg->argv[x];
+			x--;
+		} else {
+			dmsg->argv[y] = ptn->str->u64str[y];
+		}
+	}
+	assert(x == y);
+	assert(x == -1);
+	dmsg->argc = ptn->tkn_count;
 
+	bptn_free(ptn);
 	sos_value_put(tkn_ids);
 	sos_obj_put(msg_obj);
 	return dmsg;
  out:
 	sos_obj_put(msg_obj);
+	if (ptn)
+		bptn_free(ptn);
 	return NULL;
 }
 
@@ -2249,6 +2275,8 @@ static int bs_msg_add(bstore_t bs, struct timeval *tv, bmsg_t msg)
 	uint64_t pos;
 	btkn_type_t type_id;
 	int rc = ENOMEM;
+	btkn_type_t tkn_type;
+	int i, wc;
 
 	/* This code trashes the msg memory */
 	msg = bmsg_dup(msg);
@@ -2270,6 +2298,26 @@ static int bs_msg_add(bstore_t bs, struct timeval *tv, bmsg_t msg)
 	msg_value->pt_key.ptn_id = htobe64(msg->ptn_id);
 	msg_value->ct_key.comp_id = htobe64(msg->comp_id);
 	msg_value->tc_key.comp_id = htobe64(msg->comp_id);
+
+	/* Input `msg` is a sequence of token IDs. baler2 stored a message as
+	 * <ptn_id, wild_card_arg1, wild_card_arg2, ...> to save some space. So,
+	 * we can apply the same idea here. */
+
+	wc = 0;
+
+	for (i = 0; i < msg->argc; i++) {
+		tkn_type = msg->argv[i] & 0xFF;
+		if (btkn_type_is_wildcard(tkn_type)) {
+			/* wc <= i */
+			msg->argv[wc] = msg->argv[i];
+			wc++;
+		}
+		/* otherwise, skip */
+	}
+
+	assert(wc < msg->argc);
+	msg->argc = wc;
+
 	msg_value->tkn_count = msg->argc;
 
 	struct sos_value_s v_, *v;
