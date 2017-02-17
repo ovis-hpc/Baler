@@ -1349,11 +1349,14 @@ static int process_input_entry(struct bwq_entry *bwq_ent, void *arg)
 			tkn_type = BTKN_TYPE_HOSTNAME;
 		else if (btkn_has_type(ent->tkn, BTKN_TYPE_WORD))
 			tkn_type = BTKN_TYPE_WORD;
-		/* Pattern 'wilcards' are everyting except WORDs or
-		 * SEPARATORs */
+		/*
+		 * Pattern 'wildcards' are everyting except WORDs, WHITESPACEs
+		 * or SEPARATORs, see `btkn_type_is_wildcard()` in btkn_types.h
+		 */
 		switch (tkn_type) {
 		case BTKN_TYPE_SEPARATOR:
 		case BTKN_TYPE_WORD:
+		case BTKN_TYPE_WHITESPACE:
 			ptn->u64str[tkn_idx] = (tkn_id << 8) | tkn_type;
 			break;
 		case BTKN_TYPE_HOSTNAME:

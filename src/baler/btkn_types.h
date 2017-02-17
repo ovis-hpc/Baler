@@ -161,4 +161,17 @@ const char *btkn_attr_type_str(btkn_type_t t)
 	return NULL;
 }
 
+static inline
+int btkn_type_is_wildcard(btkn_type_t type)
+{
+	switch (type) {
+	case BTKN_TYPE_WORD:
+	case BTKN_TYPE_SEPARATOR:
+	case BTKN_TYPE_WHITESPACE:
+		return 0;
+	default:
+		return 1;
+	}
+}
+
 #endif
