@@ -753,7 +753,7 @@ static bptn_id_t allocate_ptn_id(bstore_sos_t bss)
 
 static size_t encode_text_with_id(char *dst, uint64_t id, const char *text, size_t len)
 {
-	size_t sz = encode_id(id, &dst[1]);
+	size_t sz = encode_id(id, (void*)&dst[1]);
 	assert(sz < 256);
 	dst[0] = (uint8_t)sz;
 	memcpy(&dst[sz+1], text, len);
@@ -1962,7 +1962,7 @@ static size_t encode_ptn(bstr_t ptn, size_t tkn_count)
 	int tkn;
 	size_t tkn_size;
 	size_t ptn_size = 0;
-	uint8_t *ptn_str = ptn->cstr;
+	uint8_t *ptn_str = (void*)ptn->cstr;
 	for (tkn = 0; tkn < tkn_count; tkn++) {
 		ptn_str++;	/* skip the len byte */
 		tkn_size = encode_id(ptn->u64str[tkn], ptn_str);
