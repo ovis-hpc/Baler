@@ -1,3 +1,6 @@
+#undef _GNU_SOURCE
+#define _GNU_SOURCE
+
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/time.h>
