@@ -300,7 +300,8 @@ static int plugin_process_output(struct boutplugin *this, struct boutq_data *oda
 	}
 	/* Per-Pattern Token History */
 	for (pos = 0; pos < msg->argc; pos++) {
-		if (mp->ptn_tkn_hist)
+		if (mp->ptn_tkn_hist == 1 || (mp->ptn_tkn_hist==2 &&
+				btkn_type_is_wildcard(msg->argv[pos] & 0xFF)))
 			do_ptn_tkn_hist(mp, msg, pos);
 	}
 	return rc;

@@ -2254,6 +2254,48 @@ static int bs_ptn_tkn_add(bstore_t bs, bptn_id_t ptn_id, uint64_t tkn_pos,
 	return rc;
 }
 
+/*
+ * \retval tkn if the tkn at the tkn_pos is not a wildcard and the tkn_id is
+ *         matched (if given).
+ * \retval ENOKEY if the tkn at tkn_pos is a wildcard.
+ * \retval errno if other error occur.
+ */
+static btkn_t __bs_static_ptn_tkn(bstore_t bs, bptn_id_t ptn_id,
+				  uint64_t tkn_pos, btkn_id_t tkn_id)
+{
+	btkn_t tkn;
+	bptn_t ptn = NULL;
+	btkn_type_t tkn_type;
+	btkn_id_t _tkn_id;
+	uint64_t count;
+
+	ptn = bs_ptn_find(bs, ptn_id);
+	if (!ptn)
+		return NULL;
+
+	tkn_type = ptn->str->u64str[tkn_pos] & 0xFF;
+	_tkn_id = ptn->str->u64str[tkn_pos] >> 8;
+	count = ptn->count;
+	bptn_free(ptn);
+
+	if (btkn_type_is_wildcard(tkn_type)) {
+		errno = ENOKEY;
+		return NULL;
+	}
+
+	/* non-wildcard */
+	if (tkn_id && _tkn_id != tkn_id) {
+		errno = ENOENT;
+		return NULL;
+	}
+
+	tkn = bs_tkn_find_by_id(bs, _tkn_id);
+	if (!tkn)
+		return NULL;
+	tkn->tkn_count = count;
+	return tkn;
+}
+
 static btkn_t bs_ptn_tkn_find(bstore_t bs, bptn_id_t ptn_id, uint64_t tkn_pos,
 			      btkn_id_t tkn_id)
 {
@@ -2265,6 +2307,12 @@ static btkn_t bs_ptn_tkn_find(bstore_t bs, bptn_id_t ptn_id, uint64_t tkn_pos,
 	sos_index_t idx;
 	btkn_t tkn;
 	int rc;
+
+	tkn = __bs_static_ptn_tkn(bs, ptn_id, tkn_pos, tkn_id);
+	if (tkn)
+		return tkn;
+	if (errno != ENOKEY) /* expect ENOKEY if !tkn */
+		return NULL;
 
 	ppt_k->key.ptn_id = htobe64(ptn_id);
 	ppt_k->key.pos = htobe64(tkn_pos);
@@ -2474,6 +2522,7 @@ static btkn_t bs_ptn_tkn_iter_find(bptn_tkn_iter_t iter,
 	ods_key_value_t kv = key->as.ptr;
 	ptn_pos_tkn_t ppt_k = (ptn_pos_tkn_t)kv->value;
 	int rc;
+	btkn_t tkn;
 
 	ppt_k->key.ptn_id = htobe64(ptn_id);
 	ppt_k->key.pos = htobe64(tkn_pos);
@@ -2482,6 +2531,16 @@ static btkn_t bs_ptn_tkn_iter_find(bptn_tkn_iter_t iter,
 
 	i->ptn_id = ptn_id;
 	i->arg = tkn_pos;
+	i->tkn_id = 0;
+
+	tkn = __bs_static_ptn_tkn(iter->bs, ptn_id, tkn_pos, 0);
+	if (tkn) {
+		/* static non-wildcard ptn_tkn */
+		i->tkn_id = tkn->tkn_id;
+		return tkn;
+	}
+	if (errno != ENOKEY) /* expect ENOKEY if !tkn */
+		return NULL;
 
 	rc = sos_iter_sup(i->iter, key);
 	if (!rc)
@@ -2492,13 +2551,18 @@ static btkn_t bs_ptn_tkn_iter_find(bptn_tkn_iter_t iter,
 static btkn_t bs_ptn_tkn_iter_obj(bptn_tkn_iter_t iter)
 {
 	bsos_iter_t i = (bsos_iter_t)iter;
+	if (i->tkn_id)
+		return __bs_static_ptn_tkn(iter->bs, i->ptn_id, i->arg, 0);
 	return make_ptn_tkn(i);
 }
 
 static btkn_t bs_ptn_tkn_iter_next(bptn_tkn_iter_t iter)
 {
 	bsos_iter_t i = (bsos_iter_t)iter;
-	int rc = sos_iter_next(i->iter);
+	int rc;
+	if (i->tkn_id) /* this is non-wildcard ptn_tkn */
+		return NULL;
+	rc = sos_iter_next(i->iter);
 	if (!rc)
 		return make_ptn_tkn(i);
 	return NULL;
