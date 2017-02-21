@@ -21,6 +21,8 @@
 #define __be32
 #endif
 
+int bstore_lock = 1;
+
 time_t clamp_time_to_bin(time_t time_, uint32_t bin_width)
 {
 	return (time_ / bin_width) * bin_width;
@@ -898,7 +900,8 @@ static btkn_id_t bs_tkn_add(bstore_t bs, btkn_t tkn)
 	bstore_sos_t bss = (bstore_sos_t)bs;
 	struct missing_cb_ctxt ctxt = {0};
 	SOS_KEY(text_key);
-	pthread_mutex_lock(&bss->dict_lock);
+	if (bstore_lock)
+		pthread_mutex_lock(&bss->dict_lock);
 
 	/* If the token is already added, return it's id */
 	encode_tkn_key(text_key, tkn->tkn_str->cstr, tkn->tkn_str->blen);
@@ -908,7 +911,8 @@ static btkn_id_t bs_tkn_add(bstore_t bs, btkn_t tkn)
 			     tkn_add_cb, &ctxt);
 
 	sos_obj_put(ctxt.obj);
-	pthread_mutex_unlock(&bss->dict_lock);
+	if (bstore_lock)
+		pthread_mutex_unlock(&bss->dict_lock);
 	return ctxt.tkn->tkn_id;
 }
 
@@ -919,7 +923,8 @@ static int bs_tkn_add_with_id(bstore_t bs, btkn_t tkn)
 	bstore_sos_t bss = (bstore_sos_t)bs;
 	SOS_KEY(text_key);
 
-	pthread_mutex_lock(&bss->dict_lock);
+	if (bstore_lock)
+		pthread_mutex_lock(&bss->dict_lock);
 	encode_tkn_key(text_key, tkn->tkn_str->cstr, tkn->tkn_str->blen);
 	/* If the token is already added, return an error */
 	tkn_obj = sos_obj_find(bss->tkn_text_attr, text_key);
@@ -930,7 +935,8 @@ static int bs_tkn_add_with_id(bstore_t bs, btkn_t tkn)
 	}
 	rc = __add_tkn_with_id(bss, tkn, 0);
  err_0:
-	pthread_mutex_unlock(&bss->dict_lock);
+	if (bstore_lock)
+		pthread_mutex_unlock(&bss->dict_lock);
 	return rc;
 }
 
@@ -945,7 +951,8 @@ static btkn_t bs_tkn_find_by_id(bstore_t bs, btkn_id_t tkn_id)
 	SOS_KEY(id_key);
 
 	sos_key_set(id_key, &tkn_id, sizeof(tkn_id));
-	pthread_mutex_lock(&bss->dict_lock);
+	if (bstore_lock)
+		pthread_mutex_lock(&bss->dict_lock);
 	tkn_obj = sos_obj_find(bss->tkn_id_attr, id_key);
 	if (!tkn_obj)
 		goto out_0;
@@ -963,7 +970,8 @@ static btkn_t bs_tkn_find_by_id(bstore_t bs, btkn_id_t tkn_id)
 	sos_value_put(tkn_str);
 	sos_obj_put(tkn_obj);
  out_0:
-	pthread_mutex_unlock(&bss->dict_lock);
+	if (bstore_lock)
+		pthread_mutex_unlock(&bss->dict_lock);
 	return token;
 }
 
@@ -979,7 +987,8 @@ static btkn_t bs_tkn_find_by_name(bstore_t bs,
 	SOS_KEY(text_key);
 
 	encode_tkn_key(text_key, text, text_len);
-	pthread_mutex_lock(&bss->dict_lock);
+	if (bstore_lock)
+		pthread_mutex_lock(&bss->dict_lock);
 	tkn_obj = sos_obj_find(bss->tkn_text_attr, text_key);
 	if (!tkn_obj)
 		goto out_0;
@@ -994,7 +1003,8 @@ static btkn_t bs_tkn_find_by_name(bstore_t bs,
  out_1:
 	sos_obj_put(tkn_obj);
  out_0:
-	pthread_mutex_unlock(&bss->dict_lock);
+	if (bstore_lock)
+		pthread_mutex_unlock(&bss->dict_lock);
 	return token;
 }
 
@@ -1012,7 +1022,8 @@ static btkn_type_t bs_tkn_type_get(bstore_t bs, const char *typ_name, size_t nam
 		return 0;
 	}
 	snprintf(type_name, name_len, "_%s_", typ_name);
-	pthread_mutex_lock(&bss->dict_lock);
+	if (bstore_lock)
+		pthread_mutex_lock(&bss->dict_lock);
 	btkn = bs_tkn_find_by_name(bs, type_name, name_len);
 	if (!btkn) {
 		errno = ENOENT;
@@ -1022,7 +1033,8 @@ static btkn_type_t bs_tkn_type_get(bstore_t bs, const char *typ_name, size_t nam
 	type_id = btkn->tkn_id;
 	btkn_free(btkn);
  out:
-	pthread_mutex_unlock(&bss->dict_lock);
+	if (bstore_lock)
+		pthread_mutex_unlock(&bss->dict_lock);
 	return type_id;
 }
 
@@ -1395,7 +1407,8 @@ static int bs_ptn_find_by_ptnstr(bstore_t bs, bptn_t ptn)
 	size_t ptn_size = encode_ptn(tmp_bstr, ptn->tkn_count);
 
 	sos_key_set(ptn_key, tmp_bstr->cstr, ptn_size);
-	pthread_mutex_lock(&bss->ptn_lock);
+	if (bstore_lock)
+		pthread_mutex_lock(&bss->ptn_lock);
 
 	/* find & copy ptn info from the store to ptn */
 	ptn_obj = sos_obj_find(bss->tkn_type_ids_attr, ptn_key);
@@ -1417,7 +1430,8 @@ static int bs_ptn_find_by_ptnstr(bstore_t bs, bptn_t ptn)
 	/* let-through for clean-up */
 
  cleanup_2:
-	pthread_mutex_unlock(&bss->ptn_lock);
+	if (bstore_lock)
+		pthread_mutex_unlock(&bss->ptn_lock);
  cleanup_1:
 	bstr_free(tmp_bstr);
  out:
@@ -2186,14 +2200,16 @@ static bptn_id_t bs_ptn_add(bstore_t bs, struct timeval *tv, bstr_t ptn)
 	ctxt.ptn_size = encode_ptn(ptn, ctxt.tkn_count);
 	sos_key_set(ptn_key, ptn->cstr, ctxt.ptn_size);
 
-	pthread_mutex_lock(&bss->ptn_lock);
+	if (bstore_lock)
+		pthread_mutex_lock(&bss->ptn_lock);
 
 	rc = sos_index_visit(sos_attr_index(bss->tkn_type_ids_attr),
 						ptn_key, ptn_add_cb, &ctxt);
 	if (ptn_key != stack_key)
 		sos_key_put(ptn_key);
 
-	pthread_mutex_unlock(&bss->ptn_lock);
+	if (bstore_lock)
+		pthread_mutex_unlock(&bss->ptn_lock);
 
 	if (rc)
 		return 0;
@@ -2232,10 +2248,12 @@ static int bs_ptn_tkn_add(bstore_t bs, bptn_id_t ptn_id, uint64_t tkn_pos,
 	ppt_k->key.tkn_id = htobe64(tkn_id);
 	kv->len = sizeof(ppt_k->key);
 
-	pthread_mutex_lock(&bss->ptn_tkn_lock);
+	if (bstore_lock)
+		pthread_mutex_lock(&bss->ptn_tkn_lock);
 	idx = sos_attr_index(bss->ptn_pos_tkn_key_attr);
 	rc = sos_index_visit(idx, key, hist_cb, NULL);
-	pthread_mutex_unlock(&bss->ptn_tkn_lock);
+	if (bstore_lock)
+		pthread_mutex_unlock(&bss->ptn_tkn_lock);
 	return rc;
 }
 
@@ -2256,7 +2274,8 @@ static btkn_t bs_ptn_tkn_find(bstore_t bs, bptn_id_t ptn_id, uint64_t tkn_pos,
 	ppt_k->key.tkn_id = htobe64(tkn_id);
 	kv->len = sizeof(ppt_k->key);
 
-	pthread_mutex_lock(&bss->ptn_tkn_lock);
+	if (bstore_lock)
+		pthread_mutex_lock(&bss->ptn_tkn_lock);
 	idx = sos_attr_index(bss->ptn_pos_tkn_key_attr);
 	rc = sos_index_find_ref(idx, key, &ref);
 	if (!rc) {
@@ -2271,7 +2290,8 @@ static btkn_t bs_ptn_tkn_find(bstore_t bs, bptn_id_t ptn_id, uint64_t tkn_pos,
 		tkn = NULL;
 	}
  out:
-	pthread_mutex_unlock(&bss->ptn_tkn_lock);
+	if (bstore_lock)
+		pthread_mutex_unlock(&bss->ptn_tkn_lock);
 	return tkn;
 }
 
@@ -2351,7 +2371,8 @@ static int bs_msg_add(bstore_t bs, struct timeval *tv, bmsg_t msg)
 	if (!msg)
 		return ENOMEM;
 
-	pthread_mutex_lock(&bss->msg_lock);
+	if (bstore_lock)
+		pthread_mutex_lock(&bss->msg_lock);
 
 	/* Allocate and save this new message */
 	msg_obj = sos_obj_new(bss->message_schema);
@@ -2399,7 +2420,8 @@ static int bs_msg_add(bstore_t bs, struct timeval *tv, bmsg_t msg)
 	if (rc)
 		goto err_1;
 	sos_obj_put(msg_obj);
-	pthread_mutex_unlock(&bss->msg_lock);
+	if (bstore_lock)
+		pthread_mutex_unlock(&bss->msg_lock);
 	bmsg_free(msg);
 	return 0;
  err_1:
@@ -2407,7 +2429,8 @@ static int bs_msg_add(bstore_t bs, struct timeval *tv, bmsg_t msg)
 	sos_obj_put(msg_obj);
  err_0:
 	bmsg_free(msg);
-	pthread_mutex_unlock(&bss->msg_lock);
+	if (bstore_lock)
+		pthread_mutex_unlock(&bss->msg_lock);
 	return rc;
 }
 
