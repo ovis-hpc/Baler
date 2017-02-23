@@ -748,9 +748,7 @@ static btkn_id_t allocate_tkn_id(bstore_sos_t bss)
 
 static bptn_id_t allocate_ptn_id(bstore_sos_t bss)
 {
-	bptn_id_t ptn_id = bss->next_ptn_id;
-	ptn_id = bss->next_ptn_id;
-	bss->next_ptn_id = ptn_id + 1;
+	bptn_id_t ptn_id = __sync_fetch_and_add(&bss->next_ptn_id, 1);
 	return ptn_id;
 }
 
@@ -2058,6 +2056,113 @@ static size_t decode_msg(bmsg_t msg, const uint8_t *tkn_str, size_t tkn_count)
 	return tkn;
 }
 
+struct ptn_add_cb_ctxt {
+	bstore_sos_t bss;
+	bptn_id_t ptn_id;
+	struct timeval *tv;
+	size_t tkn_count;
+	size_t ptn_size;
+	bstr_t ptn;
+};
+
+static sos_visit_action_t ptn_add_cb(sos_index_t index,
+				     sos_key_t key, sos_idx_data_t *idx_data,
+				     int found, void *arg)
+{
+	int rc;
+	size_t sz;
+	sos_obj_t ptn_obj;
+	ptn_t ptn_value;
+	sos_obj_ref_t *ref = (sos_obj_ref_t *)idx_data;
+	struct ptn_add_cb_ctxt *ctxt = arg;
+	SOS_KEY(id_key);
+	SOS_KEY(ts_key);
+	sos_index_t ptn_id_idx = sos_attr_index(ctxt->bss->ptn_id_attr);
+	sos_index_t first_seen_idx = sos_attr_index(ctxt->bss->first_seen_attr);
+
+	if (found) {
+		struct timeval last_seen;
+		struct timeval first_seen;
+		ptn_obj = sos_ref_as_obj(ctxt->bss->ptn_sos, *ref);
+		ptn_value = sos_obj_ptr(ptn_obj);
+		last_seen.tv_sec = ptn_value->last_seen.secs;
+		last_seen.tv_usec = ptn_value->last_seen.usecs;
+		first_seen.tv_sec = ptn_value->first_seen.secs;
+		first_seen.tv_usec = ptn_value->first_seen.usecs;
+		if (timercmp(&first_seen, ctxt->tv, >)) {
+			/* new first seen is before the db first seen */
+			/* remove existing key */
+			sos_key_set(ts_key, &ptn_value->first_seen,
+						sizeof(&ptn_value->first_seen));
+			sos_index_remove(first_seen_idx, ts_key, ptn_obj);
+			/* add new key */
+			ptn_value->first_seen.secs = ctxt->tv->tv_sec;
+			ptn_value->first_seen.usecs = ctxt->tv->tv_usec;
+			sos_key_set(ts_key, &ptn_value->first_seen,
+						sizeof(&ptn_value->first_seen));
+			sos_index_insert(first_seen_idx, ts_key, ptn_obj);
+		}
+		if (timercmp(&last_seen, ctxt->tv, <)) {
+			ptn_value->last_seen.secs = ctxt->tv->tv_sec;
+			ptn_value->last_seen.usecs = ctxt->tv->tv_usec;
+		}
+		ptn_value->count ++;
+		ctxt->ptn_id = ptn_value->ptn_id;
+		sos_obj_put(ptn_obj);
+		return SOS_VISIT_NOP;
+	}
+
+	/* Allocate and save this new pattern */
+	ptn_obj = sos_obj_new(ctxt->bss->pattern_schema);
+	if (!ptn_obj)
+		goto err_0;
+
+	ptn_value = sos_obj_ptr(ptn_obj);
+	if (!ptn_value)
+		goto err_1;
+
+	ptn_value->first_seen.secs = ptn_value->last_seen.secs = ctxt->tv->tv_sec;
+	ptn_value->first_seen.usecs = ptn_value->last_seen.usecs = ctxt->tv->tv_usec;
+	ptn_value->tkn_count = ctxt->tkn_count;
+	ptn_value->count = 1;
+
+	sos_value_t v;
+	struct sos_value_s v_;
+	v = sos_array_new(&v_, ctxt->bss->tkn_type_ids_attr,
+						ptn_obj, ctxt->ptn_size);
+	if (!v)
+		goto err_1;
+
+	sos_value_memcpy(v, ctxt->ptn->cstr, ctxt->ptn_size);
+	sos_value_put(v);
+	ctxt->ptn_id = ptn_value->ptn_id = allocate_ptn_id(ctxt->bss);
+
+	/* index the ptn_id */
+	sos_key_set(id_key, &ctxt->ptn_id, sizeof(ctxt->ptn_id));
+	rc = sos_index_insert(ptn_id_idx, id_key, ptn_obj);
+	if (rc)
+		goto err_1;
+
+	/* index the first_seen */
+	sos_key_set(ts_key, &ptn_value->first_seen, sizeof(&ptn_value->first_seen));
+	rc = sos_index_insert(first_seen_idx, ts_key, ptn_obj);
+	if (rc)
+		goto err_2;
+
+	*ref = sos_obj_ref(ptn_obj);
+	sos_obj_put(ptn_obj);
+	return SOS_VISIT_ADD;
+
+ err_2:
+	sos_index_remove(sos_attr_index(ctxt->bss->ptn_id_attr),
+							id_key, ptn_obj);
+ err_1:
+	sos_obj_delete(ptn_obj);
+	sos_obj_put(ptn_obj);
+ err_0:
+	return SOS_VISIT_NOP;
+}
+
 static bptn_id_t bs_ptn_add(bstore_t bs, struct timeval *tv, bstr_t ptn)
 {
 	bptn_id_t ptn_id;
@@ -2067,69 +2172,32 @@ static bptn_id_t bs_ptn_add(bstore_t bs, struct timeval *tv, bstr_t ptn)
 	SOS_KEY_SZ(stack_key, 2048);
 	sos_key_t ptn_key;
 	int rc;
+	struct ptn_add_cb_ctxt ctxt = { .bss = bss, .tv = tv, .ptn = ptn };
 
-	if (ptn->blen <= 2048)
+	if (ptn->blen <= 2048) {
 		ptn_key = stack_key;
-	else
+	} else {
 		ptn_key = sos_key_new(ptn->blen);
-	/* If the pattern is already present, return it's ptn_id */
-	size_t tkn_count = ptn->blen / sizeof(ptn->u64str[0]);
-	size_t ptn_size = encode_ptn(ptn, tkn_count);
-	sos_key_set(ptn_key, ptn->cstr, ptn_size);
-	pthread_mutex_lock(&bss->ptn_lock);
-	ptn_obj = sos_obj_find(bss->tkn_type_ids_attr, ptn_key);
-	if (ptn_key != stack_key)
-		sos_key_put(ptn_key);
-	if (ptn_obj) {
-		struct timeval last_seen;
-		ptn_value = sos_obj_ptr(ptn_obj);
-		last_seen.tv_sec = ptn_value->last_seen.secs;
-		last_seen.tv_usec = ptn_value->last_seen.usecs;
-		if (timercmp(&last_seen, tv, <)) {
-			ptn_value->last_seen.secs = tv->tv_sec;
-			ptn_value->last_seen.usecs = tv->tv_usec;
-		}
-		ptn_value->count ++;
-		ptn_id = ptn_value->ptn_id;
-		goto out;
+		if (!ptn_key)
+			return 0;
 	}
 
-	/* Allocate and save this new pattern */
-	ptn_obj = sos_obj_new(bss->pattern_schema);
-	if (!ptn_obj)
-		goto err_0;
+	ctxt.tkn_count = ptn->blen / sizeof(ptn->u64str[0]);
+	ctxt.ptn_size = encode_ptn(ptn, ctxt.tkn_count);
+	sos_key_set(ptn_key, ptn->cstr, ctxt.ptn_size);
 
-	ptn_value = sos_obj_ptr(ptn_obj);
-	if (!ptn_value)
-		goto err_1;
+	pthread_mutex_lock(&bss->ptn_lock);
 
-	ptn_value->first_seen.secs = ptn_value->last_seen.secs = tv->tv_sec;
-	ptn_value->first_seen.usecs = ptn_value->last_seen.usecs = tv->tv_usec;
-	ptn_value->tkn_count = tkn_count;
-	ptn_value->count = 1;
+	rc = sos_index_visit(sos_attr_index(bss->tkn_type_ids_attr),
+						ptn_key, ptn_add_cb, &ctxt);
+	if (ptn_key != stack_key)
+		sos_key_put(ptn_key);
 
-	sos_value_t v;
-	struct sos_value_s v_;
-	v = sos_array_new(&v_, bss->tkn_type_ids_attr, ptn_obj, ptn_size);
-	if (!v)
-		goto err_1;
+	pthread_mutex_unlock(&bss->ptn_lock);
 
-	sos_value_memcpy(v, ptn->cstr, ptn_size);
-	sos_value_put(v);
-	ptn_id = ptn_value->ptn_id = allocate_ptn_id(bss);
-	rc = sos_obj_index(ptn_obj);
 	if (rc)
-		goto err_1;
- out:
-	sos_obj_put(ptn_obj);
-	pthread_mutex_unlock(&bss->ptn_lock);
-	return ptn_id;
- err_1:
-	sos_obj_delete(ptn_obj);
-	sos_obj_put(ptn_obj);
- err_0:
-	pthread_mutex_unlock(&bss->ptn_lock);
-	return 0;
+		return 0;
+	return ctxt.ptn_id;
 }
 
 static sos_visit_action_t hist_cb(sos_index_t index,
