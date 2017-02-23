@@ -71,8 +71,6 @@ typedef struct bstore_sos_s {
 	pthread_mutex_t hist_lock;
 } *bstore_sos_t;
 
-#define H2BXT_IDX_ARGS "ORDER=5 SIZE=3"
-
 struct sos_schema_template token_value_schema = {
 	.name = "TokenValue",
 	.attrs = {
@@ -179,8 +177,6 @@ struct sos_schema_template pattern_schema = {
 			.type = SOS_TYPE_UINT64,
 			.indexed = 1,
 			.idx_type = "HTBL",
-			// .idx_type = "H2BXT",
-			// .idx_args = H2BXT_IDX_ARGS,
 		},
 		{
 			.name = "first_seen",
@@ -204,8 +200,6 @@ struct sos_schema_template pattern_schema = {
 			.type = SOS_TYPE_BYTE_ARRAY,
 			.indexed = 1,
 			.idx_type = "HTBL",
-			// .idx_type = "H2BXT",
-			// .idx_args = H2BXT_IDX_ARGS,
 		},
 		{ NULL }
 	}
@@ -228,7 +222,7 @@ struct sos_schema_template pattern_token_schema = {
 			.type = SOS_TYPE_STRUCT,
 			.indexed = 1,
 			.idx_type = "H2BXT",
-			.idx_args = H2BXT_IDX_ARGS,
+			.idx_args = "ORDER=5 SIZE=3",
 			.size = 24,
 			.key_type = "MEMCMP",
 		},
@@ -251,6 +245,9 @@ typedef struct ptn_pos_tkn_s {
 } *ptn_pos_tkn_t;
 #pragma pop()
 
+#define HIST_IDX "H2BXT"
+#define HIST_IDX_ARGS "ORDER=5 SIZE=19"
+
 struct sos_schema_template token_hist_schema = {
 	.name = "TokenHist",
 	.attrs = {
@@ -259,8 +256,8 @@ struct sos_schema_template token_hist_schema = {
 			.type = SOS_TYPE_STRUCT,
 			.size = 16,
 			.indexed = 1,
-			.idx_type = "H2BXT",
-			.idx_args = H2BXT_IDX_ARGS,
+			.idx_type = HIST_IDX,
+			.idx_args = HIST_IDX_ARGS,
 			.key_type = "MEMCMP",
 		},
 		{
@@ -290,8 +287,8 @@ struct sos_schema_template pattern_hist_schema = {
 			.type = SOS_TYPE_STRUCT,
 			.size = 16,
 			.indexed = 1,
-			.idx_type = "H2BXT",
-			.idx_args = H2BXT_IDX_ARGS,
+			.idx_type = HIST_IDX,
+			.idx_args = HIST_IDX_ARGS,
 			.key_type = "MEMCMP",
 		},
 		{
@@ -321,8 +318,8 @@ struct sos_schema_template component_hist_schema = {
 			.type = SOS_TYPE_STRUCT,
 			.size = 24,
 			.indexed = 1,
-			.idx_type = "H2BXT",
-			.idx_args = H2BXT_IDX_ARGS,
+			.idx_type = HIST_IDX,
+			.idx_args = HIST_IDX_ARGS,
 			.key_type = "MEMCMP"
 		},
 		{
