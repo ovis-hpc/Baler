@@ -381,8 +381,10 @@ btkn_alloc(btkn_id_t tkn_id, btkn_type_mask_t mask, const char *str, size_t len)
 		t->tkn_str->blen = len+1;
 		memcpy(t->tkn_str->cstr, str, len);
 		t->tkn_str->cstr[len] = '\0';
+		#ifndef __OPTIMIZE__
 		t->call_0 = __builtin_return_address(1);
 		t->call_1 = __builtin_return_address(2);
+		#endif
 		pthread_mutex_lock(&tkn_lock);
 		LIST_INSERT_HEAD(&tkn_list, t, entry);
 		pthread_mutex_unlock(&tkn_lock);
