@@ -4,10 +4,9 @@ EXTRA_DIST = baler.cfg hosts.txt SHA.txt TAG.txt
 
 ACLOCAL_AMFLAGS = -I m4
 
-SUBDIRS = src python
+SUBDIRS = src
 
-if ENABLE_SWIG
-SUBDIRS += swig
+if ENABLE_PYTHON
 SUBDIRS += python
 endif
 

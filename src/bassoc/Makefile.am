@@ -11,7 +11,6 @@ lib_LTLIBRARIES += libbassocimg.la
 
 bassoc_SOURCES =  bassoc.c bassoc.h
 bassoc_LDADD = ../baler/libbaler.la \
-	       ../query/libbquery.la \
 	       libbassocimg.la \
 	       -lpthread
 bassoc_LDFLAGS = $(AM_LDFLAGS) @OVIS_LIB_LIBDIR_FLAG@ @OVIS_LIB_LIB64DIR_FLAG@

@@ -73,10 +73,7 @@ man/man5/%.5: man/man3/%.3
 #
 # man1_files will use the rule above to convert man3 to man1.
 man1_files = man/man1/balerd.1 \
-	    man/man1/bhttpd.1 \
-	    man/man1/bquery.1 \
-	    man/man1/bassoc.1 \
-	    man/man1/bclient.1
+	    man/man1/bassoc.1
 
 $(man1_files): doxygen-out
 

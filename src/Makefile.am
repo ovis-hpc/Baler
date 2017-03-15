@@ -1,3 +1,3 @@
-SUBDIRS = baler plugins query bhttpd bassoc test tools
+SUBDIRS = baler plugins bassoc test tools
 
-nobase_pkginclude_HEADERS = query/bquery.h bassoc/bassoc.h
+nobase_pkginclude_HEADERS = bassoc/bassoc.h

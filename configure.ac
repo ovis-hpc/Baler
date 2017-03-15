@@ -32,13 +32,12 @@ test "$sharedstatedir" = '${prefix}/com' && sharedstatedir='${prefix}/var/lib'
 
 OPTION_DEFAULT_ENABLE([dict], [ENABLE_DICT])
 OPTION_DEFAULT_DISABLE([etc], [ENABLE_ETC])
-dnl Swig stuffs
-OPTION_DEFAULT_DISABLE([swig], [ENABLE_SWIG])
+
+OPTION_DEFAULT_ENABLE([python], [ENABLE_PYTHON])
 if test -z "$ENABLE_SWIG_TRUE"
 then
 	AM_PATH_PYTHON(2.7)
-	AC_PROG_SWIG
-	SWIG_PYTHON
+	AX_PYTHON_DEVEL
 fi
 
 OPTION_DEFAULT_ENABLE([libevent], [ENABLE_LIBEVENT])
@@ -141,12 +140,10 @@ fi
 
 AC_CONFIG_FILES([Makefile docs/Makefile src/Makefile
 	src/baler/Makefile src/plugins/Makefile
-	src/query/Makefile src/test/Makefile
-	src/bhttpd/Makefile
+	src/test/Makefile
 	src/bassoc/Makefile
 	src/tools/Makefile
 	src/plugins/test/Makefile
-	swig/Makefile
 	etc/Makefile
 	etc/baler/Makefile
 	etc/systemd/Makefile

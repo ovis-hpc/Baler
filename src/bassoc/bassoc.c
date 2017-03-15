@@ -436,6 +436,7 @@
 #include <wordexp.h>
 
 #include "bassoc.h"
+#include "../baler/btypes.h"
 #include "../baler/bhash.h"
 #include "../baler/bheap.h"
 #include "../baler/butils.h"
@@ -443,7 +444,6 @@
 #include "../baler/bmqueue.h"
 #include "../baler/bset.h"
 #include "../baler/bstore.h"
-#include "../query/bquery.h"
 
 /***** OPTIONS *****/
 const char *short_opt = "hicw:t:n:xXs:B:E:H:r:R:o:m:M:z:K:S:D:v:bO:p:?";
@@ -1365,19 +1365,6 @@ void __bq_imgiter_cb(const char *name, void *ctxt)
 	best->spp = _spp;
 }
 
-int get_closest_img_store(struct bq_store *bq_store, struct bdstr *bdstr)
-{
-	struct __best_img best = {0, 0};
-	int rc = bq_imgstore_iterate(bq_store, __bq_imgiter_cb, &best);
-	if (rc)
-		return rc;
-	if (!best.spp)
-		return ENOENT;
-	bdstr_reset(bdstr);
-	bdstr_append_printf(bdstr, "%d-%d", best.spp, best.npp);
-	return 0;
-}
-
 static inline
 int __pxl_cmp(uint32_t ts0, uint32_t c0, uint32_t ts1, uint32_t c1)
 {
@@ -1390,89 +1377,6 @@ int __pxl_cmp(uint32_t ts0, uint32_t c0, uint32_t ts1, uint32_t c1)
 	if (c0 > c1)
 		return 1;
 	return 0;
-}
-
-static
-void extract_routine_by_msg(struct bq_store *bq_store)
-{
-	berr("Extracting images by messages is not yet implemented.");
-	exit(-1);
-}
-
-static
-int __bq_cmp(struct bimgquery *bq0, struct bimgquery *bq1)
-{
-	struct bpixel p0;
-	struct bpixel p1;
-	bq_img_entry_get_pixel(bq0, &p0);
-	bq_img_entry_get_pixel(bq1, &p1);
-	if (p0.sec < p1.sec)
-		return -1;
-	if (p0.sec > p1.sec)
-		return 1;
-	if (p0.comp_id < p1.comp_id)
-		return -1;
-	if (p0.comp_id > p1.comp_id)
-		return 1;
-	return 0;
-}
-
-static
-struct bheap *__heap_init(struct bq_store *bq_store, const char *img_store_name)
-{
-	char buff[128];
-	struct bhash_iter *hiter = bhash_iter_new(ptn2imglist);
-	if (!hiter) {
-		berror("bhash_iter_new()");
-		exit(-1);
-	}
-	struct bheap *h = bheap_new(65536, (void*)__bq_cmp);
-	if (!h) {
-		berror("bheap_new()");
-		exit(-1);
-	}
-
-	struct bimgquery *bq;
-	struct bhash_entry *hent;
-	uint32_t ptn_id;
-	int rc;
-
-	rc = bhash_iter_begin(hiter);
-	if (rc) {
-		berror("bhash_iter_begin()");
-		exit(-1);
-	}
-	while (rc == 0) {
-		hent = bhash_iter_entry(hiter);
-		ptn_id = *(uint32_t*)hent->key;
-		snprintf(buff, sizeof(buff), "%u", ptn_id);
-		bq = bimgquery_create(bq_store, host_ids, buff,
-					ts_begin, ts_end, img_store_name, &rc);
-		if (!bq) {
-			berror("bimgquery_create()");
-			exit(-1);
-		}
-		rc = bq_first_entry((void*)bq);
-		if (rc == ENOENT) {
-			bimgquery_destroy(bq);
-			goto skip;
-		}
-
-		if (rc) {
-			berror("bq_first_entry()");
-			exit(-1);
-		}
-
-		rc = bheap_insert(h, bq);
-		if (rc) {
-			berror("bheap_insert()");
-			exit(-1);
-		}
-	skip:
-		rc = bhash_iter_next(hiter);
-	}
-
-	return h;
 }
 
 static
@@ -1530,56 +1434,6 @@ out:
 }
 
 static
-int __heap_get_pixel(struct bheap *bheap, struct bpixel *pixel)
-{
-	struct bimgquery *bq = bheap_get_top(bheap);
-	if (!bq)
-		return ENOENT;
-	return bq_img_entry_get_pixel(bq, pixel);
-}
-
-static
-int __heap4_get_pixel(struct bheap *h, struct bpixel *pixel)
-{
-	bcomp_hist_iter_hent_t hent = bheap_get_top(h);
-	if (!hent || !hent->valid)
-		return ENOENT;
-	pixel->count = hent->hist.msg_count;
-	pixel->ptn_id = hent->hist.ptn_id;
-	pixel->sec = hent->hist.time;
-	pixel->comp_id = hent->hist.comp_id;
-	return 0;
-}
-
-static
-int __heap_next_entry(struct bheap *bheap)
-{
-	int rc;
-	struct bimgquery *bq = bheap_get_top(bheap);
-	if (!bq)
-		return ENOENT;
-
-	rc = bq_next_entry((void*)bq);
-	switch (rc) {
-	case 0:
-		/* bq is still good, just percolate it */
-		bheap_percolate_top(bheap);
-		return 0;
-	case ENOENT:
-		/* end of this bq --> destroy */
-		bheap_remove_top(bheap);
-		bimgquery_destroy(bq);
-		if (bheap_get_top(bheap) == NULL)
-			/* no more bq in the heap */
-			return ENOENT;
-		return 0;
-	/* For other rc, just return it as-is */
-	}
-
-	return rc;
-}
-
-static
 int __heap4_next_entry(struct bheap *bheap)
 {
 	int rc;
@@ -1610,105 +1464,17 @@ int __heap4_next_entry(struct bheap *bheap)
 }
 
 static
-void extract_routine_by_img(struct bq_store *bq_store, const char *img_store_name)
-{
-	int i, n, rc;
-	struct bimgquery *bq;
-	struct bpixel pixel;
-	struct bassocimg_pixel bassoc_pixel;
-	struct bhash_entry *hent;
-	struct ptrlist *list;
-	struct ptrlistentry *lent;
-	struct bheap *bheap;
-	uint32_t npp = conf_handle->conf->npp;
-	uint32_t spp = conf_handle->conf->spp;
-
-	bheap = __heap_init(bq_store, img_store_name);
-	assert(bheap);
-	/* must check for the first entry */
-	rc = __heap_get_pixel(bheap, &pixel);
-	if (rc == ENOENT) {
-		bwarn("No image entry ... please check recipes or extracting conditions.");
-		return;
-	}
-
-loop:
-	/* reaching here, pixel is guaranteed to be valid */
-	__heap_get_pixel(bheap, &pixel);
-	hent = bhash_entry_get(ptn2imglist, (void*)&pixel.ptn_id, sizeof(pixel.ptn_id));
-	if (!hent)
-		goto next;
-	list = (void*)hent->value;
-	LIST_FOREACH(lent, list, entry) {
-		bassoc_pixel.sec = (pixel.sec / spp) * spp;
-		bassoc_pixel.comp_id = (pixel.comp_id / npp) * npp;
-		bassoc_pixel.count = pixel.count;
-		rc = bassocimg_add_count(lent->ptr, &bassoc_pixel);
-		if (rc) {
-			berr("bassocimg_add_count() error, rc: %d", rc);
-			exit(-1);
-		}
-	}
-
-next:
-	/* next entry */
-	rc = __heap_next_entry(bheap);
-	switch (rc) {
-	case 0:
-		goto loop;
-	case ENOENT:
-		break;
-	default:
-		berr("__heap_next_entry() error, rc: %d", rc);
-	}
-}
-
-static
-void extract_bq_store_routine()
-{
-	int i, n, rc;
-	struct bq_store *bq_store;
-	struct bimgquery *bq;
-	struct bdstr *bdstr;
-	struct bpixel pixel;
-
-	bq_store = bq_open_store(store_path);
-	if (!bq_store) {
-		berr("Cannot open baler store (%s), err(%d): %m", store_path, errno);
-		exit(-1);
-	}
-	bdstr = bdstr_new(128);
-	if (!bdstr) {
-		berr("Out of memory (in %s() %s:%d)", __func__, __FILE__, __LINE__);
-		exit(-1);
-	}
-
-	rc = get_closest_img_store(bq_store, bdstr);
-	switch (rc) {
-	case 0:
-		extract_routine_by_img(bq_store, bdstr->str);
-		break;
-	case ENOENT:
-		extract_routine_by_msg(bq_store);
-		break;
-	default:
-		berr("get_closest_img_store() error, rc: %d", rc);
-		exit(-1);
-	}
-}
-
-static
 void extract_routine_by_hist(bstore_t bs)
 {
 	int i, n, rc;
 	struct bimgquery *bq;
-	struct bpixel pixel;
 	struct bassocimg_pixel bassoc_pixel;
 	struct bhash_entry *hent;
 	struct ptrlist *list;
 	struct ptrlistentry *lent;
 	uint32_t npp = conf_handle->conf->npp;
 	uint32_t spp = conf_handle->conf->spp;
+	uint32_t ptn_id;
 	bcomp_hist_iter_t hiter;
 	struct bcomp_hist_s comp_hist = {0};
 	bcomp_hist_t hist;
@@ -1731,21 +1497,17 @@ void extract_routine_by_hist(bstore_t bs)
 
 loop:
 	/* hist ==> pixel */
-	pixel.comp_id = hist->comp_id;
-	pixel.ptn_id = hist->ptn_id;
-	pixel.sec = hist->time;
-	pixel.count = hist->msg_count;
+	ptn_id = hist->ptn_id;
 
 	/* get list of images associated with the pattern ID */
-	hent = bhash_entry_get(ptn2imglist, (void*)&pixel.ptn_id,
-							sizeof(pixel.ptn_id));
+	hent = bhash_entry_get(ptn2imglist, (void*)&ptn_id, sizeof(ptn_id));
 	if (!hent)
 		goto next;
 	list = (void*)hent->value;
 	LIST_FOREACH(lent, list, entry) {
-		bassoc_pixel.sec = (pixel.sec / spp) * spp;
-		bassoc_pixel.comp_id = (pixel.comp_id / npp) * npp;
-		bassoc_pixel.count = pixel.count;
+		bassoc_pixel.sec = (hist->time / spp) * spp;
+		bassoc_pixel.comp_id = (hist->comp_id / npp) * npp;
+		bassoc_pixel.count = hist->msg_count;
 		rc = bassocimg_add_count(lent->ptr, &bassoc_pixel);
 		if (rc) {
 			berr("bassocimg_add_count() error, rc: %d", rc);
