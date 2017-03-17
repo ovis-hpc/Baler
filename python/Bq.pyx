@@ -21,10 +21,9 @@ cdef class Bstore:
         self.plugin = plugin
         self.iters = []
 
-    def open(self, path):
+    def open(self, path, int flags=Bs.O_RDWR, int mode=0660):
         self.path = path
-        self.c_store = Bs.bstore_open(self.plugin, self.path,
-                                          Bs.O_CREAT | Bs.O_RDWR, 0660)
+        self.c_store = Bs.bstore_open(self.plugin, self.path, flags, mode)
         if self.c_store is NULL:
             raise ValueError()
         return self
@@ -33,6 +32,11 @@ cdef class Bstore:
         if self.c_store is not NULL:
             Bs.bstore_close(self.c_store)
             self.c_store = NULL
+
+    def __dealloc__(self):
+        # automatically close at deallocation, just in case that the application
+        # has not already closed the store.
+        self.close()
 
     cpdef tkn_by_id(self, tkn_id):
         cdef Bs.btkn_id_t id_ = <Bs.btkn_id_t>tkn_id
