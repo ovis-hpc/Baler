@@ -207,6 +207,9 @@ cdef class Biter:
         self.c_item = self.iterNext()
         return item
 
+    cpdef unsigned long card(self):
+        raise NotImplementedError
+
     def first(self):
         self.c_item = self.iterFirst()
         return self.iterItem()
@@ -293,6 +296,9 @@ cdef class Btkn_iter(Biter):
             self.c_item = NULL
             return btkn
         return None
+
+    cpdef unsigned long card(self):
+        return Bs.bstore_tkn_iter_card(self.c_iter)
 
     cdef void *iterFirst(self):
         return Bs.bstore_tkn_iter_first(self.c_iter)
@@ -440,6 +446,9 @@ cdef class Bptn_iter(Biter):
             return bptn
         return None
 
+    cpdef unsigned long card(self):
+        return Bs.bstore_ptn_iter_card(self.c_iter)
+
     cdef void *iterFirst(self):
         return Bs.bstore_ptn_iter_first(self.c_iter)
 
@@ -487,6 +496,9 @@ cdef class Bptn_tkn_iter(Biter):
             self.c_item = NULL
             return btkn
         return None
+
+    cpdef unsigned long card(self):
+        return Bs.bstore_ptn_tkn_iter_card(self.c_iter)
 
     cdef void *iterFirst(self):
         return Bs.bstore_ptn_tkn_iter_find(self.c_iter, self.ptn.ptn_id(), 0)
@@ -571,6 +583,9 @@ cdef class Bmsg_iter(Biter):
             self.c_item = NULL
             return bmsg
         return None
+
+    cpdef unsigned long card(self):
+        return Bs.bstore_msg_iter_card(self.c_iter)
 
     cdef void *iterFirst(self):
         return Bs.bstore_msg_iter_first(self.c_iter)

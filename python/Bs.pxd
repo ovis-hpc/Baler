@@ -115,6 +115,7 @@ cdef extern from "baler/bstore.h":
     bptn_t bstore_ptn_find(bstore_t bs, bptn_id_t ptn_id)
     bstore_iter_t bstore_ptn_iter_new(bstore_t bs)
     void bstore_ptn_iter_free(bstore_iter_t iter)
+    unsigned long bstore_ptn_iter_card(bstore_iter_t i)
     bptn_t bstore_ptn_iter_next(bstore_iter_t iter)
     bptn_t bstore_ptn_iter_prev(bstore_iter_t iter)
     bptn_t bstore_ptn_iter_find(bstore_iter_t iter, time_t start)
