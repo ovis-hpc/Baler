@@ -264,6 +264,7 @@ int bdstr_append_mem(struct bdstr *bdstr, void *mem, size_t len);
 /**
  * Same as ::bdstr_append(), but with printf() format.
  */
+__attribute__ ((format (printf, 2,3)))
 int bdstr_append_printf(struct bdstr *bdstr, const char *fmt, ...);
 
 /**
