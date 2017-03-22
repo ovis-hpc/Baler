@@ -176,11 +176,10 @@ cdef class Biter:
 
     cdef Bstore store
     cdef Bs.bstore_iter_t c_iter
-    cdef void *c_item
+    cdef object py_obj
 
     def __init__(self, Bstore store):
         cdef Bs.bstore_iter_t c_it
-        self.c_item = NULL
         self.store = store
         if self.store.c_store == NULL:
             raise ValueError("The specified store is not open")
@@ -195,28 +194,40 @@ cdef class Biter:
             self.c_iter = NULL
 
     def __iter__(self):
-        if self.c_item == NULL:
-            # subclass may have implemented find to start the iterator
-            self.c_item = self.iterFirst()
-        return self
+        """ iterate from current object forward. """
+        if not self.py_obj:
+            self.py_obj = self.first()
+        while self.py_obj:
+            yield self.py_obj
+            self.py_obj = self.next()
 
-    def __next__(self):
-        if self.c_item == NULL:
-            raise StopIteration
-        item = self.iterItem()
-        self.c_item = self.iterNext()
-        return item
+    cdef object obj_wrap(self, void *c_obj):
+        raise NotImplementedError
+
+    cdef object obj_update(self, void *c_obj):
+        if c_obj == NULL:
+            self.py_obj = None
+        else:
+            self.py_obj = self.obj_wrap(c_obj)
+        return self.py_obj
 
     cpdef unsigned long card(self):
         raise NotImplementedError
 
+    def obj(self):
+        return self.obj_update(self.iterObj())
+
     def first(self):
-        self.c_item = self.iterFirst()
-        return self.iterItem()
+        return self.obj_update(self.iterFirst())
+
+    def next(self):
+        return self.obj_update(self.iterNext())
+
+    def prev(self):
+        return self.obj_update(self.iterPrev())
 
     def last(self):
-        self.c_item = self.iterLast()
-        return self.iterItem()
+        return self.obj_update(self.iterLast())
 
     def get_pos(self):
         """Return the current iterator position
@@ -258,25 +269,36 @@ cdef class Biter:
         rc = self.iterPosSet(c_pos)
         Bs.bstore_iter_pos_free(self.c_iter, c_pos)
         if rc != 0:
-            raise StopIteration
+            raise StopIteration("return code: %d" % rc)
         return 0
 
     cdef Bs.bstore_iter_t iterNew(self):
         raise NotImplementedError
+
     cdef void iterDel(self):
         raise NotImplementedError
-    def iterItem(self):
+
+    cdef void *iterObj(self):
         raise NotImplementedError
+
     cdef void *iterFirst(self):
         raise NotImplementedError
+
     cdef void *iterNext(self):
         raise NotImplementedError
+
+    cdef void *iterPrev(self):
+        raise NotImplementedError
+
     cdef void *iterLast(self):
         raise NotImplementedError
+
     cdef Bs.bstore_iter_pos_t iterPosGet(self):
         raise NotImplementedError
+
     cdef int iterPosSet(self, Bs.bstore_iter_pos_t pos):
         raise NotImplementedError
+
 
 cdef class Btkn_iter(Biter):
     def __init__(self, Bstore store):
@@ -288,14 +310,13 @@ cdef class Btkn_iter(Biter):
     cdef void iterDel(self):
         Bs.bstore_tkn_iter_free(self.c_iter)
 
-    def iterItem(self):
-        cdef Btkn btkn
-        if self.c_item != NULL:
-            btkn = Btkn()
-            btkn.c_tkn = <Bs.btkn_t>self.c_item
-            self.c_item = NULL
-            return btkn
-        return None
+    cdef object obj_wrap(self, void *c_obj):
+        btkn = Btkn()
+        btkn.c_tkn = <Bs.btkn_t>c_obj
+        return btkn
+
+    cdef void *iterObj(self):
+        return Bs.bstore_tkn_iter_obj(self.c_iter)
 
     cpdef unsigned long card(self):
         return Bs.bstore_tkn_iter_card(self.c_iter)
@@ -425,10 +446,7 @@ cdef class Bptn_iter(Biter):
         return rec_count
 
     def find(self, start_time):
-        self.c_item = Bs.bstore_ptn_iter_find(self.c_iter, start_time)
-        if self.c_item != NULL:
-            return True
-        return False
+        return self.obj_update(Bs.bstore_ptn_iter_find(self.c_iter, start_time))
 
     cdef Bs.bstore_iter_t iterNew(self):
         return Bs.bstore_ptn_iter_new(self.store.c_store)
@@ -436,24 +454,29 @@ cdef class Bptn_iter(Biter):
     cdef void iterDel(self):
         Bs.bstore_ptn_iter_free(self.c_iter)
 
-    def iterItem(self):
-        cdef Bptn bptn
-        if self.c_item != NULL:
-            bptn = Bptn()
-            bptn.c_ptn = <Bs.bptn_t>self.c_item
-            bptn.store = self.store
-            self.c_item = NULL
-            return bptn
-        return None
-
     cpdef unsigned long card(self):
         return Bs.bstore_ptn_iter_card(self.c_iter)
+
+    cdef object obj_wrap(self, void *c_obj):
+        bptn = Bptn()
+        bptn.c_ptn = <Bs.bptn_t>c_obj
+        bptn.store = self.store
+        return bptn
+
+    cdef void *iterObj(self):
+        return Bs.bstore_ptn_iter_obj(self.c_iter)
 
     cdef void *iterFirst(self):
         return Bs.bstore_ptn_iter_first(self.c_iter)
 
     cdef void *iterNext(self):
         return Bs.bstore_ptn_iter_next(self.c_iter)
+
+    cdef void *iterPrev(self):
+        return Bs.bstore_ptn_iter_prev(self.c_iter)
+
+    cdef void *iterLast(self):
+        return Bs.bstore_ptn_iter_last(self.c_iter)
 
     cdef Bs.bstore_iter_pos_t iterPosGet(self):
         return Bs.bstore_ptn_iter_pos(self.c_iter)
@@ -476,11 +499,8 @@ cdef class Bptn_tkn_iter(Biter):
         -- The pattern id
         -- The token position in the pattern 0.. ptn.tkn_count() - 1
         """
-        self.c_item = Bs.bstore_ptn_tkn_iter_find(self.c_iter,
-                                                  ptn_id, tkn_pos)
-        if self.c_item == NULL:
-            return False
-        return True
+        return self.obj_update(Bs.bstore_ptn_tkn_iter_find(self.c_iter,
+                                                  ptn_id, tkn_pos))
 
     cdef Bs.bstore_iter_t iterNew(self):
         return Bs.bstore_ptn_tkn_iter_new(self.store.c_store)
@@ -488,17 +508,16 @@ cdef class Bptn_tkn_iter(Biter):
     cdef void iterDel(self):
         Bs.bstore_ptn_tkn_iter_free(self.c_iter)
 
-    def iterItem(self):
-        cdef Bs.btkn_t c_tkn
-        if self.c_item != NULL:
-            btkn = Btkn()
-            btkn.c_tkn = <Bs.btkn_t>self.c_item
-            self.c_item = NULL
-            return btkn
-        return None
-
     cpdef unsigned long card(self):
         return Bs.bstore_ptn_tkn_iter_card(self.c_iter)
+
+    cdef object obj_wrap(self, void *c_obj):
+        btkn = Btkn()
+        btkn.c_tkn = <Bs.btkn_t>c_obj
+        return btkn
+
+    cdef void *iterObj(self):
+        return Bs.bstore_ptn_tkn_iter_obj(self.c_iter)
 
     cdef void *iterFirst(self):
         return Bs.bstore_ptn_tkn_iter_find(self.c_iter, self.ptn.ptn_id(), 0)
@@ -574,18 +593,17 @@ cdef class Bmsg_iter(Biter):
     cdef void iterDel(self):
         Bs.bstore_msg_iter_free(self.c_iter)
 
-    def iterItem(self):
-        cdef Bmsg bmsg
-        if self.c_item != NULL:
-            bmsg = Bmsg()
-            bmsg.c_msg = <Bs.bmsg_t>self.c_item
-            bmsg.store = self.store
-            self.c_item = NULL
-            return bmsg
-        return None
-
     cpdef unsigned long card(self):
         return Bs.bstore_msg_iter_card(self.c_iter)
+
+    cdef object obj_wrap(self, void *c_obj):
+        bmsg = Bmsg()
+        bmsg.c_msg = <Bs.bmsg_t>c_obj
+        bmsg.store = self.store
+        return bmsg
+
+    cdef void *iterObj(self):
+        return Bs.bstore_msg_iter_obj(self.c_iter)
 
     cdef void *iterFirst(self):
         return Bs.bstore_msg_iter_first(self.c_iter)
@@ -595,6 +613,9 @@ cdef class Bmsg_iter(Biter):
 
     cdef void *iterNext(self):
         return Bs.bstore_msg_iter_next(self.c_iter)
+
+    cdef void *iterPrev(self):
+        return Bs.bstore_msg_iter_prev(self.c_iter)
 
     cdef Bs.bstore_iter_pos_t iterPosGet(self):
         return Bs.bstore_msg_iter_pos(self.c_iter)
@@ -614,13 +635,10 @@ cdef class Bmsg_iter(Biter):
         -- The pattern id that this message matches
         -- The start time in seconds since the Epoch
         """
-        cdef Bs.bmsg_t c_msg = Bs.bstore_msg_iter_find(self.c_iter,
+        return self.obj_update(Bs.bstore_msg_iter_find(self.c_iter,
                                                        start, ptn_id, comp_id,
-                                                       NULL, NULL)
-        self.c_item = c_msg
-        if c_msg == NULL:
-            return False
-        return True
+                                                       NULL, NULL))
+        return self.py_obj
 
     @cython.cdivision(True)
     def count(self, ptn_id, start_time = None, end_time = None):
@@ -681,18 +699,18 @@ cdef class Bmsg_iter(Biter):
         return msg_count
 
 cdef class Bptn_hist:
-    cpdef Bs.bptn_hist_s c_hist
+    cdef Bs.bptn_hist_s c_hist
 
-    def ptn_id(self):
+    cpdef ptn_id(self):
         return self.c_hist.ptn_id
 
-    def bin_width(self):
+    cpdef bin_width(self):
         return self.c_hist.bin_width
 
-    def time(self):
+    cpdef time(self):
         return self.c_hist.time
 
-    def msg_count(self):
+    cpdef msg_count(self):
         return self.c_hist.msg_count
 
 cdef int __bin_width__(s):
@@ -719,10 +737,16 @@ cdef class Bptn_hist_iter(Biter):
         self.c_ptn_h.bin_width = bin_width
         self.c_ptn_h.time = time
         self.c_ptn_h.msg_count = 0
-        self.c_item = Bs.bstore_ptn_hist_iter_first(self.c_iter, &self.c_ptn_h)
-        if self.c_item != NULL:
-            return True
-        return False
+        return self.obj_update(Bs.bstore_ptn_hist_iter_first(
+                                                self.c_iter, &self.c_ptn_h))
+
+    def end(self, ptn_id, bin_width, time):
+        self.c_ptn_h.ptn_id = ptn_id
+        self.c_ptn_h.bin_width = bin_width
+        self.c_ptn_h.time = time
+        self.c_ptn_h.msg_count = 0
+        return self.obj_update(Bs.bstore_ptn_hist_iter_last(
+                                                self.c_iter, &self.c_ptn_h))
 
     cdef Bs.bstore_iter_t iterNew(self):
         return Bs.bstore_ptn_hist_iter_new(self.store.c_store)
@@ -730,20 +754,25 @@ cdef class Bptn_hist_iter(Biter):
     cdef void iterDel(self):
         Bs.bstore_ptn_hist_iter_free(self.c_iter)
 
-    def iterItem(self):
-        cdef Bptn_hist ptn_h
-        if self.c_item != NULL:
-            ptn_h = Bptn_hist()
-            ptn_h.c_hist = self.c_ptn_h
-            self.c_item = NULL
-            return ptn_h
-        return None
+    cdef object obj_wrap(self, void *c_obj):
+        ptn_h = Bptn_hist()
+        ptn_h.c_hist = (<Bs.bptn_hist_t>c_obj)[0]
+        return ptn_h
+
+    cdef void *iterObj(self):
+        return Bs.bstore_ptn_hist_iter_obj(self.c_iter, &self.c_ptn_h)
 
     cdef void *iterFirst(self):
         return Bs.bstore_ptn_hist_iter_first(self.c_iter, &self.c_ptn_h)
 
     cdef void *iterNext(self):
         return Bs.bstore_ptn_hist_iter_next(self.c_iter, &self.c_ptn_h)
+
+    cdef void *iterPrev(self):
+        return Bs.bstore_ptn_hist_iter_prev(self.c_iter, &self.c_ptn_h)
+
+    cdef void *iterLast(self):
+        return Bs.bstore_ptn_hist_iter_last(self.c_iter, &self.c_ptn_h)
 
     cdef Bs.bstore_iter_pos_t iterPosGet(self):
         return Bs.bstore_ptn_hist_iter_pos(self.c_iter)
@@ -774,6 +803,7 @@ cdef class Bptn_hist_iter(Biter):
 
     def count(self, ptn_id, bin_width, start_time=None, end_time=None):
         cdef uint32_t end
+        cdef void *c_obj;
         self.c_ptn_h.ptn_id = ptn_id
         self.c_ptn_h.bin_width = bin_width
         self.c_ptn_h.msg_count = 0
@@ -786,18 +816,19 @@ cdef class Bptn_hist_iter(Biter):
             end = end_time
         else:
             end = 0
-        self.c_item = Bs.bstore_ptn_hist_iter_first(self.c_iter, &self.c_ptn_h)
+        c_obj = Bs.bstore_ptn_hist_iter_first(self.c_iter, &self.c_ptn_h)
         rec_count = 0
-        while self.c_item != NULL:
+        while c_obj != NULL:
             if end > 0 and self.c_ptn_h.time > end:
                 break
             rec_count += 1
-            self.c_item = Bs.bstore_ptn_hist_iter_next(self.c_iter, &self.c_ptn_h)
+            c_obj = Bs.bstore_ptn_hist_iter_next(self.c_iter, &self.c_ptn_h)
 
         return rec_count
 
     def as_xy_arrays(self, ptn_id, bin_width, start_time=None, end_time=None):
         cdef uint32_t end
+        cdef void *c_obj
         cdef int rec_no
         self.c_ptn_h.ptn_id = ptn_id
         self.c_ptn_h.msg_count = 0
@@ -810,7 +841,7 @@ cdef class Bptn_hist_iter(Biter):
         else:
             end = 0
         self.c_ptn_h.bin_width = bin_width
-        self.c_item = Bs.bstore_ptn_hist_iter_first(self.c_iter, &self.c_ptn_h)
+        c_obj = Bs.bstore_ptn_hist_iter_first(self.c_iter, &self.c_ptn_h)
 
         x = Array.Array()
         y = Array.Array()
@@ -820,13 +851,13 @@ cdef class Bptn_hist_iter(Biter):
         # x = np.zeros(shape, dtype=np.float64, order='C')
         # y = np.zeros(shape, dtype=np.float64, order='C')
         rec_no = 0
-        while self.c_item != NULL:
+        while c_obj != NULL:
             if end > 0 and end < self.c_ptn_h.time:
                 break
             x.append(self.c_ptn_h.time)
             y.append(self.c_ptn_h.msg_count)
             rec_no += 1
-            self.c_item = Bs.bstore_ptn_hist_iter_next(self.c_iter, &self.c_ptn_h)
+            c_obj = Bs.bstore_ptn_hist_iter_next(self.c_iter, &self.c_ptn_h)
 
         return (rec_no, x.as_ndarray(), y.as_ndarray())
 
@@ -861,10 +892,8 @@ cdef class Bcomp_hist_iter(Biter):
         self.c_comp_h.bin_width = bin_width
         self.c_comp_h.time = time
         self.c_comp_h.msg_count = 0
-        self.c_item = Bs.bstore_comp_hist_iter_first(self.c_iter, &self.c_comp_h)
-        if self.c_item != NULL:
-            return True
-        return False
+        return self.obj_update(Bs.bstore_comp_hist_iter_first(self.c_iter,
+                                        &self.c_comp_h))
 
     def end(self, comp_id, ptn_id, bin_width, time):
         self.c_comp_h.comp_id = comp_id
@@ -872,10 +901,9 @@ cdef class Bcomp_hist_iter(Biter):
         self.c_comp_h.bin_width = bin_width
         self.c_comp_h.time = time
         self.c_comp_h.msg_count = 0
-        self.c_item = Bs.bstore_comp_hist_iter_last(self.c_iter, &self.c_comp_h)
-        if self.c_item != NULL:
-            return True
-        return False
+        return self.obj_update(Bs.bstore_comp_hist_iter_last(self.c_iter,
+                                        &self.c_comp_h))
+        return self.py_obj
 
     cdef Bs.bstore_iter_t iterNew(self):
         return Bs.bstore_comp_hist_iter_new(self.store.c_store)
@@ -883,20 +911,25 @@ cdef class Bcomp_hist_iter(Biter):
     cdef void iterDel(self):
         Bs.bstore_comp_hist_iter_free(self.c_iter)
 
-    def iterItem(self):
-        cdef Bcomp_hist comp_h
-        if self.c_item != NULL:
-            comp_h = Bcomp_hist()
-            comp_h.c_hist = self.c_comp_h
-            self.c_item = NULL
-            return comp_h
-        return None
+    cdef object obj_wrap(self, void *c_obj):
+        comp_h = Bcomp_hist()
+        comp_h.c_hist = (<Bs.bcomp_hist_t>c_obj)[0]
+        return comp_h
+
+    cdef void *iterObj(self):
+        return Bs.bstore_comp_hist_iter_obj(self.c_iter, &self.c_comp_h)
 
     cdef void *iterFirst(self):
         return Bs.bstore_comp_hist_iter_first(self.c_iter, &self.c_comp_h)
 
     cdef void *iterNext(self):
         return Bs.bstore_comp_hist_iter_next(self.c_iter, &self.c_comp_h)
+
+    cdef void *iterPrev(self):
+        return Bs.bstore_comp_hist_iter_prev(self.c_iter, &self.c_comp_h)
+
+    cdef void *iterLast(self):
+        return Bs.bstore_comp_hist_iter_last(self.c_iter, &self.c_comp_h)
 
     cdef Bs.bstore_iter_pos_t iterPosGet(self):
         return Bs.bstore_comp_hist_iter_pos(self.c_iter)
@@ -927,6 +960,7 @@ cdef class Bcomp_hist_iter(Biter):
 
     def count(self, comp_id, bin_width, ptn_id=None, start_time=None, end_time=None):
         cdef uint32_t end
+        cdef void *c_obj
         self.c_comp_h.comp_id = comp_id
         self.c_comp_h.bin_width = bin_width
         self.c_comp_h.msg_count = 0
@@ -942,19 +976,20 @@ cdef class Bcomp_hist_iter(Biter):
         if ptn_id:
             self.c_comp_h.ptn_id = <Bs.bptn_id_t>ptn_id
 
-        self.c_item = Bs.bstore_comp_hist_iter_first(self.c_iter, &self.c_comp_h)
+        c_obj = Bs.bstore_comp_hist_iter_first(self.c_iter, &self.c_comp_h)
         rec_count = 0
-        while self.c_item != NULL:
+        while c_obj != NULL:
             if end > 0 and self.c_comp_h.time > end:
                 break
             rec_count += 1
-            self.c_item = Bs.bstore_comp_hist_iter_next(self.c_iter, &self.c_comp_h)
+            c_obj = Bs.bstore_comp_hist_iter_next(self.c_iter, &self.c_comp_h)
 
         return rec_count
 
     def as_xy_arrays(self, comp_id, ptn_id, bin_width, start_time=None, end_time=None):
         cdef uint32_t end
         cdef int rec_no
+        cdef void *c_obj
 
         self.c_comp_h.comp_id = comp_id
         self.c_comp_h.ptn_id = ptn_id
@@ -971,19 +1006,19 @@ cdef class Bcomp_hist_iter(Biter):
         else:
             end = 0
 
-        self.c_item = Bs.bstore_comp_hist_iter_first(self.c_iter, &self.c_comp_h)
+        c_obj = Bs.bstore_comp_hist_iter_first(self.c_iter, &self.c_comp_h)
 
         x = Array.Array()
         y = Array.Array()
 
         rec_no = 0
-        while self.c_item != NULL:
+        while c_obj != NULL:
             if end > 0 and end < self.c_comp_h.time:
                 break
             x.append(self.c_comp_h.time)
             y.append(self.c_comp_h.msg_count)
             rec_no += 1
-            self.c_item = Bs.bstore_comp_hist_iter_next(self.c_iter, &self.c_comp_h)
+            c_obj = Bs.bstore_comp_hist_iter_next(self.c_iter, &self.c_comp_h)
 
         return (rec_no, x.as_ndarray(), y.as_ndarray())
 
@@ -1024,20 +1059,16 @@ cdef class Btkn_hist_iter(Biter):
         self.c_tkn_h.bin_width = bin_width
         self.c_tkn_h.time = time
         self.c_tkn_h.tkn_count = 0
-        self.c_item = Bs.bstore_tkn_hist_iter_first(self.c_iter, &self.c_tkn_h)
-        if self.c_item != NULL:
-            return True
-        return False
+        return self.obj_update(Bs.bstore_tkn_hist_iter_first(self.c_iter,
+                                                            &self.c_tkn_h))
 
-    def end(self, tkn_id, ptn_id, bin_width, time):
+    def end(self, tkn_id, bin_width, time):
         self.c_tkn_h.tkn_id = tkn_id
         self.c_tkn_h.bin_width = bin_width
         self.c_tkn_h.time = time
         self.c_tkn_h.tkn_count = 0
-        self.c_item = Bs.bstore_tkn_hist_iter_last(self.c_iter, &self.c_tkn_h)
-        if self.c_item != NULL:
-            return True
-        return False
+        return self.obj_update(Bs.bstore_tkn_hist_iter_last(self.c_iter,
+                                                            &self.c_tkn_h))
 
     cdef Bs.bstore_iter_t iterNew(self):
         return Bs.bstore_tkn_hist_iter_new(self.store.c_store)
@@ -1045,20 +1076,25 @@ cdef class Btkn_hist_iter(Biter):
     cdef void iterDel(self):
         Bs.bstore_tkn_hist_iter_free(self.c_iter)
 
-    def iterItem(self):
-        cdef Btkn_hist tkn_h
-        if self.c_item != NULL:
-            tkn_h = Btkn_hist()
-            tkn_h.c_hist = self.c_tkn_h
-            self.c_item = NULL
-            return tkn_h
-        return None
+    cdef object obj_wrap(self, void *c_obj):
+        tkn_h = Btkn_hist()
+        tkn_h.c_hist = (<Bs.btkn_hist_t>c_obj)[0]
+        return tkn_h
+
+    cdef void *iterObj(self):
+        return Bs.bstore_tkn_hist_iter_obj(self.c_iter, &self.c_tkn_h)
 
     cdef void *iterFirst(self):
         return Bs.bstore_tkn_hist_iter_first(self.c_iter, &self.c_tkn_h)
 
     cdef void *iterNext(self):
         return Bs.bstore_tkn_hist_iter_next(self.c_iter, &self.c_tkn_h)
+
+    cdef void *iterPrev(self):
+        return Bs.bstore_tkn_hist_iter_prev(self.c_iter, &self.c_tkn_h)
+
+    cdef void *iterLast(self):
+        return Bs.bstore_tkn_hist_iter_last(self.c_iter, &self.c_tkn_h)
 
     cdef Bs.bstore_iter_pos_t iterPosGet(self):
         return Bs.bstore_tkn_hist_iter_pos(self.c_iter)
@@ -1097,6 +1133,7 @@ cdef class Btkn_hist_iter(Biter):
 
     def count(self, tkn_id, bin_width, ptn_id=None, start_time=None, end_time=None):
         cdef uint32_t end
+        cdef void *c_obj
         self.c_tkn_h.tkn_id = tkn_id
         self.c_tkn_h.bin_width = bin_width
         self.c_tkn_h.msg_count = 0
@@ -1112,19 +1149,20 @@ cdef class Btkn_hist_iter(Biter):
         if ptn_id:
             self.c_tkn_h.ptn_id = <Bs.bptn_id_t>ptn_id
 
-        self.c_item = Bs.bstore_tkn_hist_iter_first(self.c_iter, &self.c_tkn_h)
+        c_obj = Bs.bstore_tkn_hist_iter_first(self.c_iter, &self.c_tkn_h)
         rec_count = 0
-        while self.c_item != NULL:
+        while c_obj != NULL:
             if end > 0 and self.c_tkn_h.time > end:
                 break
             rec_count += 1
-            self.c_item = Bs.bstore_tkn_hist_iter_next(self.c_iter, &self.c_tkn_h)
+            c_obj = Bs.bstore_tkn_hist_iter_next(self.c_iter, &self.c_tkn_h)
 
         return rec_count
 
     def as_xy_arrays(self, tkn_id, bin_width, start_time=None, end_time=None):
         cdef uint32_t end
         cdef int rec_no
+        cdef void *c_obj
 
         self.c_tkn_h.tkn_id = tkn_id
         self.c_tkn_h.tkn_count = 0
@@ -1137,18 +1175,18 @@ cdef class Btkn_hist_iter(Biter):
         else:
             end = 0
         self.c_tkn_h.bin_width = bin_width
-        self.c_item = Bs.bstore_tkn_hist_iter_first(self.c_iter, &self.c_tkn_h)
+        c_obj = Bs.bstore_tkn_hist_iter_first(self.c_iter, &self.c_tkn_h)
 
         x = Array.Array()
         y = Array.Array()
 
         rec_no = 0
-        while self.c_item != NULL:
+        while c_obj != NULL:
             if end > 0 and end < self.c_tkn_h.time:
                 break
             x.append(self.c_tkn_h.time)
             y.append(self.c_tkn_h.tkn_count)
             rec_no += 1
-            self.c_item = Bs.bstore_tkn_hist_iter_next(self.c_iter, &self.c_tkn_h)
+            c_obj = Bs.bstore_tkn_hist_iter_next(self.c_iter, &self.c_tkn_h)
 
         return (rec_no, x.as_ndarray(), y.as_ndarray())
