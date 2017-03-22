@@ -17,11 +17,6 @@ libbstore_sos_la_LIBADD = ../baler/libbaler.la -lsos @SOS_LIBDIR_FLAG@ @SOS_LIB6
 # libbstore_sos_la_LDFLAGS = -pg -g
 lib_LTLIBRARIES += libbstore_sos.la
 
-libbstore_htbl_la_SOURCES = bstore_htbl.c
-libbstore_htbl_la_CFLAGS = $(AM_CFLAGS) @SOS_INCDIR_FLAG@
-libbstore_htbl_la_LIBADD = ../baler/libbaler.la -lsos @SOS_LIBDIR_FLAG@ @SOS_LIB64DIR_FLAG@
-# libbstore_htbl_la_LDFLAGS = -pg -g
-lib_LTLIBRARIES += libbstore_htbl.la
 
 librsyslog_parser_la_SOURCES = rsyslog_parser.c
 librsyslog_parser_la_CFLAGS = $(AM_CFLAGS)
