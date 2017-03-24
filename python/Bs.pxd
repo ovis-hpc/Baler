@@ -141,8 +141,8 @@ cdef extern from "baler/bstore.h":
     bmsg_t bstore_msg_iter_first(bstore_iter_t i)
     bmsg_t bstore_msg_iter_last(bstore_iter_t i)
 
-    const char *bstore_iter_pos_to_str(bstore_iter_t iter, bstore_iter_pos_t pos)
-    bstore_iter_pos_t bstore_iter_pos_from_str(bstore_iter_t iter, const char *pos)
+    char *bstore_pos_to_str(bstore_iter_pos_t pos)
+    bstore_iter_pos_t bstore_pos_from_str(const char *pos)
     void bstore_iter_pos_free(bstore_iter_t iter, bstore_iter_pos_t pos)
 
     cdef struct bptn_hist_s:

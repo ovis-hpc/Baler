@@ -13,6 +13,7 @@
 #include <endian.h>
 #include <sos/sos.h>
 #include "baler/bstore.h"
+#include "baler/butils.h"
 
 #ifdef __be64
 #pragma message "WARNING: __be64 is already defined!"
@@ -1063,80 +1064,39 @@ typedef struct bsos_iter_s {
 	void *cmp_ctxt;
 } *bsos_iter_t;
 
-struct bstore_iter_pos_s {
+typedef struct bsos_iter_pos_s {
+	struct bstore_iter_pos_s base;
 	int iter_type;
 	struct sos_pos sos_pos;
-};
+} *bsos_iter_pos_t;
 
 static bstore_iter_pos_t __iter_pos(bsos_iter_t iter)
 {
 	int rc;
-	struct bstore_iter_pos_s *pos;
+	size_t sz;
+	struct sos_pos *sos_pos;
+	struct bsos_iter_pos_s *pos;
 	if (!iter->iter)
 		return NULL;
-	pos = malloc(sizeof *pos);
-	if (!pos)
+	sos_pos = sos_iter_pos(iter->iter);
+	if (!sos_pos)
 		return NULL;
+	sz = sizeof(*pos) + sos_pos->data_len;
+	pos = malloc(sz);
+	if (!pos) {
+		free(sos_pos);
+		return NULL;
+	}
 	pos->iter_type = iter->iter_type;
-	rc = sos_iter_pos(iter->iter, &pos->sos_pos);
-	if (rc) {
-		errno = rc;
-		free(pos);
-		pos = NULL;
-	}
-	return pos;
+	pos->base.data_len = sz - sizeof(pos->base);
+	memcpy(&pos->sos_pos, sos_pos, sos_pos_sz(sos_pos));
+	free(sos_pos);
+	return &pos->base;
 }
 
-static int __iter_pos_set(bsos_iter_t iter, bstore_iter_pos_t _pos)
+static int __iter_pos_set(bsos_iter_t iter, bsos_iter_pos_t pos)
 {
-	struct bstore_iter_pos_s *pos = (typeof(pos))_pos;
-	return sos_iter_set(iter->iter, (sos_pos_t)&pos->sos_pos);
-}
-
-static void bs_iter_pos_free(bstore_iter_t iter, bstore_iter_pos_t pos)
-{
-	free(pos);
-}
-
-static const char *bs_iter_pos_to_str(bstore_iter_t iter, bstore_iter_pos_t _pos)
-{
-	int i;
-	struct bstore_iter_pos_s *pos = (typeof(pos))_pos;
-	char *s, *pos_str = malloc(((sizeof(pos->sos_pos) + 1) << 1) + 1);
-	if (!pos_str)
-		return NULL;
-	s = pos_str;
-	sprintf(s, "%02hhX", (unsigned char)pos->iter_type);
-	s += 2;
-	for (i = 0; i < sizeof(pos->sos_pos); i++) {
-		sprintf(s, "%02hhX", pos->sos_pos.data[i]);
-		s += 2;
-	}
-	return pos_str;
-}
-
-static bstore_iter_pos_t bs_iter_pos_from_str(bstore_iter_t iter, const char *pos_str)
-{
-	int i, n;
-	char iter_type;
-	struct bstore_iter_pos_s *pos = malloc(sizeof *pos);
-	if (!pos)
-		return NULL;
-	n = sscanf(pos_str, "%02hhX", &iter_type);
-	if (n != 1)
-		goto err;
-	pos->iter_type = iter_type;
-	pos_str += 2;
-	for (i = 0; i < sizeof(pos->sos_pos.data); i++) {
-		int n = sscanf(pos_str, "%02hhX", &pos->sos_pos.data[i]);
-		if (n != 1)
-			goto err;
-		pos_str += 2;
-	}
-	return pos;
- err:
-	free(pos);
-	return NULL;
+	return sos_iter_set(iter->iter, &pos->sos_pos);
 }
 
 static bstore_iter_pos_t bs_tkn_iter_pos(btkn_iter_t iter)
@@ -1147,7 +1107,7 @@ static bstore_iter_pos_t bs_tkn_iter_pos(btkn_iter_t iter)
 static int bs_tkn_iter_pos_set(btkn_iter_t iter, bstore_iter_pos_t _pos)
 {
 	bsos_iter_t i = (bsos_iter_t)iter;
-	struct bstore_iter_pos_s *pos = _pos;
+	struct bsos_iter_pos_s *pos = (typeof(pos))_pos;
 	/* If the sos_iter already exists and is the correct type, use it */
 	if (!i->iter || (i->iter_type != pos->iter_type))
 		return ENOENT;
@@ -1255,7 +1215,7 @@ static bstore_iter_pos_t bs_ptn_iter_pos(bptn_iter_t iter)
 static int bs_ptn_iter_pos_set(bptn_iter_t iter, bstore_iter_pos_t _pos)
 {
 	bsos_iter_t i = (bsos_iter_t)iter;
-	struct bstore_iter_pos_s *pos = _pos;
+	struct bsos_iter_pos_s *pos = (typeof(pos))_pos;
 	bstore_sos_t bss = (bstore_sos_t)i->bs;
 
 	/* If the sos_iter already exists and is the correct type, use it */
@@ -1544,7 +1504,7 @@ static bstore_iter_pos_t bs_ptn_tkn_iter_pos(bptn_tkn_iter_t iter)
 static int bs_ptn_tkn_iter_pos_set(bptn_tkn_iter_t iter, bstore_iter_pos_t _pos)
 {
 	bsos_iter_t i = (bsos_iter_t)iter;
-	struct bstore_iter_pos_s *pos = _pos;
+	struct bsos_iter_pos_s *pos = (typeof(pos))_pos;
 
 	/* If the sos_iter already exists and is the correct type, use it */
 	if (!i->iter || (i->iter_type != pos->iter_type))
@@ -1596,7 +1556,7 @@ static bstore_iter_pos_t bs_msg_iter_pos(bmsg_iter_t iter)
 static int bs_msg_iter_pos_set(bmsg_iter_t iter, bstore_iter_pos_t _pos)
 {
 	bsos_iter_t i = (bsos_iter_t)iter;
-	struct bstore_iter_pos_s *pos = _pos;
+	struct bsos_iter_pos_s *pos = (typeof(pos))_pos;
 	bstore_sos_t bss = (bstore_sos_t)i->bs;
 
 	/* If the sos_iter already exists and is the correct type, use it */
@@ -2576,7 +2536,7 @@ static bstore_iter_pos_t bs_tkn_hist_iter_pos(btkn_hist_iter_t iter)
 static int bs_tkn_hist_iter_pos_set(btkn_hist_iter_t iter, bstore_iter_pos_t _pos)
 {
 	bsos_iter_t i = (bsos_iter_t)iter;
-	struct bstore_iter_pos_s *pos = _pos;
+	struct bsos_iter_pos_s *pos = (typeof(pos))_pos;
 	/* If the sos_iter already exists and is the correct type, use it */
 	if (!i->iter || (i->iter_type != pos->iter_type))
 		return ENOENT;
@@ -2805,7 +2765,7 @@ static bstore_iter_pos_t bs_ptn_hist_iter_pos(bptn_hist_iter_t iter)
 static int bs_ptn_hist_iter_pos_set(bptn_hist_iter_t iter, bstore_iter_pos_t _pos)
 {
 	bsos_iter_t i = (bsos_iter_t)iter;
-	struct bstore_iter_pos_s *pos = _pos;
+	struct bsos_iter_pos_s *pos = (typeof(pos))_pos;
 	/* If the sos_iter already exists and is the correct type, use it */
 	if (!i->iter || (i->iter_type != pos->iter_type))
 		return ENOENT;
@@ -3042,7 +3002,7 @@ static bstore_iter_pos_t bs_comp_hist_iter_pos(bcomp_hist_iter_t iter)
 static int bs_comp_hist_iter_pos_set(bcomp_hist_iter_t iter, bstore_iter_pos_t _pos)
 {
 	bsos_iter_t i = (bsos_iter_t)iter;
-	struct bstore_iter_pos_s *pos = _pos;
+	struct bsos_iter_pos_s *pos = (typeof(pos))_pos;
 	/* If the sos_iter already exists and is the correct type, use it */
 	if (!i->iter || (i->iter_type != pos->iter_type))
 		return ENOENT;
@@ -3361,9 +3321,6 @@ static struct bstore_plugin_s plugin = {
 	.comp_hist_iter_first = bs_comp_hist_iter_find,
 	.comp_hist_iter_last = bs_comp_hist_iter_last,
 
-	.iter_pos_to_str = bs_iter_pos_to_str,
-	.iter_pos_from_str = bs_iter_pos_from_str,
-	.iter_pos_free = bs_iter_pos_free,
 };
 
 bstore_plugin_t init_store(void)

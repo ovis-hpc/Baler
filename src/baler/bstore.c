@@ -547,19 +547,56 @@ bcomp_hist_t bstore_comp_hist_iter_last(bcomp_hist_iter_t iter, bcomp_hist_t com
 	return iter->bs->plugin->comp_hist_iter_last(iter, comp_h);
 }
 
-const char *bstore_iter_pos_to_str(bstore_iter_t iter, bstore_iter_pos_t pos)
+char *bstore_pos_to_str(bstore_iter_pos_t pos)
 {
-	return iter->bs->plugin->iter_pos_to_str(iter, pos);
+	int i;
+	char *s;
+	char *str = malloc(8 + pos->data_len*2 + 1); /* data_len + data + \0 */
+	if (!str)
+		return NULL;
+	s = str;
+	s += sprintf(s, "%08X", pos->data_len);
+	for (i = 0; i < pos->data_len; i++) {
+		s += sprintf(s, "%02hhX", pos->data[i]);
+	}
+	return str;
 }
 
-bstore_iter_pos_t bstore_iter_pos_from_str(bstore_iter_t iter, const char *pos)
+bstore_iter_pos_t bstore_pos_from_str(const char *str)
 {
-	return iter->bs->plugin->iter_pos_from_str(iter, pos);
-}
+	const char *s;
+	int i, n;
+	uint32_t data_len;
+	bstore_iter_pos_t pos;
 
-void bstore_iter_pos_free(bstore_iter_t iter, bstore_iter_pos_t pos)
-{
-	return iter->bs->plugin->iter_pos_free(iter, pos);
+	s = str;
+	n = sscanf(s, "%08X", &data_len);
+	if (!n) {
+		errno = EINVAL;
+		goto err_0;
+	}
+	s += 8;
+	pos = malloc(sizeof(*pos) + data_len);
+	if (!pos)
+		goto err_0;
+	pos->data_len = data_len;
+	for (i = 0; i < data_len; i++) {
+		n = sscanf(s, "%02hhX", &pos->data[i]);
+		if (!n) {
+			errno = EINVAL;
+			goto err_1;
+		}
+		s += 2;
+	}
+	if (*s != '\0') {
+		errno = EINVAL;
+		goto err_1;
+	}
+	return pos;
+ err_1:
+	free(pos);
+ err_0:
+	return NULL;
 }
 
 static void __attribute__ ((destructor)) bstore_term(void)

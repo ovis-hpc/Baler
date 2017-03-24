@@ -254,8 +254,8 @@ cdef class Biter:
         cdef Bs.bstore_iter_pos_t c_pos = self.iterPosGet()
         if c_pos is NULL:
             return None
-        pos_str = Bs.bstore_iter_pos_to_str(self.c_iter, c_pos)
-        Bs.bstore_iter_pos_free(self.c_iter, c_pos)
+        pos_str = Bs.bstore_pos_to_str(c_pos)
+        free(c_pos)
         if pos_str is NULL:
             return None
         return pos_str
@@ -263,11 +263,11 @@ cdef class Biter:
     def set_pos(self, pos):
         cdef int rc
         cdef const char *pos_str = <const char *>pos
-        cdef Bs.bstore_iter_pos_t c_pos = Bs.bstore_iter_pos_from_str(self.c_iter, pos_str)
+        cdef Bs.bstore_iter_pos_t c_pos = Bs.bstore_pos_from_str(pos_str)
         if c_pos is NULL:
             raise ValueError("The input position string is invalid for this iterator.")
         rc = self.iterPosSet(c_pos)
-        Bs.bstore_iter_pos_free(self.c_iter, c_pos)
+        free(c_pos)
         if rc != 0:
             raise StopIteration("return code: %d" % rc)
         return 0

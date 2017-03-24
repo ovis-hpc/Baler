@@ -20,7 +20,10 @@ typedef bstore_iter_t bptn_tkn_iter_t;
 typedef bstore_iter_t bcomp_hist_iter_t;
 typedef bstore_iter_t bptn_hist_iter_t;
 typedef bstore_iter_t btkn_hist_iter_t;
-typedef void *bstore_iter_pos_t;
+typedef struct bstore_iter_pos_s {
+	uint32_t data_len;
+	char data[0];
+} *bstore_iter_pos_t;
 
 /**
  * Return !0 if the current iterator object should be returned
@@ -212,12 +215,6 @@ typedef struct bstore_plugin_s {
 	bcomp_hist_t (*comp_hist_iter_prev)(bcomp_hist_iter_t iter, bcomp_hist_t comp_h);
 	bcomp_hist_t (*comp_hist_iter_first)(bcomp_hist_iter_t iter, bcomp_hist_t comp_h);
 	bcomp_hist_t (*comp_hist_iter_last)(bcomp_hist_iter_t iter, bcomp_hist_t comp_h);
-	/**
-	 * Iterator postion management routines
-	 */
-	const char *(*iter_pos_to_str)(bstore_iter_t, bstore_iter_pos_t);
-	bstore_iter_pos_t (*iter_pos_from_str)(bstore_iter_t, const char *);
-	void (*iter_pos_free)(bstore_iter_t, bstore_iter_pos_t);
 } *bstore_plugin_t;
 
 typedef bstore_plugin_t (*bstore_init_fn_t)(void);
@@ -321,8 +318,7 @@ bcomp_hist_t bstore_comp_hist_iter_first(bcomp_hist_iter_t iter, bcomp_hist_t co
 bcomp_hist_t bstore_comp_hist_iter_last(bcomp_hist_iter_t iter, bcomp_hist_t comp_h);
 
 /* Iterator position management routines */
-const char *bstore_iter_pos_to_str(bstore_iter_t iter, bstore_iter_pos_t pos);
-bstore_iter_pos_t bstore_iter_pos_from_str(bstore_iter_t iter, const char *pos);
-void bstore_iter_pos_free(bstore_iter_t iter, bstore_iter_pos_t pos);
+char *bstore_pos_to_str(bstore_iter_pos_t pos);
+bstore_iter_pos_t bstore_pos_from_str(const char *pos);
 
 #endif
