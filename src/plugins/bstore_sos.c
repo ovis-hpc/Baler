@@ -1067,6 +1067,14 @@ typedef struct bsos_iter_s {
 typedef struct bsos_iter_pos_s {
 	struct bstore_iter_pos_s base;
 	int iter_type;
+	uint32_t bin_width;
+	uint32_t start;
+	union {
+		btkn_id_t comp_id;
+		btkn_id_t tkn_id;
+	};
+	bptn_id_t ptn_id;
+	uint64_t arg;
 	struct sos_pos sos_pos;
 } *bsos_iter_pos_t;
 
@@ -1077,25 +1085,107 @@ static bstore_iter_pos_t __iter_pos(bsos_iter_t iter)
 	struct sos_pos *sos_pos;
 	struct bsos_iter_pos_s *pos;
 	if (!iter->iter)
-		return NULL;
+		goto err_0;
 	sos_pos = sos_iter_pos(iter->iter);
 	if (!sos_pos)
-		return NULL;
+		goto err_0;
 	sz = sizeof(*pos) + sos_pos->data_len;
 	pos = malloc(sz);
-	if (!pos) {
-		free(sos_pos);
-		return NULL;
-	}
+	if (!pos)
+		goto err_1;
 	pos->iter_type = iter->iter_type;
+	switch (iter->iter_type) {
+	case TKN_ITER:
+	case PTN_ITER_ID:
+	case PTN_ITER_FIRST_SEEN:
+		/* do nothing */
+		break;
+	case MSG_ITER_PTN_TIME:
+	case MSG_ITER_COMP_TIME:
+	case MSG_ITER_TIME_COMP:
+		pos->start = iter->start;
+		pos->ptn_id = iter->ptn_id;
+		pos->comp_id = iter->comp_id;
+		break;
+	case PTN_TKN_ITER:
+		pos->arg = iter->arg;
+		pos->ptn_id = iter->ptn_id;
+		break;
+	case TKN_HIST_ITER:
+		pos->bin_width = iter->bin_width;
+		pos->start = iter->start;
+		pos->tkn_id = iter->tkn_id;
+		break;
+	case PTN_HIST_ITER:
+		pos->bin_width = iter->bin_width;
+		pos->start = iter->start;
+		pos->ptn_id = iter->ptn_id;
+		break;
+	case COMP_HIST_ITER:
+		pos->bin_width = iter->bin_width;
+		pos->start = iter->start;
+		pos->comp_id = iter->comp_id;
+		pos->ptn_id = iter->ptn_id;
+		break;
+	default:
+		assert(0 == "Unknown iterator type");
+		errno = EINVAL;
+		goto err_2;
+	}
 	pos->base.data_len = sz - sizeof(pos->base);
 	memcpy(&pos->sos_pos, sos_pos, sos_pos_sz(sos_pos));
 	free(sos_pos);
 	return &pos->base;
+
+ err_2:
+	free(pos);
+ err_1:
+	free(sos_pos);
+ err_0:
+	return NULL;
 }
 
 static int __iter_pos_set(bsos_iter_t iter, bsos_iter_pos_t pos)
 {
+	/* recovering the find parameters first */
+	switch (pos->iter_type) {
+	case TKN_ITER:
+	case PTN_ITER_ID:
+	case PTN_ITER_FIRST_SEEN:
+		/* do nothing */
+		break;
+	case MSG_ITER_PTN_TIME:
+	case MSG_ITER_COMP_TIME:
+	case MSG_ITER_TIME_COMP:
+		iter->start = pos->start;
+		iter->ptn_id = pos->ptn_id;
+		iter->comp_id = pos->comp_id;
+		break;
+	case PTN_TKN_ITER:
+		iter->arg = pos->arg;
+		iter->ptn_id = pos->ptn_id;
+		break;
+	case TKN_HIST_ITER:
+		iter->bin_width = pos->bin_width;
+		iter->start = pos->start;
+		iter->tkn_id = pos->tkn_id;
+		break;
+	case PTN_HIST_ITER:
+		iter->bin_width = pos->bin_width;
+		iter->start = pos->start;
+		iter->ptn_id = pos->ptn_id;
+		break;
+	case COMP_HIST_ITER:
+		iter->bin_width = pos->bin_width;
+		iter->start = pos->start;
+		iter->comp_id = pos->comp_id;
+		iter->ptn_id = pos->ptn_id;
+		break;
+	default:
+		assert(0 == "Unknown iterator type");
+		return EINVAL;
+	}
+	/* then, recover the iterator position */
 	return sos_iter_set(iter->iter, &pos->sos_pos);
 }
 
