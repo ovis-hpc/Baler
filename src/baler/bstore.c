@@ -175,6 +175,16 @@ btkn_t bstore_tkn_iter_next(btkn_iter_t iter)
 	return iter->bs->plugin->tkn_iter_next(iter);
 }
 
+btkn_t bstore_tkn_iter_prev(btkn_iter_t iter)
+{
+	return iter->bs->plugin->tkn_iter_prev(iter);
+}
+
+btkn_t bstore_tkn_iter_last(btkn_iter_t iter)
+{
+	return iter->bs->plugin->tkn_iter_last(iter);
+}
+
 bstore_iter_pos_t bstore_ptn_iter_pos(bptn_iter_t iter)
 {
 	return iter->bs->plugin->ptn_iter_pos(iter);
@@ -368,6 +378,11 @@ btkn_t bstore_ptn_tkn_iter_obj(bptn_tkn_iter_t iter)
 btkn_t bstore_ptn_tkn_iter_next(bptn_tkn_iter_t iter)
 {
 	return iter->bs->plugin->ptn_tkn_iter_next(iter);
+}
+
+btkn_t bstore_ptn_tkn_iter_prev(bptn_tkn_iter_t iter)
+{
+	return iter->bs->plugin->ptn_tkn_iter_prev(iter);
 }
 
 btkn_type_t bstore_tkn_type_get(bstore_t bs, const char *name, size_t len)

@@ -1297,6 +1297,28 @@ static btkn_t bs_tkn_iter_next(btkn_iter_t iter)
 	return __make_tkn(bss, sos_iter_obj(i->iter));
 }
 
+static btkn_t bs_tkn_iter_prev(btkn_iter_t iter)
+{
+	bsos_iter_t i = (bsos_iter_t)iter;
+	bstore_sos_t bss = (bstore_sos_t)i->bs;
+	int rc = sos_iter_prev(i->iter);
+	if (rc)
+		return NULL;
+
+	return __make_tkn(bss, sos_iter_obj(i->iter));
+}
+
+static btkn_t bs_tkn_iter_last(btkn_iter_t iter)
+{
+	bsos_iter_t i = (bsos_iter_t)iter;
+	bstore_sos_t bss = (bstore_sos_t)i->bs;
+	int rc = sos_iter_end(i->iter);
+	if (rc)
+		return NULL;
+
+	return __make_tkn(bss, sos_iter_obj(i->iter));
+}
+
 static bstore_iter_pos_t bs_ptn_iter_pos(bptn_iter_t iter)
 {
 	return __iter_pos((bsos_iter_t)iter);
@@ -2618,6 +2640,18 @@ static btkn_t bs_ptn_tkn_iter_next(bptn_tkn_iter_t iter)
 	return NULL;
 }
 
+static btkn_t bs_ptn_tkn_iter_prev(bptn_tkn_iter_t iter)
+{
+	bsos_iter_t i = (bsos_iter_t)iter;
+	int rc;
+	if (i->tkn_id) /* this is non-wildcard ptn_tkn */
+		return NULL;
+	rc = sos_iter_prev(i->iter);
+	if (!rc)
+		return make_ptn_tkn(i);
+	return NULL;
+}
+
 static bstore_iter_pos_t bs_tkn_hist_iter_pos(btkn_hist_iter_t iter)
 {
 	return __iter_pos((bsos_iter_t)iter);
@@ -3334,7 +3368,8 @@ static struct bstore_plugin_s plugin = {
 	.tkn_iter_first = bs_tkn_iter_first,
 	.tkn_iter_obj = bs_tkn_iter_obj,
 	.tkn_iter_next = bs_tkn_iter_next,
-	// .tkn_iter_prev = bs_tkn_iter_prev,
+	.tkn_iter_prev = bs_tkn_iter_prev,
+	.tkn_iter_last = bs_tkn_iter_last,
 
 	.msg_add = bs_msg_add,
 	.msg_iter_pos = bs_msg_iter_pos,
@@ -3372,7 +3407,7 @@ static struct bstore_plugin_s plugin = {
 	.ptn_tkn_iter_find = bs_ptn_tkn_iter_find,
 	.ptn_tkn_iter_obj = bs_ptn_tkn_iter_obj,
 	.ptn_tkn_iter_next = bs_ptn_tkn_iter_next,
-	// .ptn_tkn_iter_prev = bs_ptn_tkn_iter_prev,
+	.ptn_tkn_iter_prev = bs_ptn_tkn_iter_prev,
 
 	.tkn_hist_update = bs_tkn_hist_update,
 	.tkn_hist_iter_pos = bs_tkn_hist_iter_pos,

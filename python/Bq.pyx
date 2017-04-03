@@ -327,6 +327,12 @@ cdef class Btkn_iter(Biter):
     cdef void *iterNext(self):
         return Bs.bstore_tkn_iter_next(self.c_iter)
 
+    cdef void *iterPrev(self):
+        return Bs.bstore_tkn_iter_prev(self.c_iter)
+
+    cdef void *iterLast(self):
+        return Bs.bstore_tkn_iter_last(self.c_iter)
+
     cdef Bs.bstore_iter_pos_t iterPosGet(self):
         return Bs.bstore_tkn_iter_pos(self.c_iter)
 
@@ -524,6 +530,9 @@ cdef class Bptn_tkn_iter(Biter):
 
     cdef void *iterNext(self):
         return Bs.bstore_ptn_tkn_iter_next(self.c_iter)
+
+    cdef void *iterPrev(self):
+        return Bs.bstore_ptn_tkn_iter_prev(self.c_iter)
 
     cdef Bs.bstore_iter_pos_t iterPosGet(self):
         return Bs.bstore_ptn_tkn_iter_pos(self.c_iter)

@@ -80,6 +80,15 @@ typedef struct bstore_plugin_s {
 	 */
 	btkn_t (*tkn_iter_next)(btkn_iter_t iter);
 	/**
+	 * Return the previous token
+	 */
+	btkn_t (*tkn_iter_prev)(btkn_iter_t iter);
+	/**
+	 * Return the last token
+	 */
+	btkn_t (*tkn_iter_last)(btkn_iter_t iter);
+
+	/**
 	 * Add the message to the store
 	 */
 	int (*msg_add)(bstore_t bs, struct timeval *tv, bmsg_t msg);
@@ -160,6 +169,7 @@ typedef struct bstore_plugin_s {
 	 */
 	btkn_t (*ptn_tkn_iter_obj)(bptn_tkn_iter_t iter);
 	btkn_t (*ptn_tkn_iter_next)(bptn_tkn_iter_t iter);
+	btkn_t (*ptn_tkn_iter_prev)(bptn_tkn_iter_t iter);
 	/**
 	 * Return the type id for a token type name
 	 */
@@ -235,6 +245,8 @@ uint64_t bstore_tkn_iter_card(btkn_iter_t i);
 btkn_t bstore_tkn_iter_first(btkn_iter_t iter);
 btkn_t bstore_tkn_iter_obj(btkn_iter_t iter);
 btkn_t bstore_tkn_iter_next(btkn_iter_t iter);
+btkn_t bstore_tkn_iter_prev(btkn_iter_t iter);
+btkn_t bstore_tkn_iter_last(btkn_iter_t iter);
 
 int bstore_msg_add(bstore_t bs, struct timeval *tv, bmsg_t msg);
 bstore_iter_pos_t bstore_msg_iter_pos(bmsg_iter_t);
@@ -274,6 +286,7 @@ uint64_t bstore_ptn_tkn_iter_card(bptn_tkn_iter_t i);
 btkn_t bstore_ptn_tkn_iter_find(bptn_tkn_iter_t iter, bptn_id_t ptn_id, uint64_t pos);
 btkn_t bstore_ptn_tkn_iter_obj(bptn_tkn_iter_t iter);
 btkn_t bstore_ptn_tkn_iter_next(bptn_tkn_iter_t iter);
+btkn_t bstore_ptn_tkn_iter_prev(bptn_tkn_iter_t iter);
 
 /* Token History */
 int bstore_tkn_hist_update(bstore_t bs, time_t secs, time_t bin_width, btkn_id_t tkn_id);

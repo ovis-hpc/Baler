@@ -111,6 +111,8 @@ cdef extern from "baler/bstore.h":
     btkn_t bstore_tkn_iter_first(btkn_iter_t iter)
     btkn_t bstore_tkn_iter_obj(btkn_iter_t iter)
     btkn_t bstore_tkn_iter_next(btkn_iter_t iter)
+    btkn_t bstore_tkn_iter_prev(btkn_iter_t iter)
+    btkn_t bstore_tkn_iter_last(btkn_iter_t iter)
 
     bptn_t bstore_ptn_find(bstore_t bs, bptn_id_t ptn_id)
     bstore_iter_t bstore_ptn_iter_new(bstore_t bs)
@@ -179,6 +181,7 @@ cdef extern from "baler/bstore.h":
     cdef btkn_t bstore_ptn_tkn_iter_find(bptn_tkn_iter_t it, bptn_id_t ptn_id, uint64_t pos)
     cdef btkn_t bstore_ptn_tkn_iter_obj(bptn_tkn_iter_t it)
     cdef btkn_t bstore_ptn_tkn_iter_next(bptn_tkn_iter_t it)
+    cdef btkn_t bstore_ptn_tkn_iter_prev(bptn_tkn_iter_t it)
 
     cdef struct btkn_hist_s:
         btkn_id_t tkn_id
