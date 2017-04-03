@@ -430,11 +430,6 @@ btkn_hist_t bstore_tkn_hist_iter_next(btkn_hist_iter_t iter, btkn_hist_t tkn_h)
 	return iter->bs->plugin->tkn_hist_iter_next(iter, tkn_h);
 }
 
-btkn_hist_t bstore_tkn_hist_iter_prev(btkn_hist_iter_t iter, btkn_hist_t tkn_h)
-{
-	return iter->bs->plugin->tkn_hist_iter_prev(iter, tkn_h);
-}
-
 btkn_hist_t bstore_tkn_hist_iter_first(btkn_hist_iter_t iter, btkn_hist_t tkn_h)
 {
 	return iter->bs->plugin->tkn_hist_iter_first(iter, tkn_h);
@@ -497,11 +492,6 @@ bptn_hist_t bstore_ptn_hist_iter_next(bptn_hist_iter_t iter, bptn_hist_t ptn_h)
 	return iter->bs->plugin->ptn_hist_iter_next(iter, ptn_h);
 }
 
-bptn_hist_t bstore_ptn_hist_iter_prev(bptn_hist_iter_t iter, bptn_hist_t ptn_h)
-{
-	return iter->bs->plugin->ptn_hist_iter_prev(iter, ptn_h);
-}
-
 bptn_hist_t bstore_ptn_hist_iter_first(bptn_hist_iter_t iter, bptn_hist_t ptn_h)
 {
 	return iter->bs->plugin->ptn_hist_iter_first(iter, ptn_h);
@@ -545,11 +535,6 @@ bcomp_hist_t bstore_comp_hist_iter_obj(bcomp_hist_iter_t iter, bcomp_hist_t comp
 bcomp_hist_t bstore_comp_hist_iter_next(bcomp_hist_iter_t iter, bcomp_hist_t comp_h)
 {
 	return iter->bs->plugin->comp_hist_iter_next(iter, comp_h);
-}
-
-bcomp_hist_t bstore_comp_hist_iter_prev(bcomp_hist_iter_t iter, bcomp_hist_t comp_h)
-{
-	return iter->bs->plugin->comp_hist_iter_prev(iter, comp_h);
 }
 
 bcomp_hist_t bstore_comp_hist_iter_first(bcomp_hist_iter_t iter, bcomp_hist_t comp_h)

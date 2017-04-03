@@ -164,8 +164,6 @@ cdef extern from "baler/bstore.h":
     cdef bptn_hist_t bstore_ptn_hist_iter_find(bptn_hist_iter_t it, bptn_hist_t ptn_h)
     cdef bptn_hist_t bstore_ptn_hist_iter_obj(bptn_hist_iter_t it, bptn_hist_t ptn_h)
     cdef bptn_hist_t bstore_ptn_hist_iter_next(bptn_hist_iter_t it, bptn_hist_t ptn_h)
-    cdef bptn_hist_t bstore_ptn_hist_iter_prev(bptn_hist_iter_t iter,
-                                                        bptn_hist_t ptn_h);
     cdef bptn_hist_t bstore_ptn_hist_iter_first(bptn_hist_iter_t it, bptn_hist_t ptn_h)
     cdef bptn_hist_t bstore_ptn_hist_iter_last(bptn_hist_iter_t it, bptn_hist_t ptn_h)
 
@@ -199,7 +197,6 @@ cdef extern from "baler/bstore.h":
     btkn_hist_t bstore_tkn_hist_iter_obj(btkn_hist_iter_t iter, btkn_hist_t tkn_h)
     btkn_hist_t bstore_tkn_hist_iter_next(btkn_hist_iter_t iter, btkn_hist_t tkn_h)
     btkn_hist_t bstore_tkn_hist_iter_first(btkn_hist_iter_t iter, btkn_hist_t tkn_h)
-    btkn_hist_t bstore_tkn_hist_iter_prev(btkn_hist_iter_t iter, btkn_hist_t tkn_h)
     btkn_hist_t bstore_tkn_hist_iter_last(btkn_hist_iter_t iter, btkn_hist_t tkn_h)
 
     cdef struct bcomp_hist_s:
@@ -219,5 +216,4 @@ cdef extern from "baler/bstore.h":
     bcomp_hist_t bstore_comp_hist_iter_obj(bcomp_hist_iter_t iter, bcomp_hist_t comp_h)
     bcomp_hist_t bstore_comp_hist_iter_next(bcomp_hist_iter_t iter, bcomp_hist_t comp_h)
     bcomp_hist_t bstore_comp_hist_iter_first(bcomp_hist_iter_t iter, bcomp_hist_t comp_h)
-    bcomp_hist_t bstore_comp_hist_iter_prev(bcomp_hist_iter_t iter, bcomp_hist_t comp_h)
     bcomp_hist_t bstore_comp_hist_iter_last(bcomp_hist_iter_t iter, bcomp_hist_t comp_h)

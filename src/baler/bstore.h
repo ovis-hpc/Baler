@@ -187,7 +187,6 @@ typedef struct bstore_plugin_s {
 	btkn_hist_t (*tkn_hist_iter_find)(btkn_hist_iter_t iter, btkn_hist_t tkn_h);
 	btkn_hist_t (*tkn_hist_iter_obj)(btkn_hist_iter_t iter, btkn_hist_t tkn_h);
 	btkn_hist_t (*tkn_hist_iter_next)(btkn_hist_iter_t iter, btkn_hist_t tkn_h);
-	btkn_hist_t (*tkn_hist_iter_prev)(btkn_hist_iter_t iter, btkn_hist_t tkn_h);
 	btkn_hist_t (*tkn_hist_iter_first)(btkn_hist_iter_t iter, btkn_hist_t tkn_h);
 	btkn_hist_t (*tkn_hist_iter_last)(btkn_hist_iter_t iter, btkn_hist_t tkn_h);
 
@@ -211,7 +210,6 @@ typedef struct bstore_plugin_s {
 	bptn_hist_t (*ptn_hist_iter_find)(bptn_hist_iter_t iter, bptn_hist_t ptn_h);
 	bptn_hist_t (*ptn_hist_iter_obj)(bptn_hist_iter_t iter, bptn_hist_t ptn_h);
 	bptn_hist_t (*ptn_hist_iter_next)(bptn_hist_iter_t iter, bptn_hist_t ptn_h);
-	bptn_hist_t (*ptn_hist_iter_prev)(bptn_hist_iter_t iter, bptn_hist_t ptn_h);
 	bptn_hist_t (*ptn_hist_iter_first)(bptn_hist_iter_t iter, bptn_hist_t ptn_h);
 	bptn_hist_t (*ptn_hist_iter_last)(bptn_hist_iter_t iter, bptn_hist_t ptn_h);
 
@@ -222,7 +220,6 @@ typedef struct bstore_plugin_s {
 	bcomp_hist_t (*comp_hist_iter_find)(bcomp_hist_iter_t iter, bcomp_hist_t comp_h);
 	bcomp_hist_t (*comp_hist_iter_obj)(bcomp_hist_iter_t iter, bcomp_hist_t comp_h);
 	bcomp_hist_t (*comp_hist_iter_next)(bcomp_hist_iter_t iter, bcomp_hist_t comp_h);
-	bcomp_hist_t (*comp_hist_iter_prev)(bcomp_hist_iter_t iter, bcomp_hist_t comp_h);
 	bcomp_hist_t (*comp_hist_iter_first)(bcomp_hist_iter_t iter, bcomp_hist_t comp_h);
 	bcomp_hist_t (*comp_hist_iter_last)(bcomp_hist_iter_t iter, bcomp_hist_t comp_h);
 } *bstore_plugin_t;
@@ -298,7 +295,6 @@ btkn_hist_t bstore_tkn_hist_iter_find(btkn_hist_iter_t iter, btkn_hist_t tkn_h);
 btkn_hist_t bstore_tkn_hist_iter_obj(btkn_hist_iter_t iter, btkn_hist_t tkn_h);
 btkn_hist_t bstore_tkn_hist_iter_next(btkn_hist_iter_t iter, btkn_hist_t tkn_h);
 btkn_hist_t bstore_tkn_hist_iter_first(btkn_hist_iter_t iter, btkn_hist_t tkn_h);
-btkn_hist_t bstore_tkn_hist_iter_prev(btkn_hist_iter_t iter, btkn_hist_t tkn_h);
 btkn_hist_t bstore_tkn_hist_iter_last(btkn_hist_iter_t iter, btkn_hist_t tkn_h);
 
 /* Pattern History */
@@ -314,7 +310,6 @@ void bstore_ptn_hist_iter_free(bptn_hist_iter_t iter);
 bptn_hist_t bstore_ptn_hist_iter_find(bptn_hist_iter_t iter, bptn_hist_t ptn_h);
 bptn_hist_t bstore_ptn_hist_iter_obj(bptn_hist_iter_t iter, bptn_hist_t ptn_h);
 bptn_hist_t bstore_ptn_hist_iter_next(bptn_hist_iter_t iter, bptn_hist_t ptn_h);
-bptn_hist_t bstore_ptn_hist_iter_prev(bptn_hist_iter_t iter, bptn_hist_t ptn_h);
 bptn_hist_t bstore_ptn_hist_iter_first(bptn_hist_iter_t iter, bptn_hist_t ptn_h);
 bptn_hist_t bstore_ptn_hist_iter_last(bptn_hist_iter_t iter, bptn_hist_t ptn_h);
 
@@ -326,7 +321,6 @@ void bstore_comp_hist_iter_free(bcomp_hist_iter_t iter);
 bcomp_hist_t bstore_comp_hist_iter_find(bcomp_hist_iter_t iter, bcomp_hist_t comp_h);
 bcomp_hist_t bstore_comp_hist_iter_obj(bcomp_hist_iter_t iter, bcomp_hist_t comp_h);
 bcomp_hist_t bstore_comp_hist_iter_next(bcomp_hist_iter_t iter, bcomp_hist_t comp_h);
-bcomp_hist_t bstore_comp_hist_iter_prev(bcomp_hist_iter_t iter, bcomp_hist_t comp_h);
 bcomp_hist_t bstore_comp_hist_iter_first(bcomp_hist_iter_t iter, bcomp_hist_t comp_h);
 bcomp_hist_t bstore_comp_hist_iter_last(bcomp_hist_iter_t iter, bcomp_hist_t comp_h);
 

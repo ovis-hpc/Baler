@@ -777,9 +777,6 @@ cdef class Bptn_hist_iter(Biter):
     cdef void *iterNext(self):
         return Bs.bstore_ptn_hist_iter_next(self.c_iter, &self.c_ptn_h)
 
-    cdef void *iterPrev(self):
-        return Bs.bstore_ptn_hist_iter_prev(self.c_iter, &self.c_ptn_h)
-
     cdef void *iterLast(self):
         return Bs.bstore_ptn_hist_iter_last(self.c_iter, &self.c_ptn_h)
 
@@ -933,9 +930,6 @@ cdef class Bcomp_hist_iter(Biter):
 
     cdef void *iterNext(self):
         return Bs.bstore_comp_hist_iter_next(self.c_iter, &self.c_comp_h)
-
-    cdef void *iterPrev(self):
-        return Bs.bstore_comp_hist_iter_prev(self.c_iter, &self.c_comp_h)
 
     cdef void *iterLast(self):
         return Bs.bstore_comp_hist_iter_last(self.c_iter, &self.c_comp_h)
@@ -1098,9 +1092,6 @@ cdef class Btkn_hist_iter(Biter):
 
     cdef void *iterNext(self):
         return Bs.bstore_tkn_hist_iter_next(self.c_iter, &self.c_tkn_h)
-
-    cdef void *iterPrev(self):
-        return Bs.bstore_tkn_hist_iter_prev(self.c_iter, &self.c_tkn_h)
 
     cdef void *iterLast(self):
         return Bs.bstore_tkn_hist_iter_last(self.c_iter, &self.c_tkn_h)

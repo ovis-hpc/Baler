@@ -2869,18 +2869,6 @@ static btkn_hist_t bs_tkn_hist_iter_next(btkn_hist_iter_t iter, btkn_hist_t tkn_
 	return tkn_hist_next(i, tkn_h);
 }
 
-static btkn_hist_t bs_tkn_hist_iter_prev(btkn_hist_iter_t iter, btkn_hist_t tkn_h)
-{
-	bsos_iter_t i = (bsos_iter_t)iter;
-	int rc;
-
-	rc = sos_iter_prev(i->iter);
-	if (rc)
-		return NULL;
-
-	return tkn_hist_prev(i, tkn_h);
-}
-
 static bstore_iter_pos_t bs_ptn_hist_iter_pos(bptn_hist_iter_t iter)
 {
 	return __iter_pos((bsos_iter_t)iter);
@@ -3106,18 +3094,6 @@ static bptn_hist_t bs_ptn_hist_iter_next(bptn_hist_iter_t iter, bptn_hist_t ptn_
 	return ptn_hist_next(i, ptn_h);
 }
 
-static bptn_hist_t bs_ptn_hist_iter_prev(bptn_hist_iter_t iter, bptn_hist_t ptn_h)
-{
-	bsos_iter_t i = (bsos_iter_t)iter;
-	int rc;
-
-	rc = sos_iter_prev(i->iter);
-	if (rc)
-		return NULL;
-
-	return ptn_hist_prev(i, ptn_h);
-}
-
 static bstore_iter_pos_t bs_comp_hist_iter_pos(bcomp_hist_iter_t iter)
 {
 	return __iter_pos((bsos_iter_t)iter);
@@ -3337,18 +3313,6 @@ static bcomp_hist_t bs_comp_hist_iter_next(bcomp_hist_iter_t iter, bcomp_hist_t 
 	return comp_hist_next(i, comp_h);
 }
 
-static bcomp_hist_t bs_comp_hist_iter_prev(bcomp_hist_iter_t iter, bcomp_hist_t comp_h)
-{
-	bsos_iter_t i = (bsos_iter_t)iter;
-	int rc;
-
-	rc = sos_iter_prev(i->iter);
-	if (rc)
-		return NULL;
-
-	return comp_hist_prev(i, comp_h);
-}
-
 static struct bstore_plugin_s plugin = {
 	.open = bs_open,
 	.close = bs_close,
@@ -3417,7 +3381,6 @@ static struct bstore_plugin_s plugin = {
 	.tkn_hist_iter_find = bs_tkn_hist_iter_find,
 	.tkn_hist_iter_obj = bs_tkn_hist_iter_obj,
 	.tkn_hist_iter_next = bs_tkn_hist_iter_next,
-	.tkn_hist_iter_prev = bs_tkn_hist_iter_prev,
 	.tkn_hist_iter_first = bs_tkn_hist_iter_find,
 	.tkn_hist_iter_last = bs_tkn_hist_iter_last,
 
@@ -3431,7 +3394,6 @@ static struct bstore_plugin_s plugin = {
 	.ptn_hist_iter_find = bs_ptn_hist_iter_find,
 	.ptn_hist_iter_obj = bs_ptn_hist_iter_obj,
 	.ptn_hist_iter_next = bs_ptn_hist_iter_next,
-	.ptn_hist_iter_prev = bs_ptn_hist_iter_prev,
 	.ptn_hist_iter_first = bs_ptn_hist_iter_find,
 	.ptn_hist_iter_last = bs_ptn_hist_iter_last,
 
@@ -3442,7 +3404,6 @@ static struct bstore_plugin_s plugin = {
 	.comp_hist_iter_find = bs_comp_hist_iter_find,
 	.comp_hist_iter_obj = bs_comp_hist_iter_obj,
 	.comp_hist_iter_next = bs_comp_hist_iter_next,
-	.comp_hist_iter_prev = bs_comp_hist_iter_prev,
 	.comp_hist_iter_first = bs_comp_hist_iter_find,
 	.comp_hist_iter_last = bs_comp_hist_iter_last,
 
