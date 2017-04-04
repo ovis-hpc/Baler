@@ -7,6 +7,7 @@
 #include "baler/bstore.h"
 #include "baler/mq.h"
 #include "bout_store_hist.h"
+#include "baler/btkn.h"
 #include <limits.h>
 
 #define MINUTES	60
@@ -138,6 +139,9 @@ static int plugin_config(struct bplugin *this, struct bpair_str_head *arg_head)
 	bpstr = bpair_str_search(arg_head, "tkn", NULL);
 	if (bpstr)
 		mp->tkn_hist = strtoul(bpstr->s1, NULL, 0);
+	bpstr = bpair_str_search(arg_head, "tkn_type_mask", NULL);
+	if (bpstr)
+		mp->tkn_type_mask = btkn_type_mask_from_str(bpstr->s1);
 	bpstr = bpair_str_search(arg_head, "ptn", NULL);
 	if (bpstr)
 		mp->ptn_hist =  strtoul(bpstr->s1, NULL, 0);
@@ -232,7 +236,13 @@ static int ptn_tkn_hist_update(mq_t mq, mq_msg_t msg)
 static void do_tkn_hist(struct bout_store_hist_plugin *mp, bmsg_t msg, struct timeval *tv,
 			int bin, int pos)
 {
+	uint64_t type_mask;
 	hist_msg_t hist_msg;
+	type_mask = BTKN_TYPE_MASK(msg->argv[pos] & 0xFF);
+	if (type_mask & mp->tkn_type_mask) {
+		/* skip hist insert  for the type that has been masked */
+		return;
+	}
 	mp->curr_nq = __sync_add_and_fetch(&mp->curr_nq, 1) % mp->thread_count;
 	hist_msg = (hist_msg_t)mq_get_prod_msg_wait(mp->mqs[mp->curr_nq]);
 	hist_msg->hdr.msg_type = WQE_TKN_HIST;

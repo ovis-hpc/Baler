@@ -62,6 +62,7 @@ struct bout_store_hist_plugin {
 	int thread_count;
 	int q_depth;
 	int tkn_hist;
+	uint64_t tkn_type_mask; /* excluded token types for tkn_hist */
 	int ptn_hist;
 	int ptn_tkn_hist;
 	pthread_t *threads;
