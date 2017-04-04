@@ -360,7 +360,7 @@ typedef struct btkn_tailq_entry {
 	btkn_t tkn; /**< The token. */
 } *btkn_tailq_entry_t;
 
-#define BTKN_TYPE_MASK(_t_) (1 << (_t_ - 1))
+#define BTKN_TYPE_MASK(_t_) (1 << ((_t_) - 1))
 static int btkn_has_type(btkn_t tkn, btkn_type_t typ) {
 	return (tkn->tkn_type_mask & BTKN_TYPE_MASK(typ));
 }
