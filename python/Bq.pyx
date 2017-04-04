@@ -9,6 +9,9 @@ from libc.stdlib cimport *
 from sosdb import Array
 cimport Bs
 
+cpdef uint64_t btkn_type_mask_from_str(const char *_str):
+    return Bs.btkn_type_mask_from_str(_str)
+
 cdef class Bstore:
 
     cdef Bs.bstore_t c_store

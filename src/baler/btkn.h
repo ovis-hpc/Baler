@@ -263,5 +263,22 @@ void btkn_store_iterate(struct btkn_store *btkn_store,
 					const struct btkn_attr *attr));
 
 btkn_type_t btkn_type(const char *str);
+
+/**
+ * Get Token Type Mask from \c str.
+ *
+ * This is a convenient utility that converts input string \c str into a token
+ * type mask. The input string can be in the following format:
+ *
+ * 1. hexadecimal with leading 0x, e.g. "0xABCD",
+ * 2. type name, e.g. "HOSTNAME",
+ * 3. ored expression of types, e.g. "HOSTNAME|IP4_ADDR|IP6_ADDR".
+ *
+ * \param str the input string.
+ *
+ * \retval mask the token type mask.
+ * \retval 0 for error. In this case, \c errno will also be set.
+ */
+uint64_t btkn_type_mask_from_str(const char *str);
 #endif /* __BTKN_H */
 /**\}*/

@@ -217,3 +217,6 @@ cdef extern from "baler/bstore.h":
     bcomp_hist_t bstore_comp_hist_iter_next(bcomp_hist_iter_t iter, bcomp_hist_t comp_h)
     bcomp_hist_t bstore_comp_hist_iter_first(bcomp_hist_iter_t iter, bcomp_hist_t comp_h)
     bcomp_hist_t bstore_comp_hist_iter_last(bcomp_hist_iter_t iter, bcomp_hist_t comp_h)
+
+cdef extern from "baler/btkn.h":
+    uint64_t btkn_type_mask_from_str(const char *str)

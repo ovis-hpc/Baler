@@ -111,6 +111,48 @@ btkn_type_t btkn_type(const char *str)
 	return bget_str_idx(btkn_type_str, BTKN_TYPE_LAST, str);
 }
 
+uint64_t btkn_type_mask_from_str(const char *str)
+{
+	uint64_t mask = 0;
+	uint64_t type;
+	const char *s = str;
+	char buff[256];
+	int n;
+
+	n = 0;
+	sscanf(s, "0x%lx%n", &mask, &n);
+	if (n) {
+		/* hexadecimal form */
+		s += n;
+		if (*s != 0) {
+			errno = EINVAL;
+			goto out;
+		}
+		goto out;
+	}
+
+	do {
+		n = 0;
+		sscanf(s, "%255[^|]%n", buff, &n);
+		if (!n) {
+			errno = EINVAL;
+			goto out;
+		}
+		s += n;
+		type = btkn_type(buff);
+		if (type == -1) {
+			errno = EINVAL;
+			goto out;
+		}
+		mask |= BTKN_TYPE_MASK(type);
+		if (*s == '|')
+			s++;
+	} while (*s);
+
+out:
+	return mask;
+}
+
 void btkn_dprint(btkn_t tkn)
 {
 	binfo("id: %lu, count: %lu, type_mask: %lx, str: \"%.*s\"",
