@@ -2,7 +2,7 @@ SUBDIRS = abhttp
 
 CFLAGS := $(filter-out -Werror, ${CFLAGS})
 
-pkgpython_PYTHON = __init__.py
+pkgpython_PYTHON = __init__.py ptn_order.py util.py
 pkgpyexec_LTLIBRARIES = Bq.la
 Bq_la_SOURCES = Bq.pyx Bs.pxd
 nodist_Bq_la_SOURCES = Bq.c
@@ -15,7 +15,7 @@ pkgpyexecdir = $(pkgpythondir)
 Bq.c: Bq.pyx Bs.pxd
 	cython --gdb $< -o $@
 
-dist_bin_SCRIPTS = bq
+dist_bin_SCRIPTS = bq bclient
 
 clean-local:
 	rm -f Bq.c
