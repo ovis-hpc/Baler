@@ -19,7 +19,12 @@ AC_LIB_RPATH
 LT_INIT
 
 AC_PROG_CC()
-AC_PROG_CXX()
+AC_PROG_CC_C99()
+
+if test "$ac_cv_prog_cc_c99" = "no"; then
+	AC_MSG_ERROR([baler requires a compiler with C99 standard])
+fi
+
 AC_PROG_LEX()
 AC_PROG_YACC()
 AM_PROG_CC_C_O()
