@@ -363,9 +363,17 @@ cdef class Bptn:
         """Returns the first time this pattern was seen"""
         return self.c_ptn.first_seen.tv_sec
 
+    cpdef first_seen2(self):
+        """Returns the first time tuple (unix_ts,usec) this pattern was seen"""
+        return (self.c_ptn.first_seen.tv_sec, self.c_ptn.first_seen.tv_usec)
+
     cpdef last_seen(self):
         """Returns the last time this pattern was seen"""
         return self.c_ptn.last_seen.tv_sec
+
+    cpdef last_seen2(self):
+        """Returns the last time tuple (unix_ts,usec) this pattern was seen"""
+        return (self.c_ptn.last_seen.tv_sec, self.c_ptn.last_seen.tv_usec)
 
     cpdef tkn_count(self):
         """Returns the number of token postions in the pattern"""
