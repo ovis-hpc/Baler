@@ -432,13 +432,15 @@ cdef class Bptn_iter(Biter):
         cdef int rec_count = 0
         cdef Bs.bptn_t ptn
         cdef int more
-        start = start_time
         if end_time:
             end = <uint32_t>end_time
         else:
             end = 0
 
-        more = self.find(start_time)
+        p = self.find(start_time)
+        more = 0
+        if p:
+            more = 1
         while more != 0:
             try:
                 ptn = Bs.bstore_ptn_iter_next(self.c_iter)
@@ -452,10 +454,19 @@ cdef class Bptn_iter(Biter):
                     Bs.bptn_free(ptn)
             except StopIteration:
                 more = 0
+            except Exception as e:
+                print("Ruh roh {0}".format(e))
+                return 0
         return rec_count
 
     def find(self, start_time):
-        return self.obj_update(Bs.bstore_ptn_iter_find(self.c_iter, start_time))
+        cdef uint32_t start = <uint32_t>start_time
+        cdef Bs.bptn_t ptn
+        try:
+            ptn = Bs.bstore_ptn_iter_find(self.c_iter, start)
+            return self.obj_update(ptn)
+        except Exception as e:
+            print("Bptn_iter find err {0}".format(e))
 
     cdef Bs.bstore_iter_t iterNew(self):
         return Bs.bstore_ptn_iter_new(self.store.c_store)
