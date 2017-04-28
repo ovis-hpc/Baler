@@ -704,6 +704,8 @@ cdef class Bmsg_iter(Biter):
         end += bin_width - 1
         end = end - (end % bin_width)
 
+        if not ptn_id:
+            ptn_id = 1
         hist.ptn_id = ptn_id
         hist.bin_width = bin_width
         hist.time = start
