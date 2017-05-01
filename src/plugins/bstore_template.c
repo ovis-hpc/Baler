@@ -436,7 +436,7 @@ static struct bstore_plugin_s plugin = {
 	.iter_pos_free = EXT_iter_pos_free,
 };
 
-bstore_plugin_t init_store(void)
+bstore_plugin_t get_plugin(void)
 {
 	return &plugin;
 }

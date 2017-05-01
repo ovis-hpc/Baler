@@ -31,7 +31,7 @@ static int plugin_cmp(void *a, const void *b)
 
 struct rbt plugin_tree = RBT_INITIALIZER(plugin_cmp);
 
-static bstore_plugin_t get_plugin(const char *name)
+static bstore_plugin_t __get_plugin(const char *name)
 {
 	struct plugin_entry *pe;
 	char *plugin_path;
@@ -39,7 +39,7 @@ static bstore_plugin_t get_plugin(const char *name)
 	bstore_plugin_t plugin;
 	struct rbn *rbn;
 	void *dl;
-	bstore_init_fn_t init_store;
+	bstore_init_fn_t get_plugin;
 
 	pthread_mutex_lock(&plugin_lock);
 	rbn = rbt_find(&plugin_tree, name);
@@ -66,13 +66,13 @@ static bstore_plugin_t get_plugin(const char *name)
 		errno = EINVAL;
 		goto err_1;
 	}
-	init_store = dlsym(dl, "init_store");
-	if (!init_store)
+	get_plugin = dlsym(dl, "get_plugin");
+	if (!get_plugin)
 		goto err_2;
 	pe = malloc(sizeof *pe);
 	if (!pe)
 		goto err_2;
-	plugin = init_store();
+	plugin = get_plugin();
 	if (!plugin)
 		goto err_3;
 	pe->plugin = plugin;
@@ -98,7 +98,7 @@ bstore_t bstore_open(const char *name, const char *path, int flags, ...)
 	bstore_t store = NULL;
 	va_list ap;
 	int o_mode;
-	bstore_plugin_t plugin = get_plugin(name);
+	bstore_plugin_t plugin = __get_plugin(name);
 	if (!plugin)
 		return NULL;
 	va_start(ap, flags);

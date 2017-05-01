@@ -4016,7 +4016,7 @@ static struct bstore_plugin_s plugin = {
 	.comp_hist_iter_last = (void*)bsa_hist_iter_last,
 };
 
-bstore_plugin_t init_store(void)
+bstore_plugin_t get_plugin(void)
 {
 	return &plugin;
 }
