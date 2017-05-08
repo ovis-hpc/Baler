@@ -177,7 +177,7 @@ struct sos_schema_template pattern_schema = {
 			.name = "ptn_id",
 			.type = SOS_TYPE_UINT64,
 			.indexed = 1,
-			.idx_type = "HTBL",
+			.idx_type = "BXTREE",
 		},
 		{
 			.name = "first_seen",
