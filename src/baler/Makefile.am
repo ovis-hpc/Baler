@@ -10,6 +10,7 @@ sbin_PROGRAMS =
 # all libraries).
 libbaler_la_SOURCES = mq.c bwqueue.c btkn.c bptn.c binput.c boutput.c \
 		      bmapper.c bset.c bmvec.c bmem.c butils.c bhash.c \
+		      bhash_u.c \
 		      bstore.c \
 		      bmhash.c \
 		      bheap.c \
@@ -55,6 +56,7 @@ bin_PROGRAMS += bmeta_cluster
 pkginclude_HEADERS = barray.h \
 		     bcommon.h \
 		     bhash.h \
+		     bhash_u.h \
 		     bheap.h \
 		     bstore.h \
 		     binput.h \
