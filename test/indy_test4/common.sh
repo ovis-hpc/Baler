@@ -102,8 +102,8 @@ start_balerd() {
 
 # balerd.cfg generation
 { cat <<EOF
-tokens type=WORD path=$BTEST_ENG_DICT
 tokens type=WORD path=$BTEST_HOST_LIST
+tokens type=WORD path=$BTEST_ENG_DICT
 plugin name=bout_store_msg
 plugin name=bout_store_hist threads=1 blocking_mq=1 q_depth=128 tkn=1 ptn=1 ptn_tkn=1
 plugin name=bin_tcp port=$((BTEST_BIN_RSYSLOG_PORT + NUM)) parser=syslog_parser

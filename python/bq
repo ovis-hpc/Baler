@@ -298,7 +298,7 @@ def plot_tkn_hist(bs, args):
                          "specified with --tkn")
     it = Bq.Btkn_hist_iter(bs)
     start, end, bin_width = get_hist_args(it, tkn_id, args)
-    it.start(tkn_id, bin_width, start)
+    it.set_filter(tkn_id=tkn_id, bin_width=bin_width, tv_begin=(start,0))
     cnt, x, y = it.as_xy_arrays(tkn_id, bin_width,
                                 start_time=start, end_time=end)
     if cnt == 0:
@@ -369,7 +369,10 @@ def show_ptn_tkns(bs, args):
         for pos in range(0, tkn_count):
             try:
                 if pti[pos]:
-                    tkn = pti[pos].next()
+                    if pti[pos].next():
+                        tkn = pti[pos].obj()
+                    else:
+                        tkn = None
                 else:
                     continue
             except:
@@ -408,7 +411,10 @@ def show_ptn_tkns(bs, args):
             tkn = None
             try:
                 if pti[pos]:
-                    tkn = pti[pos].next()
+                    if pti[pos].next():
+                        tkn = pti[pos].obj()
+                    else:
+                        tkn = None
             except:
                 pti[pos] = None
             if tkn:
@@ -457,7 +463,8 @@ def plot_ptn_dist(bs, args):
     for c in comps:
         comp_id = comps[ind].tkn_id()
         hit = Bq.Bcomp_hist_iter(bs)
-        hit.start(comp_id, ptn.ptn_id(), bin_width, start)
+        hit.set_filter(comp_id=comp_id, ptn_id=ptn.ptn_id(),
+                       bin_width=bin_width, tv_begin=(start, 0))
         counts.append(0)
         for h in hit:
             if end > 0 and h.time() > end:
@@ -489,6 +496,7 @@ def show_msgs(bs, args):
     comp_id = tkn_id_from_args(args)
     if not comp_id:
         comp_id = 0
+    print("COMP_ID:", comp_id)
 
     start, end = get_times_from_args(args)
 
@@ -499,20 +507,20 @@ def show_msgs(bs, args):
         '-'.ljust(20, '-'), '-'.ljust(32, '-'))
     do_header(hf, args)
     mi = Bq.Bmsg_iter(bs)
-    if mi.start(comp_id, ptn_id, start):
-        msg_count = 0
-        for m in mi:
-            if end > 0 and m.tv_sec() > end:
-                break
-            msg_count += 1
-            comp_str = fmt_comp_str(bs, m.comp_id(), args)
-            print("{0:12} {1:12} {2:20}".format(m.ptn_id(), comp_str,
-                                                fmt_tstamp(m.tv_sec(), args)),
-                  end=' ')
-            for tkn in m:
-                tkn_str = fmt_tkn_str(tkn, args)
-                print("{0}".format(tkn_str), end='')
-            print("")
+    mi.set_filter(comp_id=comp_id, ptn_id=ptn_id, tv_begin=(start, 0))
+    msg_count = 0
+    for m in mi:
+        if end > 0 and m.tv_sec() > end:
+            break
+        msg_count += 1
+        comp_str = fmt_comp_str(bs, m.comp_id(), args)
+        print("{0:12} {1:12} {2:20}".format(m.ptn_id(), comp_str,
+                                            fmt_tstamp(m.tv_sec(), args)),
+              end=' ')
+        for tkn in m:
+            tkn_str = fmt_tkn_str(tkn, args)
+            print("{0}".format(tkn_str), end='')
+        print("")
     do_footer(hf, args)
     do_footer("{0} Record(s)".format(msg_count), args)
 
@@ -742,7 +750,7 @@ def show_ptn_hist(bs, args):
     start, end = get_times_from_args(args)
 
     phi = Bq.Bptn_hist_iter(bs)
-    phi.start(ptn_id, bin_width, start)
+    phi.set_filter(ptn_id=ptn_id, bin_width=bin_width, tv_begin=(start,0))
 
     if not args.csv:
         hf = "{0:12} {1:20} {2:12} {3:12}".format("Ptn Id", "Timestamp",
@@ -785,7 +793,7 @@ def show_tkn_hist(bs, args):
 
     ti = Bq.Btkn_hist_iter(bs)
     start, end, bin_width = get_hist_args(ti, tkn_id, args)
-    ti.start(tkn_id, bin_width, start)
+    ti.set_filter(tkn_id=tkn_id, bin_width=bin_width, tv_begin=(start,0))
     if not args.csv:
         do_header("{0:12} {1:20} {2:12} {3:12}".format("Tkn Id", "Timestamp",
                                                        "Bin Width", "Msg Count"), args)
@@ -834,7 +842,8 @@ def show_comp_hist(bs, args):
         bin_width = 3600        # hours
 
     chi = Bq.Bcomp_hist_iter(bs)
-    chi.start(comp_id, ptn_id, bin_width, start)
+    chi.set_filter(comp_id=comp_id, ptn_id=ptn_id, bin_width=bin_width,
+                   tv_begin=(start, 0))
     comp_str = fmt_comp_str(bs, comp_id, args)
     if not args.csv:
         do_header("{0:12} {1:12} {2:20} {3:12} {4:12}". \

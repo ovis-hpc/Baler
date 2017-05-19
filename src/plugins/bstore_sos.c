@@ -222,7 +222,8 @@ struct sos_schema_template pattern_token_schema = {
 			.name = "ptn_pos_tkn_key",
 			.type = SOS_TYPE_STRUCT,
 			.indexed = 1,
-			.idx_type = "H2BXT",
+			// .idx_type = "H2BXT",
+			.idx_type = "BXTREE",
 			.idx_args = "ORDER=5 SIZE=3",
 			.size = 24,
 			.key_type = "MEMCMP",
@@ -246,7 +247,8 @@ typedef struct ptn_pos_tkn_s {
 } *ptn_pos_tkn_t;
 #pragma pop()
 
-#define HIST_IDX "H2BXT"
+// #define HIST_IDX "H2BXT"
+#define HIST_IDX "BXTREE"
 #define HIST_IDX_ARGS "ORDER=5 SIZE=19"
 
 struct sos_schema_template token_hist_schema = {
@@ -280,6 +282,22 @@ typedef struct tkn_hist_s {
 } *tkn_hist_t;
 #pragma pop()
 
+static inline
+void tkn_hist_htobe(tkn_hist_t tkn_h)
+{
+	tkn_h->key.bin_width = htobe32(tkn_h->key.bin_width);
+	tkn_h->key.time = htobe32(tkn_h->key.time);
+	tkn_h->key.tkn_id = htobe64(tkn_h->key.tkn_id);
+}
+
+static inline
+void tkn_hist_betoh(tkn_hist_t tkn_h)
+{
+	tkn_h->key.bin_width = be32toh(tkn_h->key.bin_width);
+	tkn_h->key.time = be32toh(tkn_h->key.time);
+	tkn_h->key.tkn_id = be64toh(tkn_h->key.tkn_id);
+}
+
 struct sos_schema_template pattern_hist_schema = {
 	.name = "PatternHist",
 	.attrs = {
@@ -310,6 +328,22 @@ typedef struct ptn_hist_s {
 	// uint64_t count;
 } *ptn_hist_t;
 #pragma pop()
+
+static inline
+void ptn_hist_htobe(ptn_hist_t ptn_h)
+{
+	ptn_h->key.bin_width = htobe32(ptn_h->key.bin_width);
+	ptn_h->key.time = htobe32(ptn_h->key.time);
+	ptn_h->key.ptn_id = htobe64(ptn_h->key.ptn_id);
+}
+
+static inline
+void ptn_hist_betoh(ptn_hist_t ptn_h)
+{
+	ptn_h->key.bin_width = be32toh(ptn_h->key.bin_width);
+	ptn_h->key.time = be32toh(ptn_h->key.time);
+	ptn_h->key.ptn_id = be64toh(ptn_h->key.ptn_id);
+}
 
 struct sos_schema_template component_hist_schema = {
 	.name = "ComponentHist",
@@ -342,6 +376,24 @@ typedef struct comp_hist_s {
 	// uint64_t count;
 } *comp_hist_t;
 #pragma pop()
+
+static inline
+void comp_hist_htobe(comp_hist_t comp_h)
+{
+	comp_h->key.bin_width = htobe32(comp_h->key.bin_width);
+	comp_h->key.time = htobe32(comp_h->key.time);
+	comp_h->key.ptn_id = htobe64(comp_h->key.ptn_id);
+	comp_h->key.comp_id = htobe64(comp_h->key.comp_id);
+}
+
+static inline
+void comp_hist_betoh(comp_hist_t comp_h)
+{
+	comp_h->key.bin_width = be32toh(comp_h->key.bin_width);
+	comp_h->key.time = be32toh(comp_h->key.time);
+	comp_h->key.ptn_id = be64toh(comp_h->key.ptn_id);
+	comp_h->key.comp_id = be64toh(comp_h->key.comp_id);
+}
 
 static size_t encode_id(uint64_t id, uint8_t *s);
 static size_t encoded_id_len(uint64_t id);
@@ -1052,80 +1104,53 @@ static btkn_type_t bs_tkn_type_get(bstore_t bs, const char *typ_name, size_t nam
 
 typedef struct bsos_iter_s {
 	bstore_t bs;
-	int iter_type;
+	bstore_iter_type_t biter_type; /* bstore iter type */
+	/* extension */
+	int iter_type; /* internal iter type */
 	sos_iter_t iter;
-	uint64_t arg;
-	btkn_id_t tkn_id;
-	bptn_id_t ptn_id;
-	uint32_t bin_width;
-	uint32_t start;
-	uint64_t comp_id;
 	bmsg_cmp_fn_t cmp_fn;
+	struct bstore_iter_filter_s filter;
+	btkn_id_t ptn_tkn_id; /* used in ptn_tkn_iter */
 	void *cmp_ctxt;
 } *bsos_iter_t;
 
 typedef struct bsos_iter_pos_s {
 	struct bstore_iter_pos_s base;
 	int iter_type;
-	uint32_t bin_width;
-	uint32_t start;
-	union {
-		btkn_id_t comp_id;
-		btkn_id_t tkn_id;
-	};
-	bptn_id_t ptn_id;
-	uint64_t arg;
-	struct sos_pos sos_pos;
+	struct bstore_iter_filter_s filter;
+	btkn_id_t ptn_tkn_id;
+	sos_pos_t sos_pos;
 } *bsos_iter_pos_t;
 
-static bstore_iter_pos_t __iter_pos(bsos_iter_t iter)
+static bstore_iter_pos_t __iter_pos_get(bsos_iter_t iter)
 {
 	int rc;
 	size_t sz;
-	struct sos_pos *sos_pos;
+	sos_pos_t sos_pos;
 	struct bsos_iter_pos_s *pos;
 	if (!iter->iter)
 		goto err_0;
-	sos_pos = sos_iter_pos(iter->iter);
-	if (!sos_pos)
+	rc = sos_iter_pos_get(iter->iter, &sos_pos);
+	if (rc)
 		goto err_0;
-	sz = sizeof(*pos) + sos_pos->data_len;
+	sz = sizeof(*pos) + sizeof(sos_pos);
 	pos = malloc(sz);
 	if (!pos)
 		goto err_1;
+	pos->base.type = iter->biter_type;
 	pos->iter_type = iter->iter_type;
+	pos->filter = iter->filter;
 	switch (iter->iter_type) {
 	case TKN_ITER:
 	case PTN_ITER_ID:
 	case PTN_ITER_FIRST_SEEN:
-		/* do nothing */
-		break;
 	case MSG_ITER_PTN_TIME:
 	case MSG_ITER_COMP_TIME:
 	case MSG_ITER_TIME_COMP:
-		pos->start = iter->start;
-		pos->ptn_id = iter->ptn_id;
-		pos->comp_id = iter->comp_id;
-		break;
 	case PTN_TKN_ITER:
-		pos->arg = iter->arg;
-		pos->ptn_id = iter->ptn_id;
-		break;
 	case TKN_HIST_ITER:
-		pos->bin_width = iter->bin_width;
-		pos->start = iter->start;
-		pos->tkn_id = iter->tkn_id;
-		break;
 	case PTN_HIST_ITER:
-		pos->bin_width = iter->bin_width;
-		pos->start = iter->start;
-		pos->ptn_id = iter->ptn_id;
-		break;
 	case COMP_HIST_ITER:
-		pos->bin_width = iter->bin_width;
-		pos->start = iter->start;
-		pos->comp_id = iter->comp_id;
-		pos->ptn_id = iter->ptn_id;
 		break;
 	default:
 		assert(0 == "Unknown iterator type");
@@ -1133,65 +1158,29 @@ static bstore_iter_pos_t __iter_pos(bsos_iter_t iter)
 		goto err_2;
 	}
 	pos->base.data_len = sz - sizeof(pos->base);
-	memcpy(&pos->sos_pos, sos_pos, sos_pos_sz(sos_pos));
-	free(sos_pos);
+	memcpy(&pos->sos_pos, &sos_pos, sizeof(sos_pos));
 	return &pos->base;
 
  err_2:
 	free(pos);
  err_1:
-	free(sos_pos);
+	sos_iter_pos_put(iter->iter, sos_pos);
  err_0:
 	return NULL;
 }
 
 static int __iter_pos_set(bsos_iter_t iter, bsos_iter_pos_t pos)
 {
-	/* recovering the find parameters first */
-	switch (pos->iter_type) {
-	case TKN_ITER:
-	case PTN_ITER_ID:
-	case PTN_ITER_FIRST_SEEN:
-		/* do nothing */
-		break;
-	case MSG_ITER_PTN_TIME:
-	case MSG_ITER_COMP_TIME:
-	case MSG_ITER_TIME_COMP:
-		iter->start = pos->start;
-		iter->ptn_id = pos->ptn_id;
-		iter->comp_id = pos->comp_id;
-		break;
-	case PTN_TKN_ITER:
-		iter->arg = pos->arg;
-		iter->ptn_id = pos->ptn_id;
-		break;
-	case TKN_HIST_ITER:
-		iter->bin_width = pos->bin_width;
-		iter->start = pos->start;
-		iter->tkn_id = pos->tkn_id;
-		break;
-	case PTN_HIST_ITER:
-		iter->bin_width = pos->bin_width;
-		iter->start = pos->start;
-		iter->ptn_id = pos->ptn_id;
-		break;
-	case COMP_HIST_ITER:
-		iter->bin_width = pos->bin_width;
-		iter->start = pos->start;
-		iter->comp_id = pos->comp_id;
-		iter->ptn_id = pos->ptn_id;
-		break;
-	default:
-		assert(0 == "Unknown iterator type");
-		return EINVAL;
-	}
-	/* then, recover the iterator position */
-	return sos_iter_set(iter->iter, &pos->sos_pos);
+	sos_pos_t sos_pos = pos->sos_pos;
+	/* recovering the filter parameters first */
+	iter->filter = pos->filter;
+	free(pos); /* pos is a 1-time use */
+	return sos_iter_pos_set(iter->iter, sos_pos);
 }
 
-static bstore_iter_pos_t bs_tkn_iter_pos(btkn_iter_t iter)
+static bstore_iter_pos_t bs_tkn_iter_pos_get(btkn_iter_t iter)
 {
-	return __iter_pos((bsos_iter_t)iter);
+	return __iter_pos_get((bsos_iter_t)iter);
 }
 
 static int bs_tkn_iter_pos_set(btkn_iter_t iter, bstore_iter_pos_t _pos)
@@ -1204,16 +1193,30 @@ static int bs_tkn_iter_pos_set(btkn_iter_t iter, bstore_iter_pos_t _pos)
 	return __iter_pos_set(i, pos);
 }
 
+static void bs_tkn_iter_pos_free(btkn_iter_t iter, bstore_iter_pos_t _pos)
+{
+	bsos_iter_t i = (bsos_iter_t)iter;
+	struct bsos_iter_pos_s *pos = (typeof(pos))_pos;
+	if ((iter->type != _pos->type) || (i->iter_type != pos->iter_type)) {
+		assert(0 == "Iterator - Position type mismatch");
+		return;
+	}
+	sos_iter_pos_put(i->iter, pos->sos_pos);
+	free(pos);
+}
+
 static btkn_iter_t bs_tkn_iter_new(bstore_t bs)
 {
 	bstore_sos_t bss = (bstore_sos_t)bs;
 	bsos_iter_t ti = calloc(1, sizeof(*ti));
 	if (ti) {
 		ti->bs = bs;
+		ti->biter_type = BTKN_ITER;
 		ti->iter_type = TKN_ITER;
 		ti->iter = sos_attr_iter_new(bss->tkn_id_attr);
 		if (!ti->iter)
 			goto err;
+		sos_iter_flags_set(ti->iter, SOS_ITER_F_INF_LAST_DUP);
 	}
 	return (btkn_iter_t)ti;
  err:
@@ -1268,15 +1271,11 @@ static btkn_t __make_tkn(bstore_sos_t bss, sos_obj_t tkn_obj)
 	return NULL;
 }
 
-static btkn_t bs_tkn_iter_first(btkn_iter_t iter)
+static int bs_tkn_iter_first(btkn_iter_t iter)
 {
 	bsos_iter_t i = (bsos_iter_t)iter;
 	bstore_sos_t bss = (bstore_sos_t)i->bs;
-	int rc = sos_iter_begin(i->iter);
-	if (rc)
-		return NULL;
-
-	return __make_tkn(bss, sos_iter_obj(i->iter));
+	return sos_iter_begin(i->iter);
 }
 
 static btkn_t bs_tkn_iter_obj(btkn_iter_t iter)
@@ -1286,42 +1285,30 @@ static btkn_t bs_tkn_iter_obj(btkn_iter_t iter)
 	return __make_tkn(bss, sos_iter_obj(i->iter));
 }
 
-static btkn_t bs_tkn_iter_next(btkn_iter_t iter)
+static int bs_tkn_iter_next(btkn_iter_t iter)
 {
 	bsos_iter_t i = (bsos_iter_t)iter;
 	bstore_sos_t bss = (bstore_sos_t)i->bs;
-	int rc = sos_iter_next(i->iter);
-	if (rc)
-		return NULL;
-
-	return __make_tkn(bss, sos_iter_obj(i->iter));
+	return sos_iter_next(i->iter);
 }
 
-static btkn_t bs_tkn_iter_prev(btkn_iter_t iter)
+static int bs_tkn_iter_prev(btkn_iter_t iter)
 {
 	bsos_iter_t i = (bsos_iter_t)iter;
 	bstore_sos_t bss = (bstore_sos_t)i->bs;
-	int rc = sos_iter_prev(i->iter);
-	if (rc)
-		return NULL;
-
-	return __make_tkn(bss, sos_iter_obj(i->iter));
+	return sos_iter_prev(i->iter);
 }
 
-static btkn_t bs_tkn_iter_last(btkn_iter_t iter)
+static int bs_tkn_iter_last(btkn_iter_t iter)
 {
 	bsos_iter_t i = (bsos_iter_t)iter;
 	bstore_sos_t bss = (bstore_sos_t)i->bs;
-	int rc = sos_iter_end(i->iter);
-	if (rc)
-		return NULL;
-
-	return __make_tkn(bss, sos_iter_obj(i->iter));
+	return sos_iter_end(i->iter);
 }
 
-static bstore_iter_pos_t bs_ptn_iter_pos(bptn_iter_t iter)
+static bstore_iter_pos_t bs_ptn_iter_pos_get(bptn_iter_t iter)
 {
-	return __iter_pos((bsos_iter_t)iter);
+	return __iter_pos_get((bsos_iter_t)iter);
 }
 
 static int bs_ptn_iter_pos_set(bptn_iter_t iter, bstore_iter_pos_t _pos)
@@ -1353,8 +1340,39 @@ static int bs_ptn_iter_pos_set(bptn_iter_t iter, bstore_iter_pos_t _pos)
 	}
 	if (!i->iter)
 		return ENOENT;
+	sos_iter_flags_set(i->iter, SOS_ITER_F_INF_LAST_DUP);
  set_pos:
 	return __iter_pos_set(i, pos);
+}
+
+static void bs_ptn_iter_pos_free(btkn_iter_t iter, bstore_iter_pos_t _pos)
+{
+	bstore_sos_t bss = (bstore_sos_t)iter->bs;
+	sos_iter_t sos_iter;
+	struct bsos_iter_pos_s *pos = (typeof(pos))_pos;
+
+	if (iter->type != _pos->type) {
+		assert(0 == "Iterator - Position type mismatch");
+		return;
+	}
+
+	switch (pos->iter_type) {
+	case PTN_ITER_ID:
+		sos_iter = sos_attr_iter_new(bss->ptn_id_attr);
+		break;
+	case PTN_ITER_FIRST_SEEN:
+		sos_iter = sos_attr_iter_new(bss->first_seen_attr);
+		break;
+	default:
+		assert(0 == "Unknown bstore_sos ptn_iter type");
+		return;
+	}
+	if (!sos_iter) {
+		assert(0 == "Cannot allocate sos_iter");
+		return;
+	}
+	sos_iter_pos_put(sos_iter, pos->sos_pos);
+	free(pos);
 }
 
 static bptn_iter_t bs_ptn_iter_new(bstore_t bs)
@@ -1363,14 +1381,30 @@ static bptn_iter_t bs_ptn_iter_new(bstore_t bs)
 	bsos_iter_t pi = calloc(1, sizeof(*pi));
 	if (pi)
 		pi->bs = bs;
+	pi->biter_type = BPTN_ITER;
+	pi->iter_type = PTN_ITER_ID;
+	pi->iter = sos_attr_iter_new(bss->ptn_id_attr);
+	if (!pi->iter) {
+		free(pi);
+		return NULL;
+	}
+	sos_iter_flags_set(pi->iter, SOS_ITER_F_INF_LAST_DUP);
 	return (bptn_iter_t)pi;
 }
+
 static void bs_ptn_iter_free(bptn_iter_t i)
 {
 	bsos_iter_t pi = (bsos_iter_t)i;
 	if (pi->iter)
 		sos_iter_free(pi->iter);
 	free(i);
+}
+
+static int bs_ptn_iter_filter_set(bptn_iter_t i, bstore_iter_filter_t f)
+{
+	bsos_iter_t pi = (bsos_iter_t)i;
+	pi->filter = *f;
+	return 0;
 }
 
 static uint64_t bs_ptn_iter_card(bptn_iter_t i)
@@ -1394,8 +1428,8 @@ static bptn_t __make_ptn(bstore_sos_t bss, bsos_iter_t i, sos_obj_t ptn_obj)
 		return NULL;
 
 	sptn = sos_obj_ptr(ptn_obj);
-	if (i && i->ptn_id > 0) {
-		if (sptn->ptn_id != i->ptn_id)
+	if (i && i->filter.ptn_id > 0) {
+		if (sptn->ptn_id != i->filter.ptn_id)
 			goto out;
 	}
 	tkn_str = sos_value_init(&v_, ptn_obj, bss->tkn_type_ids_attr);
@@ -1507,76 +1541,74 @@ static int bs_ptn_find_by_ptnstr(bstore_t bs, bptn_t ptn)
 	return rc;
 }
 
-static bptn_t bs_ptn_iter_find(bptn_iter_t iter, time_t start)
+static int __matching_ptn(bptn_iter_t iter, int fwd)
 {
-	SOS_KEY(time_key);
-	ods_key_value_t kv = time_key->as.ptr;
+	bsos_iter_t i = (bsos_iter_t)iter;
+	ptn_t ptn;
+	sos_obj_t obj;
+	struct timeval tv;
+	int rc = 0;
+	int (*iter_step)(sos_iter_t);
+
+	if (!i->filter.tv_begin.tv_sec)
+		return 0; /* no filter for ptn_iter */
+
+	iter_step = fwd?sos_iter_next:sos_iter_prev;
+
+	for (;0 == rc; rc = iter_step(i->iter)) {
+		obj = sos_iter_obj(i->iter);
+		ptn = sos_obj_ptr(obj);
+		tv.tv_sec = ptn->first_seen.secs;
+		tv.tv_usec = ptn->first_seen.usecs;
+		if (timercmp(&i->filter.tv_begin, &tv, <=)) {
+			sos_obj_put(obj);
+			break;
+		}
+		sos_obj_put(obj);
+	}
+	return rc;
+}
+
+static int __bs_ptn_iter_find(bptn_iter_t iter, int fwd, bptn_id_t ptn_id)
+{
+	SOS_KEY(key);
+	ods_key_value_t kv = key->as.ptr;
 	struct sos_timestamp_s *first_seen;
+	bptn_id_t *_ptn_id;
 	bsos_iter_t i = (bsos_iter_t)iter;
 	bstore_sos_t bss = (bstore_sos_t)i->bs;
 	int rc;
-	i->start = start;
-	if (i->iter)
-		sos_iter_free(i->iter);
-	if (start > 0) {
-		i->iter_type = PTN_ITER_FIRST_SEEN;
-		i->iter = sos_attr_iter_new(bss->first_seen_attr);
-		if (!i->iter)
-			goto err;
-		first_seen = (struct sos_timestamp_s *)kv->value;
-		first_seen->secs = start;
-		first_seen->usecs = 0;
-		kv->len = 8;
-		rc = sos_iter_sup(i->iter, time_key);
-	} else {
-		i->iter_type = PTN_ITER_ID;
-		i->iter = sos_attr_iter_new(bss->ptn_id_attr);
-		if (!i->iter)
-			goto err;
-		rc = sos_iter_begin(i->iter);
-	}
+
+	_ptn_id = (void*)kv->value;
+	kv->len = sizeof(*_ptn_id);
+	*_ptn_id = fwd?ptn_id:(ptn_id?ptn_id:-1);
+	rc = fwd?sos_iter_sup(i->iter, key):sos_iter_inf(i->iter, key);
 	if (rc)
 		goto err;
+	return __matching_ptn(iter, fwd);
 
-	return __make_ptn(bss, i, sos_iter_obj(i->iter));
  err:
-	return NULL;
+	return rc;
 }
 
-static bptn_t bs_ptn_iter_first(bptn_iter_t iter)
+static int bs_ptn_iter_find_fwd(bptn_iter_t iter, bptn_id_t ptn_id)
 {
-	bsos_iter_t i = (bsos_iter_t)iter;
-	bstore_sos_t bss = (bstore_sos_t)i->bs;
-	int rc;
-	i->ptn_id = 0;
-	if (i->iter)
-		sos_iter_free(i->iter);
-	i->iter_type = PTN_ITER_ID;
-	i->iter = sos_attr_iter_new(bss->ptn_id_attr);
-	if (!i->iter)
-		return NULL;
-	rc = sos_iter_begin(i->iter);
-	if (rc)
-		return NULL;
-	return __make_ptn(bss, i, sos_iter_obj(i->iter));
+	return __bs_ptn_iter_find(iter, 1, ptn_id);
 }
 
-static bptn_t bs_ptn_iter_last(bptn_iter_t iter)
+static int bs_ptn_iter_find_rev(bptn_iter_t iter, bptn_id_t ptn_id)
 {
-	bsos_iter_t i = (bsos_iter_t)iter;
-	bstore_sos_t bss = (bstore_sos_t)i->bs;
-	int rc;
-	i->ptn_id = 0;
-	if (i->iter)
-		sos_iter_free(i->iter);
-	i->iter_type = PTN_ITER_ID;
-	i->iter = sos_attr_iter_new(bss->ptn_id_attr);
-	if (!i->iter)
-		return NULL;
-	rc = sos_iter_end(i->iter);
-	if (rc)
-		return NULL;
-	return __make_ptn(bss, i, sos_iter_obj(i->iter));
+	return __bs_ptn_iter_find(iter, 0, ptn_id);
+}
+
+static int bs_ptn_iter_first(bptn_iter_t iter)
+{
+	return __bs_ptn_iter_find(iter, 1, 0);
+}
+
+static int bs_ptn_iter_last(bptn_iter_t iter)
+{
+	return __bs_ptn_iter_find(iter, 0, 0);
 }
 
 static bptn_t bs_ptn_iter_obj(bptn_iter_t iter)
@@ -1586,31 +1618,29 @@ static bptn_t bs_ptn_iter_obj(bptn_iter_t iter)
 	return __make_ptn(bss, i, sos_iter_obj(i->iter));
 }
 
-static bptn_t bs_ptn_iter_next(bptn_iter_t iter)
+static int bs_ptn_iter_next(bptn_iter_t iter)
 {
 	bsos_iter_t i = (bsos_iter_t)iter;
 	bstore_sos_t bss = (bstore_sos_t)i->bs;
 	int rc = sos_iter_next(i->iter);
 	if (rc)
-		return NULL;
-
-	return __make_ptn(bss, i, sos_iter_obj(i->iter));
+		return rc;
+	return __matching_ptn(iter, 1);
 }
 
-static bptn_t bs_ptn_iter_prev(bptn_iter_t iter)
+static int bs_ptn_iter_prev(bptn_iter_t iter)
 {
 	bsos_iter_t i = (bsos_iter_t)iter;
 	bstore_sos_t bss = (bstore_sos_t)i->bs;
 	int rc = sos_iter_prev(i->iter);
 	if (rc)
-		return NULL;
-
-	return __make_ptn(bss, i, sos_iter_obj(i->iter));
+		return rc;
+	return __matching_ptn(iter, 0);
 }
 
-static bstore_iter_pos_t bs_ptn_tkn_iter_pos(bptn_tkn_iter_t iter)
+static bstore_iter_pos_t bs_ptn_tkn_iter_pos_get(bptn_tkn_iter_t iter)
 {
-	return __iter_pos((bsos_iter_t)iter);
+	return __iter_pos_get((bsos_iter_t)iter);
 }
 
 static int bs_ptn_tkn_iter_pos_set(bptn_tkn_iter_t iter, bstore_iter_pos_t _pos)
@@ -1625,22 +1655,37 @@ static int bs_ptn_tkn_iter_pos_set(bptn_tkn_iter_t iter, bstore_iter_pos_t _pos)
 	return __iter_pos_set(i, pos);
 }
 
+static void bs_ptn_tkn_iter_pos_free(bptn_tkn_iter_t iter, bstore_iter_pos_t _pos)
+{
+	bsos_iter_t i = (bsos_iter_t)iter;
+	struct bsos_iter_pos_s *pos = (typeof(pos))_pos;
+	if ((iter->type != _pos->type) || (i->iter_type != pos->iter_type)) {
+		assert(0 == "Iterator - Position type mismatch");
+		return;
+	}
+	sos_iter_pos_put(i->iter, pos->sos_pos);
+	free(pos);
+}
+
 static bptn_tkn_iter_t bs_ptn_tkn_iter_new(bstore_t bs)
 {
 	bstore_sos_t bss = (bstore_sos_t)bs;
 	bsos_iter_t pti = calloc(1, sizeof(*pti));
 	if (pti) {
 		pti->bs = bs;
+		pti->biter_type = BPTN_TKN_ITER;
 		pti->iter_type = PTN_TKN_ITER;
 		pti->iter = sos_attr_iter_new(bss->ptn_pos_tkn_key_attr);
 		if (!pti->iter)
 			goto err;
+		sos_iter_flags_set(pti->iter, SOS_ITER_F_INF_LAST_DUP);
 	}
 	return (bptn_tkn_iter_t)pti;
  err:
 	free(pti);
 	return NULL;
 }
+
 static void bs_ptn_tkn_iter_free(bptn_tkn_iter_t i)
 {
 	bsos_iter_t pti = (bsos_iter_t)i;
@@ -1655,14 +1700,9 @@ static uint64_t bs_ptn_tkn_iter_card(bptn_tkn_iter_t i)
 	return sos_iter_card(((bsos_iter_t)i)->iter);
 }
 
-struct msg_iter_pos_s {
-	int type;		/* ptn:time, comp:time, time:comp */
-	struct sos_pos pos;
-};
-
-static bstore_iter_pos_t bs_msg_iter_pos(bmsg_iter_t iter)
+static bstore_iter_pos_t bs_msg_iter_pos_get(bmsg_iter_t iter)
 {
-	return __iter_pos((bsos_iter_t)iter);
+	return __iter_pos_get((bsos_iter_t)iter);
 }
 
 static int bs_msg_iter_pos_set(bmsg_iter_t iter, bstore_iter_pos_t _pos)
@@ -1698,8 +1738,41 @@ static int bs_msg_iter_pos_set(bmsg_iter_t iter, bstore_iter_pos_t _pos)
 	}
 	if (!i->iter)
 		return ENOENT;
+	sos_iter_flags_set(i->iter, SOS_ITER_F_INF_LAST_DUP);
  set_pos:
 	return __iter_pos_set((bsos_iter_t)iter, pos);
+}
+
+static void bs_msg_iter_pos_free(btkn_iter_t iter, bstore_iter_pos_t _pos)
+{
+	bstore_sos_t bss = (bstore_sos_t)iter->bs;
+	sos_iter_t sos_iter;
+	struct bsos_iter_pos_s *pos = (typeof(pos))_pos;
+	if (iter->type != _pos->type) {
+		assert(0 == "Iterator - Position type mismatch");
+		return;
+	}
+	switch (pos->iter_type) {
+	case MSG_ITER_PTN_TIME:
+		sos_iter = sos_attr_iter_new(bss->pt_key_attr);
+		break;
+	case MSG_ITER_COMP_TIME:
+		sos_iter = sos_attr_iter_new(bss->ct_key_attr);
+		break;
+	case MSG_ITER_TIME_COMP:
+		sos_iter = sos_attr_iter_new(bss->tc_key_attr);
+		break;
+	default:
+		assert(0 == "Unknown bstore_sos message iterator type");
+		return;
+	}
+	if (!sos_iter) {
+		assert(0 == "Cannot allocate sos iterator");
+		return;
+	}
+	sos_iter_pos_put(sos_iter, pos->sos_pos);
+	sos_iter_free(sos_iter);
+	free(pos);
 }
 
 static bmsg_iter_t bs_msg_iter_new(bstore_t bs)
@@ -1708,6 +1781,7 @@ static bmsg_iter_t bs_msg_iter_new(bstore_t bs)
 	bsos_iter_t mi = calloc(1, sizeof(*mi));
 	if (mi)
 		mi->bs = bs;
+	mi->biter_type = BMSG_ITER;
 	return (bmsg_iter_t)mi;
 }
 
@@ -1795,21 +1869,33 @@ static sos_obj_t __next_matching_msg(int rc, bsos_iter_t i, int forwards)
 	msg_t msg;
 	uint64_t msg_ptn, msg_time, msg_comp;
 	sos_obj_t obj;
+	struct timeval tv;
 
 	for (;0 == rc; rc = (forwards ? sos_iter_next(i->iter) : sos_iter_prev(i->iter))) {
 		obj = sos_iter_obj(i->iter);
 		msg = sos_obj_ptr(obj);
 		msg_ptn = be64toh(msg->pt_key.ptn_id);
 		msg_time = be64toh(msg->pt_key.usecs);
+		tv.tv_sec = msg_time / 1000000;
+		tv.tv_usec = msg_time % 1000000;
 		msg_comp = be64toh(msg->ct_key.comp_id);
 
 		/* ptn_id specified and doesn't match, exit */
-		if (i->ptn_id) {
+		if (i->filter.ptn_id) {
 			/* We're using the pt_msg_key index */
-			if (i->ptn_id != msg_ptn)
+			if (i->filter.ptn_id != msg_ptn)
 				goto enoent;
+
+			if (i->filter.tv_begin.tv_sec &&
+					timercmp(&tv, &i->filter.tv_begin, <))
+				goto enoent;
+
+			if (i->filter.tv_end.tv_sec &&
+					timercmp(&i->filter.tv_end, &tv, <))
+				goto enoent;
+
 			/* Skip component id's that don't match */
-			if (i->comp_id && (i->comp_id != msg_comp)) {
+			if (i->filter.comp_id && (i->filter.comp_id != msg_comp)) {
 				sos_obj_put(obj);
 				continue;
 			} else {
@@ -1817,28 +1903,38 @@ static sos_obj_t __next_matching_msg(int rc, bsos_iter_t i, int forwards)
 				break;
 			}
 		}
-		if (i->comp_id && (i->comp_id != msg_comp)) {
-			/* We're using the ct_msg_key index. If comp_id doesn't match,
-			 * we've completed the iteration
+
+		if (i->filter.comp_id && (i->filter.comp_id != msg_comp)) {
+			/* We're using the ct_msg_key index. If comp_id doesn't
+			 * match, we've completed the iteration
 			 */
 			goto enoent;
 		}
+
+		if (i->filter.tv_begin.tv_sec &&
+				timercmp(&tv, &i->filter.tv_begin, <))
+			goto enoent;
+
+		if (i->filter.tv_end.tv_sec &&
+				timercmp(&i->filter.tv_end, &tv, <))
+			goto enoent;
 
 		/* We're using the tc_msg_key index, return the message */
 		break;
 	}
 	if (!rc)
 		return obj;
+	errno = rc;
 	return NULL;
  enoent:
+	errno = ENOENT;
 	sos_obj_put(obj);
 	return NULL;
 }
 
-static bmsg_t
-bs_msg_iter_find(bmsg_iter_t iter,
-		 time_t start, bptn_id_t ptn_id, bcomp_id_t comp_id,
-		 bmsg_cmp_fn_t cmp_fn, void *ctxt)
+static int
+__bs_msg_iter_find(bmsg_iter_t iter, int fwd, const struct timeval *tv,
+		     bcomp_id_t comp_id, bptn_id_t ptn_id)
 {
 	int rc;
 	sos_obj_t obj = NULL;
@@ -1852,99 +1948,79 @@ bs_msg_iter_find(bmsg_iter_t iter,
 	bsos_iter_t i = (bsos_iter_t)iter;
 	bstore_sos_t bss = (bstore_sos_t)i->bs;
 
-	if (i->iter)
-		sos_iter_free(i->iter);
-
-	usecs = (uint64_t)start * 1000000;
-	i->ptn_id = ptn_id;
-	i->start = usecs;
-	i->comp_id = comp_id;
-	i->cmp_fn = cmp_fn;
-	i->cmp_ctxt = ctxt;
-
-	if (ptn_id) {
-		i->iter_type = MSG_ITER_PTN_TIME;
-		i->iter = sos_attr_iter_new(bss->pt_key_attr);
-		if (!i->iter)
+	if (!i->iter) {
+		i->iter_type = MSG_ITER_TIME_COMP;
+		i->iter = sos_attr_iter_new(bss->tc_key_attr);
+		if (!i->iter) {
+			rc = errno;
 			goto err;
+		}
+		sos_iter_flags_set(i->iter, SOS_ITER_F_INF_LAST_DUP);
+	}
+
+	tv = (tv)?(tv):((fwd)?(&i->filter.tv_begin):(&i->filter.tv_end));
+	usecs = tv->tv_sec * 1000000 + tv->tv_usec;
+	ptn_id = (ptn_id)?(ptn_id):(i->filter.ptn_id);
+	comp_id = (comp_id)?(comp_id):(i->filter.comp_id);
+	if (!fwd) {
+		/* set default key to max for reverse find */
+		if (!usecs)
+			usecs = -1;
+		if (!ptn_id)
+			ptn_id = -1;
+		if (!comp_id)
+			comp_id = -1;
+	}
+
+	switch (i->iter_type) {
+	case MSG_ITER_PTN_TIME:
 		pt_key = (struct pt_msg_key *)kv->value;
 		pt_key->ptn_id = htobe64(ptn_id);
 		pt_key->usecs = htobe64(usecs);
-	} else if (comp_id) {
-		i->iter_type = MSG_ITER_COMP_TIME;
-		i->iter = sos_attr_iter_new(bss->ct_key_attr);
-		if (!i->iter)
-			goto err;
+		break;
+	case MSG_ITER_COMP_TIME:
 		ct_key = (struct ct_msg_key *)kv->value;
 		ct_key->comp_id = htobe64(comp_id);
 		ct_key->usecs = htobe64(usecs);
-	} else {
-		i->iter_type = MSG_ITER_TIME_COMP;
-		i->iter = sos_attr_iter_new(bss->tc_key_attr);
-		if (!i->iter)
-			goto err;
+		break;
+	case MSG_ITER_TIME_COMP:
 		tc_key = (struct tc_msg_key *)kv->value;
 		tc_key->usecs = htobe64(usecs);
 		tc_key->comp_id = htobe64(comp_id);
+		break;
+	default:
+		assert(0 == "BAD ITER_TYPE");
+		rc = EINVAL;
+		goto err;
 	}
+
 	kv->len = 16;
 
-	rc = sos_iter_sup(i->iter, msg_key);
-	obj = __next_matching_msg(rc, i, 1);
-	if (obj)
-		return __make_msg(bss, i, obj);
+	rc = (fwd)?(sos_iter_sup(i->iter, msg_key)):
+		   (sos_iter_inf(i->iter, msg_key));
+	obj = __next_matching_msg(rc, i, fwd);
+	if (!obj) {
+		rc = ENOENT;
+		goto err;
+	}
+	sos_obj_put(obj);
+	return 0;
  err:
-	return NULL;
+	return rc;
 }
 
-static bmsg_t
-bs_msg_iter_first(bmsg_iter_t iter)
+static int
+bs_msg_iter_find_fwd(bmsg_iter_t iter, const struct timeval *tv,
+		     bcomp_id_t comp_id, bptn_id_t ptn_id)
 {
-	int rc;
-	bsos_iter_t i = (bsos_iter_t)iter;
-	bstore_sos_t bss = (bstore_sos_t)i->bs;
-
-	i->ptn_id = 0;
-	i->start = 0;
-	i->comp_id = 0;
-	i->cmp_fn = NULL;
-	i->cmp_ctxt = 0;
-
-	if (i->iter)
-		sos_iter_free(i->iter);
-	i->iter_type = MSG_ITER_TIME_COMP;
-	i->iter = sos_attr_iter_new(bss->tc_key_attr);
-	if (!i->iter)
-		return NULL;
-	rc = sos_iter_begin(i->iter);
-	if (rc)
-		return NULL;
-	return __make_msg(bss, i, sos_iter_obj(i->iter));
+	return __bs_msg_iter_find(iter, 1, tv, comp_id, ptn_id);
 }
 
-static bmsg_t
-bs_msg_iter_last(bmsg_iter_t iter)
+static int
+bs_msg_iter_find_rev(bmsg_iter_t iter, const struct timeval *tv,
+		     bcomp_id_t comp_id, bptn_id_t ptn_id)
 {
-	int rc;
-	bsos_iter_t i = (bsos_iter_t)iter;
-	bstore_sos_t bss = (bstore_sos_t)i->bs;
-
-	i->ptn_id = 0;
-	i->start = 0;
-	i->comp_id = 0;
-	i->cmp_fn = NULL;
-	i->cmp_ctxt = 0;
-
-	if (i->iter)
-		sos_iter_free(i->iter);
-	i->iter_type = MSG_ITER_TIME_COMP;
-	i->iter = sos_attr_iter_new(bss->tc_key_attr);
-	if (!i->iter)
-		return NULL;
-	rc = sos_iter_end(i->iter);
-	if (rc)
-		return NULL;
-	return __make_msg(bss, i, sos_iter_obj(i->iter));
+	return __bs_msg_iter_find(iter, 0, tv, comp_id, ptn_id);
 }
 
 static bmsg_t bs_msg_iter_obj(bmsg_iter_t iter)
@@ -1957,7 +2033,12 @@ static bmsg_t bs_msg_iter_obj(bmsg_iter_t iter)
 	return NULL;
 }
 
-static bmsg_t bs_msg_iter_next(bmsg_iter_t iter)
+static int bs_msg_iter_first(bmsg_iter_t iter)
+{
+	return bs_msg_iter_find_fwd(iter, NULL, 0, 0);
+}
+
+static int bs_msg_iter_next(bmsg_iter_t iter)
 {
 	sos_obj_t obj;
 	bsos_iter_t i = (bsos_iter_t)iter;
@@ -1965,14 +2046,16 @@ static bmsg_t bs_msg_iter_next(bmsg_iter_t iter)
 	int rc;
 	rc = sos_iter_next(i->iter);
 	if (rc)
-		return NULL;
+		return rc;
 	obj = __next_matching_msg(rc, i, 1);
-	if (obj)
-		return __make_msg(bss, i, obj);
-	return NULL;
+	if (obj) {
+		sos_obj_put(obj);
+		return 0;
+	}
+	return errno;
 }
 
-static bmsg_t bs_msg_iter_prev(bmsg_iter_t iter)
+static int bs_msg_iter_prev(bmsg_iter_t iter)
 {
 	sos_obj_t obj;
 	bsos_iter_t i = (bsos_iter_t)iter;
@@ -1980,11 +2063,66 @@ static bmsg_t bs_msg_iter_prev(bmsg_iter_t iter)
 	int rc;
 	rc = sos_iter_prev(i->iter);
 	if (rc)
-		return NULL;
+		return rc;
 	obj = __next_matching_msg(rc, i, 0);
-	if (obj)
-		return __make_msg(bss, i, obj);
-	return NULL;
+	if (obj) {
+		sos_obj_put(obj);
+		return 0;
+	}
+	return errno;
+}
+
+static int bs_msg_iter_last(bmsg_iter_t iter)
+{
+	return bs_msg_iter_find_rev(iter, NULL, 0, 0);
+}
+
+int bs_msg_iter_filter_set(bmsg_iter_t iter, bstore_iter_filter_t filter)
+{
+	int rc;
+	bsos_iter_t i = (bsos_iter_t)iter;
+	bstore_sos_t bss = (bstore_sos_t)i->bs;
+	int new_type;
+
+	i->filter = *filter;
+
+	if (filter->ptn_id) {
+		new_type = MSG_ITER_PTN_TIME;
+	} else if (filter->comp_id) {
+		new_type = MSG_ITER_COMP_TIME;
+	} else {
+		new_type = MSG_ITER_TIME_COMP;
+	}
+
+	if (i->iter && i->iter_type == new_type) {
+		/* same iterator type, we can use the existing iterator */
+		goto out;
+	}
+
+	sos_attr_t attr;
+	if (i->iter) {
+		/* i->iter can be NULL here */
+		sos_iter_free(i->iter);
+	}
+	switch (new_type) {
+	case MSG_ITER_PTN_TIME:
+		attr = bss->pt_key_attr;
+		break;
+	case MSG_ITER_COMP_TIME:
+		attr = bss->ct_key_attr;
+		break;
+	case MSG_ITER_TIME_COMP:
+		attr = bss->tc_key_attr;
+		break;
+	}
+	i->iter_type = new_type;
+	i->iter = sos_attr_iter_new(attr);
+	if (!i->iter) {
+		return errno;
+	}
+	sos_iter_flags_set(i->iter, SOS_ITER_F_INF_LAST_DUP);
+out:
+	return 0;
 }
 
 /**
@@ -2326,6 +2464,37 @@ static int bs_ptn_tkn_add(bstore_t bs, bptn_id_t ptn_id, uint64_t tkn_pos,
 	return rc;
 }
 
+static int __bs_static_ptn_tkn_rc(bstore_t bs, bptn_id_t ptn_id,
+				  uint64_t tkn_pos, btkn_id_t *tkn_id)
+{
+	btkn_t tkn;
+	bptn_t ptn = NULL;
+	btkn_type_t tkn_type;
+	btkn_id_t _tkn_id;
+
+	ptn = bs_ptn_find(bs, ptn_id);
+	if (!ptn)
+		return EINVAL;
+
+	tkn_type = ptn->str->u64str[tkn_pos] & 0xFF;
+	_tkn_id = ptn->str->u64str[tkn_pos] >> 8;
+	bptn_free(ptn);
+
+	if (btkn_type_is_wildcard(tkn_type)) {
+		return ENOKEY;
+	}
+
+	/* non-wildcard */
+
+	if (*tkn_id && _tkn_id != *tkn_id) {
+		return ENOENT;
+	}
+
+	*tkn_id = _tkn_id;
+
+	return 0;
+}
+
 /*
  * \retval tkn if the tkn at the tkn_pos is not a wildcard and the tkn_id is
  *         matched (if given).
@@ -2551,6 +2720,24 @@ static int bs_msg_add(bstore_t bs, struct timeval *tv, bmsg_t msg)
 	return rc;
 }
 
+static int __ptn_tkn_iter_check(bsos_iter_t i)
+{
+	sos_key_t key;
+	bptn_id_t ptn_id;
+	uint64_t tkn_pos;
+	ptn_pos_tkn_t ppt;
+	key = sos_iter_key(i->iter);
+	if (!key)
+		return errno;
+	ppt = (void*)sos_key_value(key);
+	ptn_id = be64toh(ppt->key.ptn_id);
+	tkn_pos = be64toh(ppt->key.pos);
+	sos_key_put(key);
+	if ((tkn_pos != i->filter.tkn_pos) || (ptn_id != i->filter.ptn_id))
+		return ENOENT;
+	return 0;
+}
+
 static btkn_t make_ptn_tkn(bsos_iter_t i)
 {
 	bstore_sos_t bss = (bstore_sos_t)i->bs;
@@ -2573,7 +2760,7 @@ static btkn_t make_ptn_tkn(bsos_iter_t i)
 	tkn_id_ = be64toh(ppt_o->key.tkn_id);
 	sos_key_put(key_o);
 
-	if ((tkn_pos_ != i->arg) || (ptn_id_ != i->ptn_id))
+	if ((tkn_pos_ != i->filter.tkn_pos) || (ptn_id_ != i->filter.ptn_id))
 		goto out;
 
 	tkn = bs_tkn_find_by_id(i->bs, tkn_id_);
@@ -2585,8 +2772,16 @@ static btkn_t make_ptn_tkn(bsos_iter_t i)
 	return NULL;
 }
 
-static btkn_t bs_ptn_tkn_iter_find(bptn_tkn_iter_t iter,
-				   bptn_id_t ptn_id, uint64_t tkn_pos)
+static btkn_t bs_ptn_tkn_iter_obj(bptn_tkn_iter_t iter)
+{
+	bsos_iter_t i = (bsos_iter_t)iter;
+	if (i->ptn_tkn_id)
+		return __bs_static_ptn_tkn(iter->bs, i->filter.ptn_id,
+					   i->filter.tkn_pos, i->ptn_tkn_id);
+	return make_ptn_tkn(i);
+}
+
+static int bs_ptn_tkn_iter_first(bptn_tkn_iter_t iter)
 {
 	bsos_iter_t i = (bsos_iter_t)iter;
 	bstore_sos_t bss = (bstore_sos_t)i->bs;
@@ -2594,67 +2789,82 @@ static btkn_t bs_ptn_tkn_iter_find(bptn_tkn_iter_t iter,
 	ods_key_value_t kv = key->as.ptr;
 	ptn_pos_tkn_t ppt_k = (ptn_pos_tkn_t)kv->value;
 	int rc;
-	btkn_t tkn;
 
-	ppt_k->key.ptn_id = htobe64(ptn_id);
-	ppt_k->key.pos = htobe64(tkn_pos);
+	/* Check if this position is not a wild card */
+	i->ptn_tkn_id = 0;
+	rc = __bs_static_ptn_tkn_rc(iter->bs, i->filter.ptn_id,
+				    i->filter.tkn_pos, &i->ptn_tkn_id);
+	if (rc == 0) {
+		/* static non-wildcard ptn_tkn */
+		return 0;
+	}
+	if (rc != ENOKEY) /* expect ENOKEY if !tkn */
+		return rc;
+	ppt_k->key.ptn_id = htobe64(i->filter.ptn_id);
+	ppt_k->key.pos = htobe64(i->filter.tkn_pos);
 	ppt_k->key.tkn_id = 0;
 	kv->len = sizeof(ppt_k->key);
 
-	i->ptn_id = ptn_id;
-	i->arg = tkn_pos;
-	i->tkn_id = 0;
-
-	tkn = __bs_static_ptn_tkn(iter->bs, ptn_id, tkn_pos, 0);
-	if (tkn) {
-		/* static non-wildcard ptn_tkn */
-		i->tkn_id = tkn->tkn_id;
-		return tkn;
-	}
-	if (errno != ENOKEY) /* expect ENOKEY if !tkn */
-		return NULL;
-
 	rc = sos_iter_sup(i->iter, key);
-	if (!rc)
-		return make_ptn_tkn(i);
-	return NULL;
+	return __ptn_tkn_iter_check(i);
 }
 
-static btkn_t bs_ptn_tkn_iter_obj(bptn_tkn_iter_t iter)
+static int bs_ptn_tkn_iter_last(bptn_tkn_iter_t iter)
 {
 	bsos_iter_t i = (bsos_iter_t)iter;
-	if (i->tkn_id)
-		return __bs_static_ptn_tkn(iter->bs, i->ptn_id, i->arg, 0);
-	return make_ptn_tkn(i);
+	bstore_sos_t bss = (bstore_sos_t)i->bs;
+	SOS_KEY(key);
+	ods_key_value_t kv = key->as.ptr;
+	ptn_pos_tkn_t ppt_k = (ptn_pos_tkn_t)kv->value;
+	int rc;
+
+	/* Check if this position is not a wild card */
+	i->ptn_tkn_id = 0;
+	rc = __bs_static_ptn_tkn_rc(iter->bs, i->filter.ptn_id,
+				    i->filter.tkn_pos, &i->ptn_tkn_id);
+	if (rc == 0) {
+		/* static non-wildcard ptn_tkn */
+		return 0;
+	}
+	if (rc != ENOKEY) /* expect ENOKEY if !tkn */
+		return rc;
+
+	ppt_k->key.ptn_id = htobe64(i->filter.ptn_id);
+	ppt_k->key.pos = htobe64(i->filter.tkn_pos);
+	ppt_k->key.tkn_id = -1;
+	kv->len = sizeof(ppt_k->key);
+
+	rc = sos_iter_inf(i->iter, key);
+	return __ptn_tkn_iter_check(i);
 }
 
-static btkn_t bs_ptn_tkn_iter_next(bptn_tkn_iter_t iter)
+static int bs_ptn_tkn_iter_next(bptn_tkn_iter_t iter)
 {
 	bsos_iter_t i = (bsos_iter_t)iter;
 	int rc;
-	if (i->tkn_id) /* this is non-wildcard ptn_tkn */
-		return NULL;
+	if (i->ptn_tkn_id) /* this is non-wildcard ptn_tkn */
+		return ENOENT;
 	rc = sos_iter_next(i->iter);
-	if (!rc)
-		return make_ptn_tkn(i);
-	return NULL;
+	if (rc)
+		return rc;
+	return __ptn_tkn_iter_check(i);
 }
 
-static btkn_t bs_ptn_tkn_iter_prev(bptn_tkn_iter_t iter)
+static int bs_ptn_tkn_iter_prev(bptn_tkn_iter_t iter)
 {
 	bsos_iter_t i = (bsos_iter_t)iter;
 	int rc;
-	if (i->tkn_id) /* this is non-wildcard ptn_tkn */
-		return NULL;
+	if (i->ptn_tkn_id) /* this is non-wildcard ptn_tkn */
+		return ENOENT;
 	rc = sos_iter_prev(i->iter);
-	if (!rc)
-		return make_ptn_tkn(i);
-	return NULL;
+	if (rc)
+		return rc;
+	return __ptn_tkn_iter_check(i);
 }
 
-static bstore_iter_pos_t bs_tkn_hist_iter_pos(btkn_hist_iter_t iter)
+static bstore_iter_pos_t bs_tkn_hist_iter_pos_get(btkn_hist_iter_t iter)
 {
-	return __iter_pos((bsos_iter_t)iter);
+	return __iter_pos_get((bsos_iter_t)iter);
 }
 
 static int bs_tkn_hist_iter_pos_set(btkn_hist_iter_t iter, bstore_iter_pos_t _pos)
@@ -2667,16 +2877,30 @@ static int bs_tkn_hist_iter_pos_set(btkn_hist_iter_t iter, bstore_iter_pos_t _po
 	return __iter_pos_set(i, pos);
 }
 
+static void bs_tkn_hist_iter_pos_free(btkn_hist_iter_t iter, bstore_iter_pos_t _pos)
+{
+	bsos_iter_t i = (bsos_iter_t)iter;
+	struct bsos_iter_pos_s *pos = (typeof(pos))_pos;
+	if ((iter->type != _pos->type) || (i->iter_type != pos->iter_type)) {
+		assert(0 == "Iterator - Position type mismatch");
+		return;
+	}
+	sos_iter_pos_put(i->iter, pos->sos_pos);
+	free(pos);
+}
+
 btkn_hist_iter_t bs_tkn_hist_iter_new(bstore_t bs)
 {
 	bstore_sos_t bss = (bstore_sos_t)bs;
 	bsos_iter_t thi = calloc(1, sizeof(*thi));
 	if (thi) {
 		thi->bs = bs;
+		thi->biter_type = BTKN_HIST_ITER;
 		thi->iter_type = TKN_HIST_ITER;
 		thi->iter = sos_attr_iter_new(bss->tkn_hist_key_attr);
 		if (!thi->iter)
 			goto err;
+		sos_iter_flags_set(thi->iter, SOS_ITER_F_INF_LAST_DUP);
 	}
 	return (btkn_hist_iter_t)thi;
  err:
@@ -2692,101 +2916,91 @@ static void bs_tkn_hist_iter_free(btkn_hist_iter_t i)
 	free(i);
 }
 
-int tkn_hist_match(bsos_iter_t i, tkn_hist_t tkn_o)
-{
-	if ((i->tkn_id && (i->tkn_id != tkn_o->key.tkn_id))
-	    || (i->bin_width && (i->bin_width != tkn_o->key.bin_width))) {
-		return 0;
-	}
-	return 1;
-}
-
 /*
  * Index order is:
  * - bin-width
  * - timestamp
  * - token id
  */
-static btkn_hist_t tkn_hist_next(bsos_iter_t i, btkn_hist_t tkn_h)
+static int __tkn_hist_next(bsos_iter_t i)
 {
 	int rc = 0;
-	tkn_hist_t tkn_o;
+	struct tkn_hist_s tkn_s;
 	sos_key_t key_o = sos_iter_key(i->iter);
-	time_t hist_time;
-	time_t start_time = be32toh(i->start);
+	time_t start_time = i->filter.tv_begin.tv_sec;
+	time_t end_time = i->filter.tv_end.tv_sec;
 	sos_obj_ref_t ref;
 	for ( ; 0 == rc;
 	      sos_key_put(key_o),
 		      key_o = (0 == (rc = sos_iter_next(i->iter))?sos_iter_key(i->iter):NULL)) {
 
-		tkn_o = (tkn_hist_t)sos_key_value(key_o);
-		if (i->bin_width && (i->bin_width != tkn_o->key.bin_width))
+		/* copy-out tkn_s value and convert BE-to-host*/
+		tkn_s = *(tkn_hist_t)sos_key_value(key_o);
+		tkn_hist_betoh(&tkn_s);
+
+		if (i->filter.bin_width &&
+				(i->filter.bin_width != tkn_s.key.bin_width))
 			/* Bin width doesn't match, no more matches */
 			break;
 
-		hist_time = be32toh(tkn_o->key.time);
-		if (start_time && start_time > hist_time)
+		if ((start_time && tkn_s.key.time < start_time) ||
+				(end_time && end_time <  tkn_s.key.time))
 			/* Time doesn't match, no more matches */
 			break;
 
-		if (i->tkn_id && (i->tkn_id != tkn_o->key.tkn_id))
+		if (i->filter.tkn_id && (i->filter.tkn_id != tkn_s.key.tkn_id))
 			/* tkn id doesn't match, keep looking */
 			continue;
 
-		/* Everything matches, return it */
-		tkn_h->tkn_id = be64toh(tkn_o->key.tkn_id);
-		tkn_h->bin_width = be32toh(tkn_o->key.bin_width);
-		tkn_h->time = be32toh(tkn_o->key.time);
-		ref = sos_iter_ref(i->iter);
-		tkn_h->tkn_count = ref.idx_data.uint64_[1];
-		return tkn_h;
+		/* Everything matches */
+		sos_key_put(key_o);
+		return 0;
 	}
 	if (key_o)
 		sos_key_put(key_o);
-	return NULL;
+	return ENOENT;
 }
 
-static btkn_hist_t tkn_hist_prev(bsos_iter_t i, btkn_hist_t tkn_h)
+static int __tkn_hist_prev(bsos_iter_t i)
 {
 	int rc = 0;
-	tkn_hist_t tkn_o;
+	struct tkn_hist_s tkn_s;
 	sos_key_t key_o = sos_iter_key(i->iter);
-	time_t hist_time;
-	time_t start_time = be32toh(i->start);
+	time_t start_time = i->filter.tv_begin.tv_sec;
+	time_t end_time = i->filter.tv_end.tv_sec;
 	sos_obj_ref_t ref;
 	for ( ; 0 == rc;
 	      sos_key_put(key_o),
 		      key_o = (0 == (rc = sos_iter_prev(i->iter))?sos_iter_key(i->iter):NULL)) {
 
-		tkn_o = (tkn_hist_t)sos_key_value(key_o);
-		if (i->bin_width && (i->bin_width != tkn_o->key.bin_width))
+		tkn_s = *(tkn_hist_t)sos_key_value(key_o);
+		tkn_hist_betoh(&tkn_s);
+
+		if (i->filter.bin_width &&
+				(i->filter.bin_width != tkn_s.key.bin_width))
 			/* Bin width doesn't match, no more matches */
 			break;
 
-		hist_time = be32toh(tkn_o->key.time);
-		if (start_time && start_time < hist_time)
+		if ((start_time && tkn_s.key.time < start_time) ||
+				(end_time && end_time < tkn_s.key.time))
 			/* Time doesn't match, no more matches */
 			break;
 
-		if (i->tkn_id && (i->tkn_id != tkn_o->key.tkn_id))
+		if (i->filter.tkn_id && (i->filter.tkn_id != tkn_s.key.tkn_id))
 			/* tkn id doesn't match, keep looking */
 			continue;
 
-		/* Everything matches, return it */
-		tkn_h->tkn_id = be64toh(tkn_o->key.tkn_id);
-		tkn_h->bin_width = be32toh(tkn_o->key.bin_width);
-		tkn_h->time = be32toh(tkn_o->key.time);
-		ref = sos_iter_ref(i->iter);
-		tkn_h->tkn_count = ref.idx_data.uint64_[1];
-		return tkn_h;
+		/* Everything matches */
+		sos_key_put(key_o);
+		return 0;
 	}
 	if (key_o)
 		sos_key_put(key_o);
-	return NULL;
+	return ENOENT;
 }
 
-static btkn_hist_t
-bs_tkn_hist_iter_find(btkn_hist_iter_t iter, btkn_hist_t tkn_h)
+static int
+__bs_tkn_hist_iter_find(btkn_hist_iter_t iter, int fwd, btkn_hist_t tkn_h)
 {
 	bstore_sos_t bss = (bstore_sos_t)iter->bs;
 	bsos_iter_t i = (bsos_iter_t)iter;
@@ -2794,84 +3008,124 @@ bs_tkn_hist_iter_find(btkn_hist_iter_t iter, btkn_hist_t tkn_h)
 	ods_key_value_t hist_k = key->as.ptr;
 	tkn_hist_t tkn_k = (tkn_hist_t)hist_k->value;
 	sos_obj_t hist_o;
+	int (*iter_fn)(sos_iter_t, sos_key_t);
+	int (*step_fn)(bsos_iter_t);
 	int rc;
 
-	i->tkn_id = htobe64(tkn_h->tkn_id);
-	i->bin_width = htobe32(tkn_h->bin_width);
-	i->start = htobe32(clamp_time_to_bin(tkn_h->time, tkn_h->bin_width));
+	if (fwd) {
+		iter_fn = sos_iter_sup;
+		step_fn = __tkn_hist_next;
+	} else {
+		iter_fn = sos_iter_inf;
+		step_fn = __tkn_hist_prev;
+	}
 
-	tkn_k->key.tkn_id = i->tkn_id;
-	tkn_k->key.bin_width = i->bin_width;
-	tkn_k->key.time = i->start;
+	tkn_k->key.tkn_id = (tkn_h->tkn_id)?(tkn_h->tkn_id):(i->filter.tkn_id);
+	tkn_k->key.bin_width = (tkn_h->bin_width)?(tkn_h->bin_width)
+						 :(i->filter.bin_width);
+	tkn_k->key.time = (tkn_h->time)?(tkn_h->time)
+				       :((fwd)?(i->filter.tv_begin.tv_sec)
+					      :(i->filter.tv_end.tv_sec));
+	tkn_hist_htobe(tkn_k);
+	if (!fwd) {
+		if (!tkn_k->key.tkn_id)
+			tkn_k->key.tkn_id = -1;
+		if (!tkn_k->key.bin_width)
+			tkn_k->key.bin_width = -1;
+		if (!tkn_k->key.time)
+			tkn_k->key.time = -1;
+	}
 	hist_k->len = sizeof(tkn_k->key);
 
-	rc = sos_iter_sup(i->iter, key);
+	rc = iter_fn(i->iter, key);
 	if (rc)
-		return NULL;
-
-	return tkn_hist_next(i, tkn_h);
-}
-static btkn_hist_t
-bs_tkn_hist_iter_last(btkn_hist_iter_t iter, btkn_hist_t tkn_h)
-{
-	bstore_sos_t bss = (bstore_sos_t)iter->bs;
-	bsos_iter_t i = (bsos_iter_t)iter;
-	SOS_KEY(key);
-	ods_key_value_t hist_k = key->as.ptr;
-	tkn_hist_t tkn_k = (tkn_hist_t)hist_k->value;
-	sos_obj_t hist_o;
-	int rc;
-
-	i->tkn_id = htobe64(tkn_h->tkn_id);
-	i->bin_width = htobe32(tkn_h->bin_width);
-	i->start = htobe32(clamp_time_to_bin(tkn_h->time, tkn_h->bin_width));
-
-	tkn_k->key.tkn_id = (i->tkn_id)?(i->tkn_id):(-1);
-	tkn_k->key.bin_width = i->bin_width;
-	tkn_k->key.time = (i->start)?(i->start):(-1);
-	hist_k->len = sizeof(tkn_k->key);
-
-	rc = sos_iter_inf(i->iter, key);
-	if (rc)
-		return NULL;
-
-	return tkn_hist_prev(i, tkn_h);
+		return rc;
+	return step_fn(i);
 }
 
-static btkn_hist_t bs_tkn_hist_iter_first(btkn_hist_iter_t iter, btkn_hist_t tkn_h)
+static int
+bs_tkn_hist_iter_find_fwd(btkn_hist_iter_t iter, btkn_hist_t tkn_h)
 {
-	bstore_sos_t bss = (bstore_sos_t)iter->bs;
+	return __bs_tkn_hist_iter_find(iter, 1, tkn_h);
+}
+
+static int
+bs_tkn_hist_iter_find_rev(btkn_hist_iter_t iter, btkn_hist_t tkn_h)
+{
+	return __bs_tkn_hist_iter_find(iter, 0, tkn_h);
+}
+
+static int
+bs_tkn_hist_iter_last(btkn_hist_iter_t iter)
+{
 	bsos_iter_t i = (bsos_iter_t)iter;
-	int rc;
+	struct btkn_hist_s hist = {
+		.bin_width = i->filter.bin_width,
+		.time = i->filter.tv_end.tv_sec,
+		.tkn_id = i->filter.tkn_id,
+	};
+	return bs_tkn_hist_iter_find_rev(iter, &hist);
+}
 
-	rc = sos_iter_begin(i->iter);
-	if (rc)
-		return NULL;
-
-	return tkn_hist_next(i, tkn_h);
+static int bs_tkn_hist_iter_first(btkn_hist_iter_t iter)
+{
+	bsos_iter_t i = (bsos_iter_t)iter;
+	struct btkn_hist_s hist = {
+		.bin_width = i->filter.bin_width,
+		.time = i->filter.tv_begin.tv_sec,
+		.tkn_id = i->filter.tkn_id,
+	};
+	return bs_tkn_hist_iter_find_fwd(iter, &hist);
 }
 
 static btkn_hist_t bs_tkn_hist_iter_obj(btkn_hist_iter_t iter, btkn_hist_t tkn_h)
 {
 	bsos_iter_t i = (bsos_iter_t)iter;
-	return tkn_hist_next(i, tkn_h);
+	sos_key_t key_o;
+	tkn_hist_t tkn_o;
+	sos_obj_ref_t ref;
+
+	key_o = sos_iter_key(i->iter);
+	if (!key_o)
+		return NULL;
+	tkn_o = (tkn_hist_t)sos_key_value(key_o);
+	tkn_h->tkn_id = be64toh(tkn_o->key.tkn_id);
+	tkn_h->bin_width = be32toh(tkn_o->key.bin_width);
+	tkn_h->time = be32toh(tkn_o->key.time);
+	sos_key_put(key_o);
+	ref = sos_iter_ref(i->iter);
+	tkn_h->tkn_count = ref.idx_data.uint64_[1];
+
+	return tkn_h;
 }
 
-static btkn_hist_t bs_tkn_hist_iter_next(btkn_hist_iter_t iter, btkn_hist_t tkn_h)
+static int bs_tkn_hist_iter_next(btkn_hist_iter_t iter)
 {
 	bsos_iter_t i = (bsos_iter_t)iter;
 	int rc;
 
 	rc = sos_iter_next(i->iter);
 	if (rc)
-		return NULL;
+		return rc;
 
-	return tkn_hist_next(i, tkn_h);
+	return __tkn_hist_next(i);
 }
 
-static bstore_iter_pos_t bs_ptn_hist_iter_pos(bptn_hist_iter_t iter)
+static int bs_tkn_hist_iter_prev(btkn_hist_iter_t iter)
 {
-	return __iter_pos((bsos_iter_t)iter);
+	bsos_iter_t i = (bsos_iter_t)iter;
+	int rc;
+
+	rc = sos_iter_prev(i->iter);
+	if (rc)
+		return rc;
+
+	return __tkn_hist_prev(i);
+}
+
+static bstore_iter_pos_t bs_ptn_hist_iter_pos_get(bptn_hist_iter_t iter)
+{
+	return __iter_pos_get((bsos_iter_t)iter);
 }
 
 static int bs_ptn_hist_iter_pos_set(bptn_hist_iter_t iter, bstore_iter_pos_t _pos)
@@ -2884,16 +3138,30 @@ static int bs_ptn_hist_iter_pos_set(bptn_hist_iter_t iter, bstore_iter_pos_t _po
 	return __iter_pos_set(i, pos);
 }
 
+static void bs_ptn_hist_iter_pos_free(bptn_hist_iter_t iter, bstore_iter_pos_t _pos)
+{
+	bsos_iter_t i = (bsos_iter_t)iter;
+	struct bsos_iter_pos_s *pos = (typeof(pos))_pos;
+	if ((iter->type != _pos->type) || (i->iter_type != pos->iter_type)) {
+		assert(0 == "Iterator - Position type mismatch");
+		return;
+	}
+	sos_iter_pos_put(i->iter, pos->sos_pos);
+	free(pos);
+}
+
 bptn_hist_iter_t bs_ptn_hist_iter_new(bstore_t bs)
 {
 	bstore_sos_t bss = (bstore_sos_t)bs;
 	bsos_iter_t phi = calloc(1, sizeof(*phi));
 	if (phi) {
 		phi->bs = bs;
+		phi->biter_type = BPTN_HIST_ITER;
 		phi->iter_type = PTN_HIST_ITER;
 		phi->iter = sos_attr_iter_new(bss->ptn_hist_key_attr);
 		if (!phi->iter)
 			goto err;
+		sos_iter_flags_set(phi->iter, SOS_ITER_F_INF_LAST_DUP);
 	}
 	return (bptn_hist_iter_t)phi;
  err:
@@ -2911,8 +3179,8 @@ static void bs_ptn_hist_iter_free(bptn_hist_iter_t i)
 
 int ptn_hist_match(bsos_iter_t i, ptn_hist_t ptn_o)
 {
-	if ((i->ptn_id && (i->ptn_id != ptn_o->key.ptn_id))
-	    || (i->bin_width && (i->bin_width != ptn_o->key.bin_width))) {
+	if ((i->filter.ptn_id && (i->filter.ptn_id != ptn_o->key.ptn_id))
+	    || (i->filter.bin_width && (i->filter.bin_width != ptn_o->key.bin_width))) {
 		return 0;
 	}
 	return 1;
@@ -2924,88 +3192,84 @@ int ptn_hist_match(bsos_iter_t i, ptn_hist_t ptn_o)
  * - timestamp
  * - pattern id
  */
-static bptn_hist_t ptn_hist_next(bsos_iter_t i, bptn_hist_t ptn_h)
+static
+int __ptn_hist_next(bsos_iter_t i)
 {
 	int rc = 0;
-	ptn_hist_t ptn_o;
 	sos_key_t key_o = sos_iter_key(i->iter);
-	sos_obj_ref_t ref;
-	time_t hist_time;
-	time_t start_time = be32toh(i->start);
+	struct ptn_hist_s ptn_s;
+	time_t start_time = i->filter.tv_begin.tv_sec;
+	time_t end_time = i->filter.tv_end.tv_sec;
 	for ( ; 0 == rc;
 	      sos_key_put(key_o),
 		      key_o = (0 == (rc = sos_iter_next(i->iter))?sos_iter_key(i->iter):NULL)) {
 
-		ptn_o = (typeof(ptn_o))sos_key_value(key_o);
-		if (i->bin_width && (i->bin_width != ptn_o->key.bin_width))
+		/* copy-out key and convert BE-to-host */
+		ptn_s = *(ptn_hist_t)sos_key_value(key_o);
+		ptn_hist_betoh(&ptn_s);
+
+		if (i->filter.bin_width &&
+				(i->filter.bin_width != ptn_s.key.bin_width))
 			/* Bin width doesn't match, no more matches */
 			break;
 
-		hist_time = be32toh(ptn_o->key.time);
-		if (start_time && start_time > hist_time)
+		if ((start_time && ptn_s.key.time < start_time) ||
+				(end_time && end_time < ptn_s.key.time))
 			/* Time doesn't match, no more matches */
 			break;
-
-		if (i->ptn_id && (i->ptn_id != ptn_o->key.ptn_id))
+		if (i->filter.ptn_id && (i->filter.ptn_id != ptn_s.key.ptn_id))
 			/* ptn id doesn't match, skip mismatch */
 			continue;
 
 		/* Everything matches, return it */
-		ptn_h->ptn_id = be64toh(ptn_o->key.ptn_id);
-		ptn_h->bin_width = be32toh(ptn_o->key.bin_width);
-		ptn_h->time = be32toh(ptn_o->key.time);
 		sos_key_put(key_o);
-		ref = sos_iter_ref(i->iter);
-		ptn_h->msg_count = ref.idx_data.uint64_[1];
-		return ptn_h;
+		return 0;
 	}
 	if (key_o)
 		sos_key_put(key_o);
-	return NULL;
+	return ENOENT;
 }
 
-static bptn_hist_t ptn_hist_prev(bsos_iter_t i, bptn_hist_t ptn_h)
+static int __ptn_hist_prev(bsos_iter_t i)
 {
 	int rc = 0;
-	ptn_hist_t ptn_o;
 	sos_key_t key_o = sos_iter_key(i->iter);
-	sos_obj_ref_t ref;
-	time_t hist_time;
-	time_t start_time = be32toh(i->start);
+	struct ptn_hist_s ptn_s;
+	time_t start_time = i->filter.tv_begin.tv_sec;
+	time_t end_time = i->filter.tv_end.tv_sec;
 	for ( ; 0 == rc;
 	      sos_key_put(key_o),
 		      key_o = (0 == (rc = sos_iter_prev(i->iter))?sos_iter_key(i->iter):NULL)) {
 
-		ptn_o = (typeof(ptn_o))sos_key_value(key_o);
-		if (i->bin_width && (i->bin_width != ptn_o->key.bin_width))
+		/* copy-out key and convert BE-to-host */
+		ptn_s = *(ptn_hist_t)sos_key_value(key_o);
+		ptn_hist_betoh(&ptn_s);
+
+		if (i->filter.bin_width &&
+				(i->filter.bin_width != ptn_s.key.bin_width))
 			/* Bin width doesn't match, no more matches */
 			break;
 
-		hist_time = be32toh(ptn_o->key.time);
-		if (start_time && start_time < hist_time)
+		if ((start_time && ptn_s.key.time < start_time) ||
+				(end_time && end_time < ptn_s.key.time))
 			/* Time doesn't match, no more matches */
 			break;
 
-		if (i->ptn_id && (i->ptn_id != ptn_o->key.ptn_id))
+		if (i->filter.ptn_id && (i->filter.ptn_id != ptn_s.key.ptn_id))
 			/* ptn id doesn't match, skip mismatch */
 			continue;
 
 		/* Everything matches, return it */
-		ptn_h->ptn_id = be64toh(ptn_o->key.ptn_id);
-		ptn_h->bin_width = be32toh(ptn_o->key.bin_width);
-		ptn_h->time = be32toh(ptn_o->key.time);
 		sos_key_put(key_o);
-		ref = sos_iter_ref(i->iter);
-		ptn_h->msg_count = ref.idx_data.uint64_[1];
-		return ptn_h;
+		return 0;
 	}
 	if (key_o)
 		sos_key_put(key_o);
-	return NULL;
+	return ENOENT;
 }
 
-static bptn_hist_t
-bs_ptn_hist_iter_find(bptn_hist_iter_t iter, bptn_hist_t ptn_h)
+static int
+__bs_ptn_hist_iter_find(bptn_hist_iter_t iter, int fwd, bptn_hist_t ptn_h)
 {
 	bstore_sos_t bss = (bstore_sos_t)iter->bs;
 	bsos_iter_t i = (bsos_iter_t)iter;
@@ -3013,90 +3277,124 @@ bs_ptn_hist_iter_find(bptn_hist_iter_t iter, bptn_hist_t ptn_h)
 	ods_key_value_t hist_k = key->as.ptr;
 	ptn_hist_t ptn_k = (ptn_hist_t)hist_k->value;
 	sos_obj_t hist_o;
+	int (*iter_fn)(sos_iter_t, sos_key_t);
+	int (*step_fn)(bsos_iter_t);
 	int rc;
 
-	i->ptn_id = htobe64(ptn_h->ptn_id);
-	i->bin_width = htobe32(ptn_h->bin_width);
-	i->start = htobe32(clamp_time_to_bin(ptn_h->time, ptn_h->bin_width));
+	if (fwd) {
+		iter_fn = sos_iter_sup;
+		step_fn = __ptn_hist_next;
+	} else {
+		iter_fn = sos_iter_inf;
+		step_fn = __ptn_hist_prev;
+	}
 
-	ptn_k->key.ptn_id = i->ptn_id;
-	ptn_k->key.bin_width = i->bin_width;
-	ptn_k->key.time = i->start;
+	ptn_k->key.ptn_id = (ptn_h->ptn_id)?(ptn_h->ptn_id):(i->filter.ptn_id);
+	ptn_k->key.bin_width = (ptn_h->bin_width)?(ptn_h->bin_width)
+						 :(i->filter.bin_width);
+	ptn_k->key.time = (ptn_h->time)?(ptn_h->time)
+				       :((fwd)?(i->filter.tv_begin.tv_sec)
+					      :(i->filter.tv_end.tv_sec));
+	ptn_hist_htobe(ptn_k);
+	if (!fwd) {
+		if (!ptn_k->key.ptn_id)
+			ptn_k->key.ptn_id = -1;
+		if (!ptn_k->key.bin_width)
+			ptn_k->key.bin_width = -1;
+		if (!ptn_k->key.time)
+			ptn_k->key.time = -1;
+	}
 	hist_k->len = sizeof(ptn_k->key);
 
-	rc = sos_iter_sup(i->iter, key);
+	rc = iter_fn(i->iter, key);
 	if (rc)
-		return NULL;
-
-	return ptn_hist_next(i, ptn_h);
+		return rc;
+	return step_fn(i);
 }
 
-static bptn_hist_t bs_ptn_hist_iter_first(bptn_hist_iter_t iter, bptn_hist_t ptn_h)
+static int
+bs_ptn_hist_iter_find_fwd(bptn_hist_iter_t iter, bptn_hist_t ptn_h)
 {
-	bstore_sos_t bss = (bstore_sos_t)iter->bs;
-	bsos_iter_t i = (bsos_iter_t)iter;
-	ptn_hist_t ptn_o;
-	sos_obj_t hist_o;
-	int rc;
-
-	i->ptn_id = 0;
-	i->bin_width = ptn_h->bin_width;
-	i->start = 0;
-
-	rc = sos_iter_begin(i->iter);
-	if (rc)
-		return NULL;
-
-	return ptn_hist_next(i, ptn_h);
+	return __bs_ptn_hist_iter_find(iter, 1, ptn_h);
 }
 
-static bptn_hist_t bs_ptn_hist_iter_last(bptn_hist_iter_t iter, bptn_hist_t ptn_h)
+static int
+bs_ptn_hist_iter_find_rev(bptn_hist_iter_t iter, bptn_hist_t ptn_h)
 {
-	bstore_sos_t bss = (bstore_sos_t)iter->bs;
+	return __bs_ptn_hist_iter_find(iter, 0, ptn_h);
+}
+
+static int bs_ptn_hist_iter_first(bptn_hist_iter_t iter)
+{
 	bsos_iter_t i = (bsos_iter_t)iter;
-	SOS_KEY(key);
-	ods_key_value_t hist_k = key->as.ptr;
-	ptn_hist_t ptn_k = (ptn_hist_t)hist_k->value;
-	sos_obj_t hist_o;
-	int rc;
+	struct bptn_hist_s hist = {
+		.ptn_id = i->filter.ptn_id,
+		.time = i->filter.tv_begin.tv_sec,
+		.bin_width = i->filter.bin_width,
+	};
 
-	i->ptn_id = htobe64(ptn_h->ptn_id);
-	i->bin_width = htobe32(ptn_h->bin_width);
-	i->start = htobe32(ptn_h->time);
+	return bs_ptn_hist_iter_find_fwd(iter, &hist);
+}
 
-	ptn_k->key.ptn_id = i->ptn_id;
-	ptn_k->key.bin_width = i->bin_width;
-	ptn_k->key.time = (i->start)?(i->start):(-1);
-	hist_k->len = sizeof(ptn_k->key);
+static int bs_ptn_hist_iter_last(bptn_hist_iter_t iter)
+{
+	bsos_iter_t i = (bsos_iter_t)iter;
+	struct bptn_hist_s hist = {
+		.ptn_id = i->filter.ptn_id,
+		.time = i->filter.tv_end.tv_sec,
+		.bin_width = i->filter.bin_width,
+	};
 
-	rc = sos_iter_inf(i->iter, key);
-	if (rc)
-		return NULL;
-
-	return ptn_hist_prev(i, ptn_h);
+	return bs_ptn_hist_iter_find_rev(iter, &hist);
 }
 
 static bptn_hist_t bs_ptn_hist_iter_obj(bptn_hist_iter_t iter, bptn_hist_t ptn_h)
 {
 	bsos_iter_t i = (bsos_iter_t)iter;
-	return ptn_hist_next(i, ptn_h);
+	ptn_hist_t ptn_o;
+	sos_obj_ref_t ref;
+	sos_key_t key_o;
+
+	key_o = sos_iter_key(i->iter);
+	if (!key_o)
+		return NULL;
+	ptn_o = (typeof(ptn_o))sos_key_value(key_o);
+	ptn_h->ptn_id = be64toh(ptn_o->key.ptn_id);
+	ptn_h->time = be32toh(ptn_o->key.time);
+	ptn_h->bin_width =  be32toh(ptn_o->key.bin_width);
+	sos_key_put(key_o);
+	ref = sos_iter_ref(i->iter);
+	ptn_h->msg_count = ref.idx_data.uint64_[1];
+	return ptn_h;
 }
 
-static bptn_hist_t bs_ptn_hist_iter_next(bptn_hist_iter_t iter, bptn_hist_t ptn_h)
+static int bs_ptn_hist_iter_next(bptn_hist_iter_t iter)
 {
 	bsos_iter_t i = (bsos_iter_t)iter;
 	int rc;
 
 	rc = sos_iter_next(i->iter);
 	if (rc)
-		return NULL;
+		return rc;
 
-	return ptn_hist_next(i, ptn_h);
+	return __ptn_hist_next(i);
 }
 
-static bstore_iter_pos_t bs_comp_hist_iter_pos(bcomp_hist_iter_t iter)
+static int bs_ptn_hist_iter_prev(bptn_hist_iter_t iter)
 {
-	return __iter_pos((bsos_iter_t)iter);
+	bsos_iter_t i = (bsos_iter_t)iter;
+	int rc;
+
+	rc = sos_iter_prev(i->iter);
+	if (rc)
+		return rc;
+
+	return __ptn_hist_prev(i);
+}
+
+static bstore_iter_pos_t bs_comp_hist_iter_pos_get(bcomp_hist_iter_t iter)
+{
+	return __iter_pos_get((bsos_iter_t)iter);
 }
 
 static int bs_comp_hist_iter_pos_set(bcomp_hist_iter_t iter, bstore_iter_pos_t _pos)
@@ -3109,16 +3407,30 @@ static int bs_comp_hist_iter_pos_set(bcomp_hist_iter_t iter, bstore_iter_pos_t _
 	return __iter_pos_set(i, pos);
 }
 
+static void bs_comp_hist_iter_pos_free(bcomp_hist_iter_t iter, bstore_iter_pos_t _pos)
+{
+	bsos_iter_t i = (bsos_iter_t)iter;
+	struct bsos_iter_pos_s *pos = (typeof(pos))_pos;
+	if ((iter->type != _pos->type) || (i->iter_type != pos->iter_type)) {
+		assert(0 == "Iterator - Position type mismatch");
+		return;
+	}
+	sos_iter_pos_put(i->iter, pos->sos_pos);
+	free(pos);
+}
+
 bcomp_hist_iter_t bs_comp_hist_iter_new(bstore_t bs)
 {
 	bstore_sos_t bss = (bstore_sos_t)bs;
 	bsos_iter_t chi = calloc(1, sizeof(*chi));
 	if (chi) {
 		chi->bs = bs;
+		chi->biter_type = BCOMP_HIST_ITER;
 		chi->iter_type = COMP_HIST_ITER;
 		chi->iter = sos_attr_iter_new(bss->comp_hist_key_attr);
 		if (!chi->iter)
 			goto err;
+		sos_iter_flags_set(chi->iter, SOS_ITER_F_INF_LAST_DUP);
 	}
 	return (bcomp_hist_iter_t)chi;
  err:
@@ -3141,176 +3453,224 @@ static void bs_comp_hist_iter_free(bcomp_hist_iter_t i)
  *   - component id
  *   - ptn id
  */
-static bcomp_hist_t comp_hist_next(bsos_iter_t i, bcomp_hist_t comp_h)
+static int __comp_hist_next(bsos_iter_t i)
 {
 	int rc = 0;
-	comp_hist_t comp_o;
+	struct comp_hist_s comp_s;
 	sos_key_t key_o = sos_iter_key(i->iter);
-	sos_obj_ref_t ref;
-	time_t hist_time;
-	time_t start_time = be32toh(i->start);
+	time_t start_time = i->filter.tv_begin.tv_sec;
+	time_t end_time = i->filter.tv_end.tv_sec;
 	for ( ; 0 == rc;
 	      sos_key_put(key_o),
 		      key_o = (0 == (rc = sos_iter_next(i->iter))?sos_iter_key(i->iter):NULL)) {
-		comp_o = (typeof(comp_o))sos_key_value(key_o);
-		if (i->bin_width && (i->bin_width != comp_o->key.bin_width))
+
+		comp_s = *(comp_hist_t)sos_key_value(key_o);
+		comp_hist_betoh(&comp_s);
+
+		if (i->filter.bin_width &&
+				(i->filter.bin_width != comp_s.key.bin_width))
 			/* Bin width is primary order, no more matches */
 			break;
 
-		hist_time = be32toh(comp_o->key.time);
-		if (start_time && start_time > hist_time)
+		if ((start_time && comp_s.key.time < start_time) ||
+				(end_time && end_time < comp_s.key.time))
 			/* Time doesn't match and is secondar, no more matches */
 			break;
-
-		if (i->comp_id && (i->comp_id != comp_o->key.comp_id))
+		if (i->filter.comp_id &&
+				(i->filter.comp_id != comp_s.key.comp_id))
 			/* comp id doesn't match */
 			continue;
 
-		if (i->ptn_id && (i->ptn_id != comp_o->key.ptn_id))
+		if (i->filter.ptn_id && (i->filter.ptn_id != comp_s.key.ptn_id))
 			continue;
 
 		/* Everything matches, return it */
-		comp_h->comp_id = be64toh(comp_o->key.comp_id);
-		comp_h->ptn_id = be64toh(comp_o->key.ptn_id);
-		comp_h->bin_width = be32toh(comp_o->key.bin_width);
-		comp_h->time = be32toh(comp_o->key.time);
 		sos_key_put(key_o);
-		ref = sos_iter_ref(i->iter);
-		comp_h->msg_count = ref.idx_data.uint64_[1];
-		return comp_h;
+		return 0;
 	}
 	if (key_o)
 		sos_key_put(key_o);
-	return NULL;
+	return ENOENT;
 }
 
-static bcomp_hist_t comp_hist_prev(bsos_iter_t i, bcomp_hist_t comp_h)
+static int __comp_hist_prev(bsos_iter_t i)
 {
 	int rc = 0;
-	comp_hist_t comp_o;
+	struct comp_hist_s comp_s;
 	sos_key_t key_o = sos_iter_key(i->iter);
-	sos_obj_ref_t ref;
-	time_t hist_time;
-	time_t start_time = be32toh(i->start);
+	time_t start_time = i->filter.tv_begin.tv_sec;
+	time_t end_time = i->filter.tv_end.tv_sec;
 	for ( ; 0 == rc;
 	      sos_key_put(key_o),
 		      key_o = (0 == (rc = sos_iter_prev(i->iter))?sos_iter_key(i->iter):NULL)) {
-		comp_o = (typeof(comp_o))sos_key_value(key_o);
-		if (i->bin_width && (i->bin_width != comp_o->key.bin_width))
+		comp_s = *(comp_hist_t)sos_key_value(key_o);
+		comp_hist_betoh(&comp_s);
+		if (i->filter.bin_width &&
+				(i->filter.bin_width != comp_s.key.bin_width))
 			/* Bin width is primary order, no more matches */
 			break;
 
-		hist_time = be32toh(comp_o->key.time);
-		if (start_time && start_time <hist_time)
-			/* Time doesn't match and is secondary, no more matches */
+		if ((start_time && comp_s.key.time < start_time) ||
+				(end_time && end_time < comp_s.key.time))
+			/* Time doesn't match and is secondar, no more matches */
 			break;
 
-		if (i->comp_id && (i->comp_id != comp_o->key.comp_id))
+		if (i->filter.comp_id &&
+				(i->filter.comp_id != comp_s.key.comp_id))
 			/* comp id doesn't match */
 			continue;
 
-		if (i->ptn_id && (i->ptn_id != comp_o->key.ptn_id))
+		if (i->filter.ptn_id && (i->filter.ptn_id != comp_s.key.ptn_id))
 			continue;
 
 		/* Everything matches, return it */
-		comp_h->comp_id = be64toh(comp_o->key.comp_id);
-		comp_h->ptn_id = be64toh(comp_o->key.ptn_id);
-		comp_h->bin_width = be32toh(comp_o->key.bin_width);
-		comp_h->time = be32toh(comp_o->key.time);
 		sos_key_put(key_o);
-		ref = sos_iter_ref(i->iter);
-		comp_h->msg_count = ref.idx_data.uint64_[1];
-		return comp_h;
+		return 0;
 	}
 	if (key_o)
 		sos_key_put(key_o);
-	return NULL;
+	return ENOENT;
 }
 
-static bcomp_hist_t
-bs_comp_hist_iter_find(bcomp_hist_iter_t iter, bcomp_hist_t comp_h)
+static int
+__bs_comp_hist_iter_find(bcomp_hist_iter_t iter, int fwd, bcomp_hist_t comp_h)
 {
 	bstore_sos_t bss = (bstore_sos_t)iter->bs;
 	bsos_iter_t i = (bsos_iter_t)iter;
 	SOS_KEY(key);
 	ods_key_value_t hist_k = key->as.ptr;
 	comp_hist_t comp_k = (comp_hist_t)hist_k->value;
+	sos_obj_t hist_o;
+	int (*iter_fn)(sos_iter_t, sos_key_t);
+	int (*step_fn)(bsos_iter_t);
 	int rc;
 
-	i->comp_id = htobe64(comp_h->comp_id);
-	i->ptn_id = htobe64(comp_h->ptn_id);
-	i->start = htobe32(clamp_time_to_bin(comp_h->time, comp_h->bin_width));
-	i->bin_width = htobe32(comp_h->bin_width);
+	if (fwd) {
+		iter_fn = sos_iter_sup;
+		step_fn = __comp_hist_next;
+	} else {
+		iter_fn = sos_iter_inf;
+		step_fn = __comp_hist_prev;
+	}
 
-	comp_k->key.comp_id = i->comp_id;
-	comp_k->key.ptn_id = i->ptn_id;
-	comp_k->key.bin_width = i->bin_width;
-	comp_k->key.time = i->start;
+	comp_k->key.ptn_id = (comp_h->ptn_id)?(comp_h->ptn_id)
+					     :(i->filter.ptn_id);
+	comp_k->key.comp_id = (comp_h->comp_id)?(comp_h->comp_id)
+					       :(i->filter.comp_id);
+	comp_k->key.bin_width = (comp_h->bin_width)?(comp_h->bin_width)
+						   :(i->filter.bin_width);
+	comp_k->key.time = (comp_h->time)?(comp_h->time)
+					 :((fwd)?(i->filter.tv_begin.tv_sec)
+						:(i->filter.tv_end.tv_sec));
+	comp_hist_htobe(comp_k);
+	if (!fwd) {
+		if (!comp_k->key.ptn_id)
+			comp_k->key.ptn_id = -1;
+		if (!comp_k->key.comp_id)
+			comp_k->key.comp_id = -1;
+		if (!comp_k->key.bin_width)
+			comp_k->key.bin_width = -1;
+		if (!comp_k->key.time)
+			comp_k->key.time = -1;
+	}
 	hist_k->len = sizeof(comp_k->key);
 
-	rc = sos_iter_sup(i->iter, key);
+	rc = iter_fn(i->iter, key);
 	if (rc)
-		return NULL;
-
-	return comp_hist_next(i, comp_h);
+		return rc;
+	return step_fn(i);
 }
 
-static bcomp_hist_t bs_comp_hist_iter_first(bcomp_hist_iter_t iter, bcomp_hist_t comp_h)
+static int
+bs_comp_hist_iter_find_fwd(bcomp_hist_iter_t iter, bcomp_hist_t comp_h)
+{
+	return __bs_comp_hist_iter_find(iter, 1, comp_h);
+}
+
+static int
+bs_comp_hist_iter_find_rev(bcomp_hist_iter_t iter, bcomp_hist_t comp_h)
+{
+	return __bs_comp_hist_iter_find(iter, 0, comp_h);
+}
+
+static int bs_comp_hist_iter_first(bcomp_hist_iter_t iter)
 {
 	bstore_sos_t bss = (bstore_sos_t)iter->bs;
 	bsos_iter_t i = (bsos_iter_t)iter;
-	comp_hist_t comp_o;
-	int rc;
-
-	rc = sos_iter_begin(i->iter);
-	if (rc)
-		return NULL;
-
-	return comp_hist_next(i, comp_h);
+	struct bcomp_hist_s hist = {
+		.bin_width = i->filter.bin_width,
+		.comp_id = i->filter.comp_id,
+		.ptn_id = i->filter.ptn_id,
+		.time = i->filter.tv_begin.tv_sec,
+	};
+	return bs_comp_hist_iter_find_fwd(iter, &hist);
 }
 
-static bcomp_hist_t bs_comp_hist_iter_last(bcomp_hist_iter_t iter, bcomp_hist_t comp_h)
+static int bs_comp_hist_iter_last(bcomp_hist_iter_t iter)
 {
 	bstore_sos_t bss = (bstore_sos_t)iter->bs;
 	bsos_iter_t i = (bsos_iter_t)iter;
-	SOS_KEY(key);
-	ods_key_value_t hist_k = key->as.ptr;
-	comp_hist_t comp_k = (comp_hist_t)hist_k->value;
-	int rc;
-
-	i->comp_id = htobe64(comp_h->comp_id);
-	i->ptn_id = htobe64(comp_h->ptn_id);
-	i->start = htobe32(comp_h->time);
-	i->bin_width = htobe32(comp_h->bin_width);
-
-	comp_k->key.comp_id = (i->comp_id)?(i->comp_id):(-1);
-	comp_k->key.ptn_id = (i->ptn_id)?(i->ptn_id):(-1);
-	comp_k->key.bin_width = i->bin_width;
-	comp_k->key.time = (i->start)?(i->start):(-1);
-	hist_k->len = sizeof(comp_k->key);
-
-	rc = sos_iter_inf(i->iter, key);
-	if (rc)
-		return NULL;
-
-	return comp_hist_prev(i, comp_h);
+	struct bcomp_hist_s hist = {
+		.bin_width = i->filter.bin_width,
+		.comp_id = i->filter.comp_id,
+		.ptn_id = i->filter.ptn_id,
+		.time = i->filter.tv_end.tv_sec,
+	};
+	return bs_comp_hist_iter_find_rev(iter, &hist);
 }
 
 static bcomp_hist_t bs_comp_hist_iter_obj(bcomp_hist_iter_t iter, bcomp_hist_t comp_h)
 {
-	return comp_hist_next((bsos_iter_t)iter, comp_h);
+	bsos_iter_t i = (bsos_iter_t)iter;
+	int rc = 0;
+	comp_hist_t comp_o;
+	sos_obj_ref_t ref;
+	sos_key_t key_o;
+
+	key_o = sos_iter_key(i->iter);
+	if (!key_o)
+		return NULL;
+	comp_o = (typeof(comp_o))sos_key_value(key_o);
+	comp_h->comp_id = be64toh(comp_o->key.comp_id);
+	comp_h->ptn_id = be64toh(comp_o->key.ptn_id);
+	comp_h->bin_width = be32toh(comp_o->key.bin_width);
+	comp_h->time = be32toh(comp_o->key.time);
+	sos_key_put(key_o);
+	ref = sos_iter_ref(i->iter);
+	comp_h->msg_count = ref.idx_data.uint64_[1];
+	return comp_h;
 }
 
-static bcomp_hist_t bs_comp_hist_iter_next(bcomp_hist_iter_t iter, bcomp_hist_t comp_h)
+static int bs_comp_hist_iter_next(bcomp_hist_iter_t iter)
 {
 	bsos_iter_t i = (bsos_iter_t)iter;
 	int rc;
 
 	rc = sos_iter_next(i->iter);
 	if (rc)
-		return NULL;
+		return rc;
 
-	return comp_hist_next(i, comp_h);
+	return __comp_hist_next(i);
+}
+
+static int bs_comp_hist_iter_prev(bcomp_hist_iter_t iter)
+{
+	bsos_iter_t i = (bsos_iter_t)iter;
+	int rc;
+
+	rc = sos_iter_prev(i->iter);
+	if (rc)
+		return rc;
+
+	return __comp_hist_prev(i);
+}
+
+static int bs_iter_filter_set(btkn_hist_iter_t iter,
+					bstore_iter_filter_t filter)
+{
+	bsos_iter_t i = (bsos_iter_t)iter;
+	i->filter = *filter;
+	return 0;
 }
 
 static struct bstore_plugin_s plugin = {
@@ -3324,8 +3684,9 @@ static struct bstore_plugin_s plugin = {
 	.tkn_find_by_id = bs_tkn_find_by_id,
 	.tkn_find_by_name = bs_tkn_find_by_name,
 
-	.tkn_iter_pos = bs_tkn_iter_pos,
+	.tkn_iter_pos_get = bs_tkn_iter_pos_get,
 	.tkn_iter_pos_set = bs_tkn_iter_pos_set,
+	.tkn_iter_pos_free = bs_tkn_iter_pos_free,
 	.tkn_iter_new = bs_tkn_iter_new,
 	.tkn_iter_free = bs_tkn_iter_free,
 	.tkn_iter_card = bs_tkn_iter_card,
@@ -3336,75 +3697,97 @@ static struct bstore_plugin_s plugin = {
 	.tkn_iter_last = bs_tkn_iter_last,
 
 	.msg_add = bs_msg_add,
-	.msg_iter_pos = bs_msg_iter_pos,
+	.msg_iter_pos_get = bs_msg_iter_pos_get,
 	.msg_iter_pos_set = bs_msg_iter_pos_set,
+	.msg_iter_pos_free = bs_msg_iter_pos_free,
 	.msg_iter_new = bs_msg_iter_new,
 	.msg_iter_free = bs_msg_iter_free,
 	.msg_iter_card = bs_msg_iter_card,
-	.msg_iter_find = bs_msg_iter_find,
-	.msg_iter_first = bs_msg_iter_first,
-	.msg_iter_last = bs_msg_iter_last,
+	.msg_iter_find_fwd = bs_msg_iter_find_fwd,
+	.msg_iter_find_rev = bs_msg_iter_find_rev,
 	.msg_iter_obj = bs_msg_iter_obj,
+	.msg_iter_first = bs_msg_iter_first,
 	.msg_iter_next = bs_msg_iter_next,
 	.msg_iter_prev = bs_msg_iter_prev,
+	.msg_iter_last = bs_msg_iter_last,
+	.msg_iter_filter_set = bs_msg_iter_filter_set,
 
 	.ptn_add = bs_ptn_add,
 	.ptn_find = bs_ptn_find,
 	.ptn_find_by_ptnstr = bs_ptn_find_by_ptnstr,
-	.ptn_iter_pos = bs_ptn_iter_pos,
+	.ptn_iter_pos_get = bs_ptn_iter_pos_get,
 	.ptn_iter_pos_set = bs_ptn_iter_pos_set,
+	.ptn_iter_pos_free = bs_ptn_iter_pos_free,
 	.ptn_iter_new = bs_ptn_iter_new,
 	.ptn_iter_free = bs_ptn_iter_free,
+	.ptn_iter_filter_set = bs_ptn_iter_filter_set,
 	.ptn_iter_card = bs_ptn_iter_card,
-	.ptn_iter_find = bs_ptn_iter_find,
+	.ptn_iter_find_fwd = bs_ptn_iter_find_fwd,
+	.ptn_iter_find_rev = bs_ptn_iter_find_rev,
 	.ptn_iter_first = bs_ptn_iter_first,
 	.ptn_iter_last = bs_ptn_iter_last,
 	.ptn_iter_obj = bs_ptn_iter_obj,
 	.ptn_iter_next = bs_ptn_iter_next,
 	.ptn_iter_prev = bs_ptn_iter_prev,
 
-	.ptn_tkn_iter_pos = bs_ptn_tkn_iter_pos,
+	.ptn_tkn_iter_pos_get = bs_ptn_tkn_iter_pos_get,
 	.ptn_tkn_iter_pos_set = bs_ptn_tkn_iter_pos_set,
+	.ptn_tkn_iter_pos_free = bs_ptn_tkn_iter_pos_free,
 	.ptn_tkn_iter_new = bs_ptn_tkn_iter_new,
 	.ptn_tkn_iter_free = bs_ptn_tkn_iter_free,
 	.ptn_tkn_iter_card = bs_ptn_tkn_iter_card,
-	.ptn_tkn_iter_find = bs_ptn_tkn_iter_find,
 	.ptn_tkn_iter_obj = bs_ptn_tkn_iter_obj,
+	.ptn_tkn_iter_first = bs_ptn_tkn_iter_first,
 	.ptn_tkn_iter_next = bs_ptn_tkn_iter_next,
 	.ptn_tkn_iter_prev = bs_ptn_tkn_iter_prev,
+	.ptn_tkn_iter_last = bs_ptn_tkn_iter_last,
+	.ptn_tkn_iter_filter_set = bs_iter_filter_set,
 
 	.tkn_hist_update = bs_tkn_hist_update,
-	.tkn_hist_iter_pos = bs_tkn_hist_iter_pos,
+	.tkn_hist_iter_pos_get = bs_tkn_hist_iter_pos_get,
 	.tkn_hist_iter_pos_set = bs_tkn_hist_iter_pos_set,
+	.tkn_hist_iter_pos_free = bs_tkn_hist_iter_pos_free,
 	.tkn_hist_iter_new = bs_tkn_hist_iter_new,
 	.tkn_hist_iter_free = bs_tkn_hist_iter_free,
-	.tkn_hist_iter_find = bs_tkn_hist_iter_find,
+	.tkn_hist_iter_find_fwd = bs_tkn_hist_iter_find_fwd,
+	.tkn_hist_iter_find_rev = bs_tkn_hist_iter_find_rev,
 	.tkn_hist_iter_obj = bs_tkn_hist_iter_obj,
 	.tkn_hist_iter_next = bs_tkn_hist_iter_next,
-	.tkn_hist_iter_first = bs_tkn_hist_iter_find,
+	.tkn_hist_iter_prev = bs_tkn_hist_iter_prev,
+	.tkn_hist_iter_first = bs_tkn_hist_iter_first,
 	.tkn_hist_iter_last = bs_tkn_hist_iter_last,
+	.tkn_hist_iter_filter_set = bs_iter_filter_set,
 
 	.ptn_hist_update = bs_ptn_hist_update,
 	.ptn_tkn_add = bs_ptn_tkn_add,
 	.ptn_tkn_find = bs_ptn_tkn_find,
-	.ptn_hist_iter_pos = bs_ptn_hist_iter_pos,
+
+	.ptn_hist_iter_pos_get = bs_ptn_hist_iter_pos_get,
 	.ptn_hist_iter_pos_set = bs_ptn_hist_iter_pos_set,
+	.ptn_hist_iter_pos_free = bs_ptn_hist_iter_pos_free,
 	.ptn_hist_iter_new = bs_ptn_hist_iter_new,
 	.ptn_hist_iter_free = bs_ptn_hist_iter_free,
-	.ptn_hist_iter_find = bs_ptn_hist_iter_find,
+	.ptn_hist_iter_find_fwd = bs_ptn_hist_iter_find_fwd,
+	.ptn_hist_iter_find_rev = bs_ptn_hist_iter_find_rev,
 	.ptn_hist_iter_obj = bs_ptn_hist_iter_obj,
+	.ptn_hist_iter_filter_set = bs_iter_filter_set,
+	.ptn_hist_iter_first = bs_ptn_hist_iter_first,
 	.ptn_hist_iter_next = bs_ptn_hist_iter_next,
-	.ptn_hist_iter_first = bs_ptn_hist_iter_find,
+	.ptn_hist_iter_prev = bs_ptn_hist_iter_prev,
 	.ptn_hist_iter_last = bs_ptn_hist_iter_last,
 
-	.comp_hist_iter_pos = bs_comp_hist_iter_pos,
+	.comp_hist_iter_pos_get = bs_comp_hist_iter_pos_get,
 	.comp_hist_iter_pos_set = bs_comp_hist_iter_pos_set,
+	.comp_hist_iter_pos_free = bs_comp_hist_iter_pos_free,
 	.comp_hist_iter_new = bs_comp_hist_iter_new,
 	.comp_hist_iter_free = bs_comp_hist_iter_free,
-	.comp_hist_iter_find = bs_comp_hist_iter_find,
+	.comp_hist_iter_find_fwd = bs_comp_hist_iter_find_fwd,
+	.comp_hist_iter_find_rev = bs_comp_hist_iter_find_rev,
 	.comp_hist_iter_obj = bs_comp_hist_iter_obj,
+	.comp_hist_iter_filter_set = bs_iter_filter_set,
+	.comp_hist_iter_first = bs_comp_hist_iter_first,
 	.comp_hist_iter_next = bs_comp_hist_iter_next,
-	.comp_hist_iter_first = bs_comp_hist_iter_find,
+	.comp_hist_iter_prev = bs_comp_hist_iter_prev,
 	.comp_hist_iter_last = bs_comp_hist_iter_last,
 
 };

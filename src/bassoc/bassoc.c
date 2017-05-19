@@ -635,11 +635,15 @@ void bcomp_hist_iter_hent_free(bcomp_hist_iter_hent_t hiter)
 int bcomp_hist_iter_hent_first(bcomp_hist_iter_hent_t hiter)
 {
 	bcomp_hist_t h;
+	int rc;
 	hiter->valid = 0;
 	hiter->hist.comp_id = hiter->comp_id;
 	hiter->hist.time = hiter->ts_begin;
 	hiter->hist.bin_width = hiter->bin_width;
-	h = bstore_comp_hist_iter_find(hiter->iter, &hiter->hist);
+	rc = bstore_comp_hist_iter_find_fwd(hiter->iter, &hiter->hist);
+	if (rc)
+		return rc;
+	h = bstore_comp_hist_iter_obj(hiter->iter, &hiter->hist);
 	if (!h)
 		return ENOENT;
 	hiter->valid = 1;
@@ -649,12 +653,16 @@ int bcomp_hist_iter_hent_first(bcomp_hist_iter_hent_t hiter)
 int bcomp_hist_iter_hent_next(bcomp_hist_iter_hent_t hiter)
 {
 	bcomp_hist_t h;
+	int rc;
 	time_t last_time;
 	if (!hiter->valid)
 		return EINVAL;
 	last_time = hiter->hist.time;
 	hiter->valid = 0;
-	h = bstore_comp_hist_iter_next(hiter->iter, &hiter->hist);
+	rc = bstore_comp_hist_iter_next(hiter->iter);
+	if (rc)
+		return rc;
+	h = bstore_comp_hist_iter_obj(hiter->iter, &hiter->hist);
 	if (!h)
 		return ENOENT;
 	if (hiter->ts_end && hiter->ts_end < hiter->hist.time)
@@ -1488,7 +1496,13 @@ void extract_routine_by_hist(bstore_t bs)
 	comp_hist.bin_width = __get_bin_width();
 	if (time_begin)
 		comp_hist.time = time_begin;
-	hist = bstore_comp_hist_iter_find(hiter, &comp_hist);
+	rc = bstore_comp_hist_iter_find_fwd(hiter, &comp_hist);
+	if (rc) {
+		bwarn("No data matching given criteria ...");
+		/* no need to continue ... */
+		return;
+	}
+	hist = bstore_comp_hist_iter_obj(hiter, &comp_hist);
 	if (!hist) {
 		bwarn("No data matching given criteria ...");
 		/* no need to continue ... */
@@ -1517,7 +1531,10 @@ loop:
 
 next:
 	/* next entry */
-	hist = bstore_comp_hist_iter_next(hiter, &comp_hist);
+	rc = bstore_comp_hist_iter_next(hiter);
+	if (rc)
+		goto out;
+	hist = bstore_comp_hist_iter_obj(hiter, &comp_hist);
 	if (!hist)
 		goto out;
 	if (time_end && hist->time > time_end)
@@ -1540,6 +1557,7 @@ struct bset_u64 * __get_comp_set(bstore_t bs)
 	struct bset_u64 *set = NULL;
 	btkn_iter_t ti = NULL;
 	btkn_t tkn;
+	int rc;
 
 	if (host_ids) {
 		set = bset_u64_from_numlist(host_ids, 65537);
@@ -1553,13 +1571,16 @@ struct bset_u64 * __get_comp_set(bstore_t bs)
 		goto out;
 
 	ti = bstore_tkn_iter_new(bs);
-	for (tkn = bstore_tkn_iter_first(ti);
-			tkn; tkn = bstore_tkn_iter_next(ti)) {
+	for (rc = bstore_tkn_iter_first(ti);
+			rc == 0; rc = bstore_tkn_iter_next(ti)) {
+		tkn = bstore_tkn_iter_obj(ti);
+		assert(tkn);
 		if (!btkn_has_type(tkn, BTKN_TYPE_HOSTNAME))
 			continue;
 		bset_u64_insert(set, tkn->tkn_id);
+		btkn_free(tkn);
 	}
-	// bstore_tkn_iter_free(ti);
+	bstore_tkn_iter_free(ti);
 out:
 	return set;
 }

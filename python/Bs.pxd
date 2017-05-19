@@ -1,6 +1,9 @@
 import cython
 cimport numpy as np
 
+cdef extern from "strings.h":
+    void bzero(void *s, size_t n)
+
 cdef extern from "inttypes.h":
     ctypedef unsigned int uint32_t
     ctypedef unsigned long uint64_t
@@ -15,6 +18,7 @@ cdef extern from "sys/time.h":
         time_t tv_sec
         time_t tv_usec
     ctypedef timeval *timeval_t
+    ctypedef timeval timeval_s
 
 cdef extern from "baler/btkn_types.h":
     ctypedef uint64_t btkn_type_t
@@ -78,7 +82,8 @@ cdef extern from "baler/btypes.h":
     ctypedef bmsg *bmsg_t
 
 cdef extern from "baler/bstore.h":
-    ctypedef struct bstore_s
+    cdef struct bstore_s
+    ctypedef uint64_t bstore_iter_pos_handle_t
     ctypedef bstore_s *bstore_t
     bstore_t bstore_open(const char *plugin, const char *path, int flags, ...)
     void bstore_close(bstore_t bs)
@@ -86,6 +91,17 @@ cdef extern from "baler/bstore.h":
     ctypedef struct bstore_iter_s
     ctypedef bstore_iter_s *bstore_iter_t
     ctypedef void *bstore_iter_pos_t
+
+    cdef struct bstore_iter_filter_s:
+        timeval tv_begin
+        timeval tv_end
+        bptn_id_t ptn_id
+        bcomp_id_t comp_id
+        btkn_id_t tkn_id
+        uint64_t tkn_pos
+        uint64_t bin_width
+
+    ctypedef bstore_iter_filter_s *bstore_iter_filter_t
 
     btkn_t btkn_alloc(btkn_id_t tkn_id, btkn_type_mask_t mask, const char *str, size_t len)
     btkn_t btkn_dup(btkn_t src)
@@ -103,48 +119,48 @@ cdef extern from "baler/bstore.h":
 
     ctypedef bstore_iter_t btkn_iter_t
     btkn_iter_t bstore_tkn_iter_new(bstore_t bs)
-    bstore_iter_pos_t bstore_tkn_iter_pos(btkn_iter_t)
+    bstore_iter_pos_t bstore_tkn_iter_pos_get(btkn_iter_t)
     int bstore_tkn_iter_pos_set(btkn_iter_t, bstore_iter_pos_t)
     btkn_iter_t bstore_tkn_iter_new(bstore_t bs)
     void bstore_tkn_iter_free(btkn_iter_t i)
     unsigned long bstore_tkn_iter_card(btkn_iter_t i)
-    btkn_t bstore_tkn_iter_first(btkn_iter_t iter)
     btkn_t bstore_tkn_iter_obj(btkn_iter_t iter)
-    btkn_t bstore_tkn_iter_next(btkn_iter_t iter)
-    btkn_t bstore_tkn_iter_prev(btkn_iter_t iter)
-    btkn_t bstore_tkn_iter_last(btkn_iter_t iter)
+    int bstore_tkn_iter_first(btkn_iter_t iter)
+    int bstore_tkn_iter_next(btkn_iter_t iter)
+    int bstore_tkn_iter_prev(btkn_iter_t iter)
+    int bstore_tkn_iter_last(btkn_iter_t iter)
 
     bptn_t bstore_ptn_find(bstore_t bs, bptn_id_t ptn_id)
     bstore_iter_t bstore_ptn_iter_new(bstore_t bs)
     void bstore_ptn_iter_free(bstore_iter_t iter)
     unsigned long bstore_ptn_iter_card(bstore_iter_t i)
     bptn_t bstore_ptn_iter_obj(bstore_iter_t iter)
-    bptn_t bstore_ptn_iter_next(bstore_iter_t iter)
-    bptn_t bstore_ptn_iter_prev(bstore_iter_t iter)
-    bptn_t bstore_ptn_iter_find(bstore_iter_t iter, time_t start)
-    bptn_t bstore_ptn_iter_first(bstore_iter_t iter)
-    bptn_t bstore_ptn_iter_last(bstore_iter_t iter)
-    bstore_iter_pos_t bstore_ptn_iter_pos(btkn_iter_t)
+    int bstore_ptn_iter_find_fwd(bstore_iter_t iter, bptn_id_t ptn_id)
+    int bstore_ptn_iter_find_rev(bstore_iter_t iter, bptn_id_t ptn_id)
+    int bstore_ptn_iter_next(bstore_iter_t iter)
+    int bstore_ptn_iter_prev(bstore_iter_t iter)
+    int bstore_ptn_iter_first(bstore_iter_t iter)
+    int bstore_ptn_iter_last(bstore_iter_t iter)
+    bstore_iter_pos_t bstore_ptn_iter_pos_get(btkn_iter_t)
     int bstore_ptn_iter_pos_set(btkn_iter_t, bstore_iter_pos_t)
+    int bstore_ptn_iter_filter_set(bstore_iter_t i, bstore_iter_filter_t f)
 
-    bstore_iter_pos_t bstore_msg_iter_pos(bstore_iter_t)
+    bstore_iter_pos_t bstore_msg_iter_pos_get(bstore_iter_t)
     int bstore_msg_iter_pos_set(bstore_iter_t, bstore_iter_pos_t)
     bstore_iter_t bstore_msg_iter_new(bstore_t bs)
     void bstore_msg_iter_free(bstore_iter_t i)
     uint64_t bstore_msg_iter_card(bstore_iter_t i)
-    ctypedef int (*bmsg_cmp_fn_t)(bptn_id_t ptn_id, time_t ts,
-                                            bcomp_id_t comp_id, void *ctxt)
-    bmsg_t bstore_msg_iter_find(bstore_iter_t i,
-                            bptn_id_t ptn_id, time_t start, bcomp_id_t comp_id,
-                            bmsg_cmp_fn_t cmp_fn, void *ctxt)
     bmsg_t bstore_msg_iter_obj(bstore_iter_t i)
-    bmsg_t bstore_msg_iter_next(bstore_iter_t i)
-    bmsg_t bstore_msg_iter_prev(bstore_iter_t i)
-    bmsg_t bstore_msg_iter_first(bstore_iter_t i)
-    bmsg_t bstore_msg_iter_last(bstore_iter_t i)
+    int bstore_msg_iter_find_fwd(bstore_iter_t itr, timeval *tv,
+                                 bcomp_id_t comp_id, bptn_id_t ptn_id)
+    int bstore_msg_iter_find_rev(bstore_iter_t itr, timeval *tv,
+                                 bcomp_id_t comp_id, bptn_id_t ptn_id)
+    int bstore_msg_iter_next(bstore_iter_t i)
+    int bstore_msg_iter_prev(bstore_iter_t i)
+    int bstore_msg_iter_first(bstore_iter_t i)
+    int bstore_msg_iter_last(bstore_iter_t i)
+    int bstore_msg_iter_filter_set(bstore_iter_t i, bstore_iter_filter_t f)
 
-    char *bstore_pos_to_str(bstore_iter_pos_t pos)
-    bstore_iter_pos_t bstore_pos_from_str(const char *pos)
     void bstore_iter_pos_free(bstore_iter_t iter, bstore_iter_pos_t pos)
 
     cdef struct bptn_hist_s:
@@ -157,29 +173,36 @@ cdef extern from "baler/bstore.h":
     ctypedef bstore_iter_t bptn_iter_t
     ctypedef bstore_iter_t bptn_hist_iter_t
 
-    cdef bstore_iter_pos_t bstore_ptn_hist_iter_pos(bptn_hist_iter_t)
+    cdef bstore_iter_pos_t bstore_ptn_hist_iter_pos_get(bptn_hist_iter_t)
     cdef int bstore_ptn_hist_iter_pos_set(bptn_hist_iter_t, bstore_iter_pos_t)
     cdef bptn_hist_iter_t bstore_ptn_hist_iter_new(bstore_t bs)
     cdef void bstore_ptn_hist_iter_free(bptn_hist_iter_t it)
-    cdef bptn_hist_t bstore_ptn_hist_iter_find(bptn_hist_iter_t it, bptn_hist_t ptn_h)
     cdef bptn_hist_t bstore_ptn_hist_iter_obj(bptn_hist_iter_t it, bptn_hist_t ptn_h)
-    cdef bptn_hist_t bstore_ptn_hist_iter_next(bptn_hist_iter_t it, bptn_hist_t ptn_h)
-    cdef bptn_hist_t bstore_ptn_hist_iter_first(bptn_hist_iter_t it, bptn_hist_t ptn_h)
-    cdef bptn_hist_t bstore_ptn_hist_iter_last(bptn_hist_iter_t it, bptn_hist_t ptn_h)
+    int bstore_ptn_hist_iter_filter_set(bptn_hist_iter_t iter,
+                                        bstore_iter_filter_t filter)
+    cdef int bstore_ptn_hist_iter_find_fwd(bptn_hist_iter_t it, bptn_hist_t ptn_h)
+    cdef int bstore_ptn_hist_iter_find_rev(bptn_hist_iter_t it, bptn_hist_t ptn_h)
+    cdef int bstore_ptn_hist_iter_first(bptn_hist_iter_t it)
+    cdef int bstore_ptn_hist_iter_next(bptn_hist_iter_t it)
+    cdef int bstore_ptn_hist_iter_prev(bptn_hist_iter_t it)
+    cdef int bstore_ptn_hist_iter_last(bptn_hist_iter_t it)
 
     ctypedef bstore_iter_t bptn_tkn_iter_t
     cdef btkn_t bstore_ptn_tkn_find(bstore_t bs,
                                     bptn_id_t ptn_id, uint64_t tkn_pos,
                                     btkn_id_t tkn_id)
-    cdef bstore_iter_pos_t bstore_ptn_tkn_iter_pos(bptn_tkn_iter_t)
+    cdef bstore_iter_pos_t bstore_ptn_tkn_iter_pos_get(bptn_tkn_iter_t)
     cdef int bstore_ptn_tkn_iter_pos_set(bptn_tkn_iter_t, bstore_iter_pos_t)
-    cdef bptn_tkn_iter_t bstore_ptn_tkn_iter_new(bstore_t bs)
+    cdef bptn_tkn_iter_t bstore_ptn_tkn_iter_new(bstore_t bs);
     cdef void bstore_ptn_tkn_iter_free(bptn_tkn_iter_t it)
     cdef uint64_t bstore_ptn_tkn_iter_card(bptn_tkn_iter_t it)
-    cdef btkn_t bstore_ptn_tkn_iter_find(bptn_tkn_iter_t it, bptn_id_t ptn_id, uint64_t pos)
     cdef btkn_t bstore_ptn_tkn_iter_obj(bptn_tkn_iter_t it)
-    cdef btkn_t bstore_ptn_tkn_iter_next(bptn_tkn_iter_t it)
-    cdef btkn_t bstore_ptn_tkn_iter_prev(bptn_tkn_iter_t it)
+    cdef int bstore_ptn_tkn_iter_next(bptn_tkn_iter_t it)
+    cdef int bstore_ptn_tkn_iter_prev(bptn_tkn_iter_t it)
+    cdef int bstore_ptn_tkn_iter_first(bptn_tkn_iter_t it)
+    cdef int bstore_ptn_tkn_iter_last(bptn_tkn_iter_t it)
+    cdef int bstore_ptn_tkn_iter_filter_set(bptn_tkn_iter_t itr,
+                                            bstore_iter_filter_t fltr);
 
     cdef struct btkn_hist_s:
         btkn_id_t tkn_id
@@ -189,15 +212,19 @@ cdef extern from "baler/bstore.h":
     ctypedef btkn_hist_s *btkn_hist_t
 
     ctypedef bstore_iter_t btkn_hist_iter_t
-    bstore_iter_pos_t bstore_tkn_hist_iter_pos(btkn_hist_iter_t)
+    bstore_iter_pos_t bstore_tkn_hist_iter_pos_get(btkn_hist_iter_t)
     int bstore_tkn_hist_iter_pos_set(btkn_hist_iter_t, bstore_iter_pos_t)
     btkn_hist_iter_t bstore_tkn_hist_iter_new(bstore_t bs)
     void bstore_tkn_hist_iter_free(btkn_hist_iter_t iter)
-    btkn_hist_t bstore_tkn_hist_iter_find(btkn_hist_iter_t iter, btkn_hist_t tkn_h)
     btkn_hist_t bstore_tkn_hist_iter_obj(btkn_hist_iter_t iter, btkn_hist_t tkn_h)
-    btkn_hist_t bstore_tkn_hist_iter_next(btkn_hist_iter_t iter, btkn_hist_t tkn_h)
-    btkn_hist_t bstore_tkn_hist_iter_first(btkn_hist_iter_t iter, btkn_hist_t tkn_h)
-    btkn_hist_t bstore_tkn_hist_iter_last(btkn_hist_iter_t iter, btkn_hist_t tkn_h)
+    int bstore_tkn_hist_iter_filter_set(btkn_hist_iter_t iter,
+                                        bstore_iter_filter_t filter)
+    int bstore_tkn_hist_iter_find_fwd(btkn_hist_iter_t iter, btkn_hist_t tkn_h)
+    int bstore_tkn_hist_iter_find_rev(btkn_hist_iter_t iter, btkn_hist_t tkn_h)
+    int bstore_tkn_hist_iter_first(btkn_hist_iter_t iter)
+    int bstore_tkn_hist_iter_next(btkn_hist_iter_t iter)
+    int bstore_tkn_hist_iter_prev(btkn_hist_iter_t iter)
+    int bstore_tkn_hist_iter_last(btkn_hist_iter_t iter)
 
     cdef struct bcomp_hist_s:
         bcomp_id_t comp_id
@@ -208,15 +235,26 @@ cdef extern from "baler/bstore.h":
     ctypedef bcomp_hist_s *bcomp_hist_t
     ctypedef bstore_iter_t bcomp_hist_iter_t
 
-    bstore_iter_pos_t bstore_comp_hist_iter_pos(bcomp_hist_iter_t)
+    bstore_iter_pos_t bstore_comp_hist_iter_pos_get(bcomp_hist_iter_t)
     int bstore_comp_hist_iter_pos_set(bcomp_hist_iter_t, bstore_iter_pos_t)
     bcomp_hist_iter_t bstore_comp_hist_iter_new(bstore_t bs)
     void bstore_comp_hist_iter_free(bcomp_hist_iter_t iter)
-    bcomp_hist_t bstore_comp_hist_iter_find(bcomp_hist_iter_t iter, bcomp_hist_t comp_h)
     bcomp_hist_t bstore_comp_hist_iter_obj(bcomp_hist_iter_t iter, bcomp_hist_t comp_h)
-    bcomp_hist_t bstore_comp_hist_iter_next(bcomp_hist_iter_t iter, bcomp_hist_t comp_h)
-    bcomp_hist_t bstore_comp_hist_iter_first(bcomp_hist_iter_t iter, bcomp_hist_t comp_h)
-    bcomp_hist_t bstore_comp_hist_iter_last(bcomp_hist_iter_t iter, bcomp_hist_t comp_h)
+    int bstore_comp_hist_iter_filter_set(bcomp_hist_iter_t iter,
+                                         bstore_iter_filter_t filter)
+    int bstore_comp_hist_iter_find_fwd(bcomp_hist_iter_t iter, bcomp_hist_t comp_h)
+    int bstore_comp_hist_iter_find_rev(bcomp_hist_iter_t iter, bcomp_hist_t comp_h)
+    int bstore_comp_hist_iter_first(bcomp_hist_iter_t iter)
+    int bstore_comp_hist_iter_next(bcomp_hist_iter_t iter)
+    int bstore_comp_hist_iter_prev(bcomp_hist_iter_t iter)
+    int bstore_comp_hist_iter_last(bcomp_hist_iter_t iter)
+    bstore_iter_pos_handle_t bstore_iter_pos_get(bstore_iter_t iter)
+
+    bstore_iter_pos_handle_t bstore_iter_pos_get(bstore_iter_t iter)
+    void bstore_iter_pos_put(bstore_iter_t iter, bstore_iter_pos_handle_t pos_h)
+    int bstore_iter_pos_set(bstore_iter_t iter, bstore_iter_pos_handle_t pos_h)
+    char *bstore_pos_to_str(bstore_iter_pos_handle_t pos)
+    bstore_iter_pos_handle_t bstore_pos_from_str(const char *pos)
 
 cdef extern from "baler/btkn.h":
     uint64_t btkn_type_mask_from_str(const char *str)

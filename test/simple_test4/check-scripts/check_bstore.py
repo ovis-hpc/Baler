@@ -12,6 +12,10 @@ REV = 2
 
 PTN_STAT = get_ptn_stats()
 
+class Debug(object): pass
+
+DEBUG = Debug() # debug object ... for debugging purpose
+
 COMP_HIST_TABLE = {}
 for (k, e) in PTN_STAT.iteritems():
     COMP_HIST_TABLE.update(e.comp_hist)
@@ -70,9 +74,9 @@ class TestBS(object):
         N = 50
         for i in range(0, N):
             tkn0 = itr0.next()
-        pos = itr0.pos()
+        pos = itr0.get_pos()
         self.assertIsNotNone(pos)
-        itr1.pos_set(pos)
+        itr1.set_pos(pos)
         tkn1 = itr1.obj()
         self.assertEqual(tkn0, tkn1)
         count = N
@@ -96,11 +100,15 @@ class TestBS(object):
         stack = [itr.first()]
         for i in range(0, N):
             stack.append(itr.next())
+        stack2 = []
         tkn = itr.obj()
         while tkn:
-            self.assertEqual(tkn, stack.pop())
+            stack2.append(tkn)
+            # self.assertEqual(tkn, stack.pop())
             tkn = itr.prev()
-        self.assertEqual(len(stack), 0)
+        stack2.reverse()
+        self.assertEqual(stack, stack2)
+        # self.assertEqual(len(stack), 0)
 
     def __test_iter_rev_fwd(self, ItrCls, N, *args, **kwargs):
         itr = ItrCls(self.bs, *args, **kwargs)
@@ -140,11 +148,11 @@ class TestBS(object):
         p1 = itr1.next()
         self.assertTrue(p1)
 
-        pos = itr1.pos()
+        pos = itr1.get_pos()
         assert(pos)
 
         itr2 = PtnIter(self.bs)
-        itr2.pos_set(pos)
+        itr2.set_pos(pos)
         p2 = itr2.obj()
 
         count = 0
@@ -198,25 +206,45 @@ class TestBS(object):
             count += 1
         self.assertEqual(count, card)
 
-    def test_ptn_iter_find(self):
+    def test_ptn_iter_find_fwd(self):
         itr = PtnIter(self.bs)
-        ptn = itr.find(1)
-        while ptn:
-            next_ptn = itr.next()
-            if not next_ptn:
-                break
-            self.assertGreaterEqual(next_ptn.first_seen, ptn.first_seen)
-            ptn = next_ptn
+        ptn_id = 260
+        self.assertTrue(itr.find_fwd(ptn_id = ptn_id))
+        ptn = itr.obj()
+        self.assertEqual(ptn.ptn_id, ptn_id)
 
-    def test_ptn_iter_find_pos(self):
+    def test_ptn_iter_find_rev(self):
+        itr = PtnIter(self.bs)
+        ptn_id = 260
+        self.assertTrue(itr.find_rev(ptn_id = ptn_id))
+        ptn = itr.obj()
+        self.assertEqual(ptn.ptn_id, ptn_id)
+
+    def test_ptn_iter_filter(self):
+        itr = PtnIter(self.bs)
+        ts = BTEST_TS_BEGIN
+        itr.set_filter(tv_begin=(ts, 0))
+        count = 0
+        for ptn in itr:
+            self.assertGreaterEqual(ptn.first_seen, ts)
+            count += 1
+        self.assertGreater(count, 0)
+
+    def test_ptn_iter_filter_pos(self):
         itr1 = PtnIter(self.bs)
-        ptn1 = itr1.find(1)
+        ts = BTEST_TS_BEGIN
+        itr1.set_filter(tv_begin=(ts, 0))
+        ptn1 = itr1.first()
+        self.assertIsNotNone(ptn1)
         ptn1 = itr1.next()
+        self.assertIsNotNone(ptn1)
         ptn1 = itr1.next()
-        pos = itr1.pos()
+        self.assertIsNotNone(ptn1)
+        pos = itr1.get_pos()
         self.assertIsNotNone(pos)
+        print "pos:", pos
         itr2 = PtnIter(self.bs)
-        itr2.pos_set(pos)
+        itr2.set_pos(pos)
         ptn2 = itr2.obj()
         self.assertTrue(ptn2)
         count = 0
@@ -229,15 +257,20 @@ class TestBS(object):
         self.assertIsNone(ptn2)
         self.assertTrue(count)
 
-    def test_ptn_iter_find_pos_rev(self):
+    def test_ptn_iter_filter_pos_rev(self):
         itr1 = PtnIter(self.bs)
-        ptn1 = itr1.find(1)
+        ts = BTEST_TS_BEGIN
+        itr1.set_filter(tv_begin=(ts, 0))
+        ptn1 = itr1.first()
+        self.assertIsNotNone(ptn1)
         ptn1 = itr1.next()
+        self.assertIsNotNone(ptn1)
         ptn1 = itr1.next()
-        pos = itr1.pos()
+        self.assertIsNotNone(ptn1)
+        pos = itr1.get_pos()
         self.assertIsNotNone(pos)
         itr2 = PtnIter(self.bs)
-        itr2.pos_set(pos)
+        itr2.set_pos(pos)
         ptn2 = itr2.obj()
         self.assertTrue(ptn2)
         count = 0
@@ -274,10 +307,13 @@ class TestBS(object):
         self.assertEqual(msgs1, msgs2)
 
     def test_msg_iter_rev(self):
-        msgs1 = [str(msg) for msg in MsgIter(self.bs)]
-        for msg in MsgRevIter(self.bs):
-            m1 = msgs1.pop()
-            self.assertEqual(m1, str(msg))
+        global msg_fwd, msg_rev, msg, bs
+        bs = self.bs
+        msg_fwd = [str(msg) for msg in MsgIter(self.bs)]
+        msg_rev = [str(msg) for msg in MsgRevIter(self.bs)]
+        self.assertEqual(len(msg_fwd), len(msg_rev))
+        for i in range(0, len(msg_fwd)):
+            self.assertEqual(msg_fwd[i], msg_rev[-(i+1)])
 
     def test_msg_iter_fwd_rev(self):
         count = 20
@@ -292,14 +328,14 @@ class TestBS(object):
             msg = itr.prev()
         self.assertEqual(len(stack), 0)
 
-    def test_msg_iter_find_comp(self):
+    def test_msg_iter_filter_comp(self):
         name = "node00012"
         reg = re.compile(name)
         msgs0 = []
         msgs1 = list(filter(lambda s: reg.findall(s), get_messages()))
         comp = self.bs.tknFindByName(name)
         self.assertIsNotNone(comp)
-        for msg in MsgIterFind(self.bs, 0, 0, comp.tkn_id):
+        for msg in MsgIterFilter(self.bs, comp_id=comp.tkn_id):
             self.assertEqual(msg.comp_id, comp.tkn_id)
             msgs0.append(msg.msg())
         msgs0.sort()
@@ -313,14 +349,14 @@ class TestBS(object):
             comp = self.bs.tknFindByName(comp)
             comp_id = comp.tkn_id
         itr0 = MsgIter(self.bs)
-        msg0 = itr0.find(ptn_id, start, comp_id)
-        msg0 = itr0.next()
-        msg0 = itr0.next()
-        msg0 = itr0.next()
-        msg0 = itr0.next()
-        pos0 = itr0.pos()
+        msg0 = itr0.find_fwd(tv=(start, 0), comp_id=comp_id, ptn_id=ptn_id)
+        self.assertIsNotNone(msg0)
+        for x in range(0, 4):
+            msg0 = itr0.next()
+            self.assertIsNotNone(msg0)
+        pos0 = itr0.get_pos()
         itr1 = MsgIter(self.bs)
-        itr1.pos_set(pos0)
+        itr1.set_pos(pos0)
         msg1 = itr1.obj()
         while msg0 and msg1:
             msg0 = itr0.next()
@@ -333,14 +369,14 @@ class TestBS(object):
             comp = self.bs.tknFindByName(comp)
             comp_id = comp.tkn_id
         itr0 = MsgIter(self.bs)
-        msg0 = itr0.find(ptn_id, start, comp_id)
-        msg0 = itr0.next()
-        msg0 = itr0.next()
-        msg0 = itr0.next()
-        msg0 = itr0.next()
-        pos0 = itr0.pos()
+        msg0 = itr0.find_fwd(tv=(start, 0), comp_id=comp_id, ptn_id=ptn_id)
+        self.assertIsNotNone(msg0)
+        for x in range(0, 4):
+            msg0 = itr0.next()
+            self.assertIsNotNone(msg0)
+        pos0 = itr0.get_pos()
         itr1 = MsgIter(self.bs)
-        itr1.pos_set(pos0)
+        itr1.set_pos(pos0)
         msg1 = itr1.obj()
         while msg0 and msg1:
             msg0 = itr0.prev()
@@ -385,15 +421,17 @@ class TestBS(object):
         self.__test_msg_iter_find_pos_rev(BTEST_TS_BEGIN + 4*3600, 263,
                                           "node00012")
 
-    def test_msg_iter_find_comp_time(self):
+    def test_msg_iter_filter_comp_time(self):
         name = "node00012"
         ts = BTEST_TS_BEGIN + 4*3600
+        tv_begin = (ts, 0)
         reg = re.compile(name)
         msgs0 = []
         msgs1 = list(filter(lambda s: reg.findall(s), get_messages()))
         comp = self.bs.tknFindByName(name)
         self.assertIsNotNone(comp)
-        for msg in MsgIterFind(self.bs, 0, ts, comp.tkn_id):
+        for msg in MsgIterFilter(self.bs, tv_begin=tv_begin,
+                                 comp_id=comp.tkn_id):
             self.assertEqual(msg.comp_id, comp.tkn_id)
             msgs0.append(msg.msg())
         msgs0.sort()
@@ -406,9 +444,10 @@ class TestBS(object):
             t = parse_local_time(msg)
             self.assertLess(t, ts)
 
-    def test_msg_iter_find_time(self):
+    def test_msg_iter_filter_time(self):
         ts = BTEST_TS_BEGIN + 4*3600
-        msgs0 = [msg.msg() for msg in MsgIterFind(self.bs, 0, ts, 0)]
+        tv_begin = (ts, 0)
+        msgs0 = [msg.msg() for msg in MsgIterFilter(self.bs, tv_begin=tv_begin)]
         msgs1 = get_messages()
         msgs0.sort()
         msgs1.sort()
@@ -420,10 +459,10 @@ class TestBS(object):
             t = parse_local_time(msg)
             self.assertLess(t, ts)
 
-    def test_msg_iter_find_ptn(self):
+    def test_msg_iter_filter_ptn(self):
         ptn_id = 263
         msgs0 = []
-        for msg in MsgIterFind(self.bs, ptn_id, 0, 0):
+        for msg in MsgIterFilter(self.bs, ptn_id=ptn_id):
             self.assertEqual(msg.ptn_id, ptn_id)
             msgs0.append(msg.msg())
         ptn = self.bs.ptnFindById(ptn_id)
@@ -435,11 +474,12 @@ class TestBS(object):
         self.assertGreater(len(msgs0), 0)
         self.assertEqual(msgs0, msgs1)
 
-    def test_msg_iter_find_ptn_time(self):
+    def test_msg_iter_filter_ptn_time(self):
         ptn_id = 263
         ts = BTEST_TS_BEGIN + 4*3600
+        tv_begin = (ts, 0)
         msgs0 = []
-        for msg in MsgIterFind(self.bs, ptn_id, ts, 0):
+        for msg in MsgIterFilter(self.bs, ptn_id=ptn_id, tv_begin=tv_begin):
             self.assertEqual(msg.ptn_id, ptn_id)
             msgs0.append(msg.msg())
         ptn = self.bs.ptnFindById(ptn_id)
@@ -455,10 +495,11 @@ class TestBS(object):
             t = parse_local_time(msg)
             self.assertLess(t, ts)
 
-    def test_msg_iter_find_ptn_comp_time(self):
+    def test_msg_iter_filter_ptn_comp_time(self):
         ptn_id = 263
         name = "node00012"
         ts = BTEST_TS_BEGIN + 4*3600
+        tv_begin = (ts, 0)
         node_reg = re.compile(name)
         ptn = self.bs.ptnFindById(ptn_id)
         s = re.match(".*(This is pattern .*):.*", str(ptn)).group(1)
@@ -470,7 +511,8 @@ class TestBS(object):
         msgs1 = list(filter(
                         lambda s: node_reg.search(s) and ptn_reg.search(s),
                         get_messages()))
-        for msg in MsgIterFind(self.bs, ptn_id, ts, comp.tkn_id):
+        for msg in MsgIterFilter(self.bs, ptn_id=ptn_id,
+                                 tv_begin=tv_begin, comp_id=comp.tkn_id):
             self.assertEqual(msg.ptn_id, ptn_id)
             msgs0.append(msg.msg())
         msgs0.sort()
@@ -494,10 +536,10 @@ class TestBS(object):
             msg0 = itr0.next()
             n -= 1
 
-        pos = itr0.pos()
+        pos = itr0.get_pos()
 
         itr1 = MsgIter(self.bs)
-        itr1.pos_set(pos)
+        itr1.set_pos(pos)
         msg1 = itr1.obj()
         self.assertEqual(msg0, msg1)
 
@@ -537,9 +579,9 @@ class TestBS(object):
         tkn0 = itr0.first()
         tkn0 = itr0.next()
         tkn0 = itr0.next()
-        pos = itr0.pos()
+        pos = itr0.get_pos()
         itr1 = PtnTknIter(self.bs, 0, 0)
-        itr1.pos_set(pos)
+        itr1.set_pos(pos)
         tkn1 = itr1.obj()
         self.assertEqual(tkn0, tkn1)
         while tkn0 and tkn1:
@@ -551,7 +593,6 @@ class TestBS(object):
         bs = self.bs
         data = {}
         tkn_id = 0
-        Iter = TknHistIter
         histAssert = self.assertGreaterEqual
         if name:
             tkn = bs.tknFindByName(name)
@@ -559,7 +600,12 @@ class TestBS(object):
                 return data
             tkn_id = tkn.tkn_id
         prev_hist = None
-        itr = Iter(bs, tkn_id, bin_width, ts)
+        kwargs = {
+            "tkn_id": tkn_id,
+            "bin_width": bin_width,
+            "tv_begin": (ts, 0)
+        }
+        itr = TknHistIter(bs, **kwargs)
         for hist in itr:
             if tkn_id:
                 self.assertEqual(tkn_id, hist.tkn_id)
@@ -567,14 +613,14 @@ class TestBS(object):
                 histAssert(hist, prev_hist)
             tkn = bs.tknFindById(hist.tkn_id)
             key = (hist.bin_width, hist.time, str(tkn))
-            self.assertFalse(key in data)
+            self.assertNotIn(key, data)
             data[key] = hist.tkn_count
             prev_hist = hist
         return data
 
     def __test_tkn_hist_fwd_iter(self, bin_width, ts, name):
-        d0 = self.__tkn_hist_data(bin_width, ts, name)
-        d1 = get_tkn_hist(bin_width, ts, name)
+        DEBUG.d0 = d0 = self.__tkn_hist_data(bin_width, ts, name)
+        DEBUG.d1 = d1 = get_tkn_hist(bin_width, ts, name)
         self.assertGreater(len(d0), 0)
         self.assertEqual(d0, d1)
 
@@ -623,7 +669,7 @@ class TestBS(object):
             return
         name = "Zero"
         tkn = self.bs.tknFindByName(name)
-        itr = TknHistIter(self.bs, tkn.tkn_id, 3600, 0)
+        itr = TknHistIter(self.bs, tkn_id=tkn.tkn_id, bin_width=3600)
         count = 0
         for x in itr:
             o = itr.obj()
@@ -633,15 +679,20 @@ class TestBS(object):
 
     def __test_tkn_hist_pos(self, bin_width, start, tkn_text):
         tkn_id = 0 if not tkn_text else self.bs.tknFindByName(tkn_text).tkn_id
-        itr1 = TknHistIter(self.bs, tkn_id, bin_width, start)
+        kwargs = {
+            "tkn_id": tkn_id,
+            "bin_width": bin_width,
+            "tv_begin": (start, 0),
+        }
+        itr1 = TknHistIter(self.bs, **kwargs)
         itr1.first()
         itr1.next()
         itr1.next()
         itr1.next()
         itr1.next()
-        pos = itr1.pos()
-        itr2 = TknHistIter(self.bs, 0, 0, 0)
-        itr2.pos_set(pos)
+        pos = itr1.get_pos()
+        itr2 = TknHistIter(self.bs)
+        itr2.set_pos(pos)
         obj1 = itr1.obj()
         obj2 = itr2.obj()
         self.assertIsNotNone(obj1)
@@ -662,9 +713,14 @@ class TestBS(object):
         data = {}
         for ptn in PtnIter(self.bs):
             pdata = {}
-            for hist in PtnHistIter(self.bs, ptn.ptn_id, bin_width, start):
+            kwargs = {
+                "ptn_id": ptn.ptn_id,
+                "bin_width": bin_width,
+                "tv_begin": (start, 0),
+            }
+            for hist in PtnHistIter(self.bs, **kwargs):
                 key = (hist.bin_width, hist.time)
-                self.assertFalse(key in pdata)
+                self.assertNotIn(key, pdata)
                 pdata[key] = hist.msg_count
             key = str(ptn)
             self.assertFalse(key in data)
@@ -674,6 +730,17 @@ class TestBS(object):
     def __test_ptn_hist_iter(self, bin_width, ts=0):
         d0 = self.__ptn_hist_data(bin_width, ts)
         d1 = get_ptn_hist(bin_width, ts)
+        if False:
+            # Debug print
+            print "----------------------"
+            print "len(d0):", len(d0)
+            print "len(d1):", len(d1)
+            print "-------  D0  ---------"
+            KV_HEAD(d0)
+            print "----------------------"
+            print "-------  D1  ---------"
+            KV_HEAD(d1)
+            print "----------------------"
         self.assertEqual(d0, d1)
 
     def test_ptn_hist_fwd_iter_3600(self):
@@ -697,15 +764,20 @@ class TestBS(object):
         self.__test_ptn_hist_iter(60, BTEST_TS_BEGIN + 4*3600)
 
     def __test_ptn_hist_iter_pos(self, bin_width, time, ptn_id):
-        itr1 = PtnHistIter(self.bs, ptn_id, bin_width, time)
+        kwargs = {
+            "ptn_id": ptn_id,
+            "bin_width": bin_width,
+            "tv_begin": (time, 0),
+        }
+        itr1 = PtnHistIter(self.bs, **kwargs)
         itr1.first()
         itr1.next()
         itr1.next()
         itr1.next()
         itr1.next()
-        pos = itr1.pos()
-        itr2 = PtnHistIter(self.bs, 0, 0, 0)
-        itr2.pos_set(pos)
+        pos = itr1.get_pos()
+        itr2 = PtnHistIter(self.bs)
+        itr2.set_pos(pos)
         obj1 = itr1.obj()
         obj2 = itr2.obj()
         self.assertIsNotNone(obj1)
@@ -738,7 +810,13 @@ class TestBS(object):
             a[k] = v
         try:
             b = {}
-            itr = CompHistIter(self.bs, bin_width, ts, comp_id, ptn_id)
+            kwargs = {
+                "bin_width": bin_width,
+                "tv_begin": (ts, 0),
+                "comp_id": comp_id,
+                "ptn_id": ptn_id
+            }
+            itr = CompHistIter(self.bs, **kwargs)
             for h in itr:
                 c_str = str(self.bs.tknFindById(h.comp_id))
                 p_str = str(self.bs.ptnFindById(h.ptn_id))
@@ -827,15 +905,21 @@ class TestBS(object):
 
     def __test_comp_hist_iter_pos(self, bin_width, time, comp, ptn_id):
         comp_id = 0 if not comp else self.bs.tknFindByName(comp).tkn_id
-        itr1 = CompHistIter(self.bs, bin_width, time, comp_id, ptn_id)
+        kwargs = {
+            "bin_width": bin_width,
+            "tv_begin": (time, 0),
+            "comp_id": comp_id,
+            "ptn_id": ptn_id
+        }
+        itr1 = CompHistIter(self.bs, **kwargs)
         itr1.first()
         itr1.next()
         itr1.next()
         itr1.next()
         itr1.next()
-        pos = itr1.pos()
-        itr2 = CompHistIter(self.bs, 0, 0, 0, 0)
-        itr2.pos_set(pos)
+        pos = itr1.get_pos()
+        itr2 = CompHistIter(self.bs)
+        itr2.set_pos(pos)
         obj1 = itr1.obj()
         obj2 = itr2.obj()
         self.assertIsNotNone(obj1)
@@ -862,11 +946,17 @@ class TestBSS(TestBS, unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        del cls.bs
+        cls.bs.close()
 
 
 if __name__ == "__main__":
+    DEBUG._f = "/home/narate/env/pystartup.py"
+    if os.path.exists(DEBUG._f):
+        execfile(DEBUG._f)
     LOGFMT = '%(asctime)s %(name)s %(levelname)s: %(message)s'
     logging.basicConfig(format=LOGFMT)
     logger.setLevel(logging.INFO)
+    # default prefix is 'test_'
+    # change it to test a subset of test methods (e.g. 'test_msg_iter_')
+    unittest.TestLoader.testMethodPrefix = "test_"
     unittest.main()

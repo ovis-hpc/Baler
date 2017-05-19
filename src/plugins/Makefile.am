@@ -17,7 +17,6 @@ libbstore_sos_la_LIBADD = ../baler/libbaler.la -lsos @SOS_LIBDIR_FLAG@ @SOS_LIB6
 # libbstore_sos_la_LDFLAGS = -pg -g
 lib_LTLIBRARIES += libbstore_sos.la
 
-
 libbstore_agg_la_SOURCES = bstore_agg.c
 libbstore_agg_la_CFLAGS = $(AM_CFLAGS) @SOS_INCDIR_FLAG@ @OVIS_LIB_INCDIR_FLAG@
 libbstore_agg_la_LIBADD = ../baler/libbaler.la -lsos -lcoll -lpthread \

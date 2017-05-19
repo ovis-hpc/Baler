@@ -9,8 +9,9 @@ BSTORE=./store
 BCONFIG=./balerd.cfg
 BTEST_N_PATTERNS=128
 BTEST_ENG_DICT="../eng-dictionary"
-BTEST_HOST_LIST="./host.list"
+BTEST_HOST_LIST="./host.list" # the file will be automatically generated below
 BTEST_BIN_RSYSLOG_PORT=33333
+BTEST_NODE_LEN=64
 BPROF=balerd.prof
 
 BOUT_THREADS=1
@@ -38,11 +39,10 @@ __cleanup() {
 }
 
 __info "Generating host.list"
-{ echo <<EOF
-$(for ((H=0; $H<$BTEST_NODE_LEN; H++)); do
-	printf "node%05d" $((BTEST_NODE_BEGIN + H))
-done)
-EOF
+{
+for ((H=0; $H<$BTEST_NODE_LEN; H++)); do
+	printf "node%05d\n" $((BTEST_NODE_BEGIN + H))
+done
 } > $BTEST_HOST_LIST
 
 # Hook to kill all jobs at exit
@@ -91,6 +91,7 @@ for ((X=0; $X<$BTEST_N_DAEMONS; X++)); do
 	check_balerd $X
 done
 
-echo -e "${BLD}${GRN}FINISHED!!!${NC} -- press ENTER to exit"
-
+echo -e "${BLD}${GRN}FINISHED!!!${NC} -- press ENTER to test bstore_agg"
 read
+
+./bstore_test.py

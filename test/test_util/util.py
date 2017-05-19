@@ -305,8 +305,10 @@ class BStore(object):
         self.bs = bs
         self.path = path
 
-    def __del__(self):
+    def close(self):
         self.bs.close()
+
+    def __del__(self):
         del self.bs
 
     def tknFindByName(self, name):
@@ -640,169 +642,89 @@ class Msg(object):
                 self.text() == other.text()
 
 
-class TknIter(object):
+class Iter(object):
+    def __init__(self, bs, **kwargs):
+        raise NotImplemented("sub-class must override this!")
+        # The sub-class must do the following:
+        # - set `self.itr` in __init__
+        # - define self.obj() method
+
+    def __del__(self):
+        del self.itr
+
+    def set_filter(self, **kwargs):
+        return self.itr.set_filter(**kwargs)
+
+    def find_fwd(self, **kwargs):
+        return self._step(self.itr.find_fwd, **kwargs)
+
+    def find_rev(self, **kwargs):
+        return self._step(self.itr.find_rev, **kwargs)
+
+    def card(self):
+        return self.itr.card()
+
+    def _step(self, fn, *args, **kwargs):
+        success = fn(*args, **kwargs)
+        if success:
+            return self.obj()
+        return None
+
+    def first(self):
+        return self._step(self.itr.first)
+
+    def last(self):
+        return self._step(self.itr.last)
+
+    def next(self):
+        return self._step(self.itr.next)
+
+    def prev(self):
+        return self._step(self.itr.prev)
+
+    def get_pos(self):
+        return self.itr.get_pos()
+
+    def set_pos(self, pos):
+        return self.itr.set_pos(pos)
+
+    def __iter__(self):
+        obj = self.first()
+        while obj:
+            yield obj
+            obj = self.next()
+
+
+class TknIter(Iter):
     def __init__(self, bs):
         assert(type(bs) == BStore)
         self.itr = Bq.Btkn_iter(bs.bs)
 
-    def __del__(self):
-        del self.itr
-
-    def __iter__(self):
-        tkn = self.first()
-        while tkn:
-            yield tkn
-            tkn = self.next()
-
-    def first(self):
-        return TKN(self.itr.first())
-
-    def next(self):
-        return TKN(self.itr.next())
-
-    def prev(self):
-        return TKN(self.itr.prev())
-
-    def last(self):
-        return TKN(self.itr.last())
-
     def obj(self):
         return TKN(self.itr.obj())
-
-    def card(self):
-        return self.itr.card()
-
-    def pos(self):
-        return self.itr.get_pos()
-
-    def pos_set(self, pos):
-        return self.itr.set_pos(pos)
 
 
 # Ptn_Iter wrapper. This is not a Python Iterator. However, it implements
 # `__iter__()` so that it can be used as Python Iterator.
-class PtnIter(object):
+class PtnIter(Iter):
     def __init__(self, bs):
         assert(type(bs) == BStore)
         self.itr = Bq.Bptn_iter(bs.bs)
 
-    def __del__(self):
-        del self.itr
-
-    def first(self):
-        return PTN(self.itr.first())
-
-    def last(self):
-        return PTN(self.itr.last())
-
-    def next(self):
-        return PTN(self.itr.next())
-
-    def prev(self):
-        return PTN(self.itr.prev())
-
     def obj(self):
         return PTN(self.itr.obj())
 
-    def pos(self):
-        return self.itr.get_pos()
 
-    def pos_set(self, pos):
-        return self.itr.set_pos(pos)
-
-    def find(self, ts):
-        found = self.itr.find(ts)
-        return PTN(self.itr.obj()) if found else None
-
-    def card(self):
-        return self.itr.card()
-
-    def __iter__(self):
-        ptn = self.first()
-        while ptn:
-            yield ptn
-            ptn = self.next()
-
-
-class PtnTknIter(object):
+class PtnTknIter(Iter):
     def __init__(self, bs, ptn_id, tkn_pos): # find-based
         assert(type(bs) == BStore)
-        self.itr = Bq.Bptn_tkn_iter(bs.bs)
-        self.ptn_id = ptn_id
-        self.tkn_pos = tkn_pos
-
-    def __del__(self):
-        del self.itr
-
-    def first(self):
-        found = self.itr.find(self.ptn_id, self.tkn_pos)
-        return TKN(self.itr.obj()) if found else None
-
-    def next(self):
-        return TKN(self.itr.next())
-
-    def prev(self):
-        return TKN(self.itr.prev())
-
-    def pos(self):
-        return self.itr.get_pos()
-
-    def pos_set(self, pos):
-        return self.itr.set_pos(pos)
+        self.itr = Bq.Bptn_tkn_iter(bs.bs, ptn_id, tkn_pos)
 
     def obj(self):
         return TKN(self.itr.obj())
 
-    def __iter__(self):
-        tkn = self.first()
-        while tkn:
-            yield tkn
-            tkn = self.next()
 
-
-class CompHistIter(object):
-    def __init__(self, bs, bin_width, time, comp_id, ptn_id):
-        assert(type(bs) == BStore)
-        self.bin_width = bin_width
-        self.time = time
-        self.comp_id = comp_id
-        self.ptn_id = ptn_id
-        self.itr = Bq.Bcomp_hist_iter(bs.bs)
-        assert(self.itr)
-
-    def __del__(self):
-        del self.itr
-
-    def first(self):
-        if self.itr.start(self.comp_id, self.ptn_id, self.bin_width, self.time):
-            return COMP_HIST(self.itr.obj())
-        return None
-
-    def last(self):
-        if self.itr.end(self.comp_id, self.ptn_id, self.bin_width, self.time):
-            return COMP_HIST(self.itr.obj())
-        return None
-
-    def next(self):
-        return COMP_HIST(self.itr.next())
-
-    def obj(self):
-        return COMP_HIST(self.itr.obj())
-
-    def pos(self):
-        return self.itr.get_pos()
-
-    def pos_set(self, pos):
-        return self.itr.set_pos(pos)
-
-    def __iter__(self):
-        h = self.first()
-        while h:
-            yield h
-            h = self.next()
-
-
-class MsgIter(object):
+class MsgIter(Iter):
     def __init__(self, bs):
         assert(type(bs) == BStore)
         self.bs = bs
@@ -811,51 +733,19 @@ class MsgIter(object):
     def __del__(self):
         del self.itr
 
-    def __iter__(self):
-        msg = self.first()
-        while msg:
-            yield msg
-            msg = self.next()
-
-    def first(self):
-        return MSG(self.bs, self.itr.first())
-
-    def last(self):
-        return MSG(self.bs, self.itr.last())
-
-    def next(self):
-        return MSG(self.bs, self.itr.next())
-
-    def prev(self):
-        return MSG(self.bs, self.itr.prev())
-
-    def find(self, ptn_id, start, comp_id):
-        if self.itr.start(comp_id, ptn_id, start):
-            return MSG(self.bs, self.itr.obj())
-        return None
-
     def obj(self):
         return MSG(self.bs, self.itr.obj())
 
-    def card(self):
-        return self.itr.card()
 
-    def pos(self):
-        return self.itr.get_pos()
-
-    def pos_set(self, pos):
-        return self.itr.set_pos(pos)
-
-
-class MsgIterFind(MsgIter):
-    def __init__(self, bs, ptn_id, start, comp_id):
-        super(MsgIterFind, self).__init__(bs)
-        self.ptn_id = ptn_id
-        self.start = start
-        self.comp_id = comp_id
+class MsgIterFilter(MsgIter):
+    def __init__(self, bs, tv_begin=(0,0), tv_end=(0,0), comp_id=0, ptn_id=0):
+        super(MsgIterFilter, self).__init__(bs)
+        self.key = dict(tv = tv_begin, tv_begin=tv_begin, tv_end=tv_end,
+                        comp_id=comp_id, ptn_id=ptn_id)
+        self.itr.set_filter(**self.key)
 
     def __iter__(self):
-        msg = self.find(self.ptn_id, self.start, self.comp_id)
+        msg = self.find_fwd(**self.key)
         while msg:
             yield msg
             msg = self.next()
@@ -869,75 +759,34 @@ class MsgRevIter(MsgIter):
             msg = self.prev()
 
 
-class TknHistIter(object):
-    def __init__(self, bs, tkn_id, bin_width, time):
+class TknHistIter(Iter):
+    def __init__(self, bs, **kwargs):
         assert(type(bs) == BStore)
         self.itr = Bq.Btkn_hist_iter(bs.bs)
-        self.tkn_id = tkn_id
-        self.bin_width = bin_width
-        self.time = time
-
-    def first(self):
-        if self.itr.start(self.tkn_id, self.bin_width, self.time):
-            return TKN_HIST(self.itr.obj())
-        return None
-
-    def last(self):
-        if self.itr.end(self.tkn_id, self.bin_width, self.time):
-            return TKN_HIST(self.itr.obj())
-        return None
-
-    def next(self):
-        return TKN_HIST(self.itr.next())
+        self.itr.set_filter(**kwargs)
+        assert(self.itr)
 
     def obj(self):
         return TKN_HIST(self.itr.obj())
 
-    def pos(self):
-        return self.itr.get_pos()
 
-    def pos_set(self, pos):
-        return self.itr.set_pos(pos)
-
-    def __iter__(self):
-        obj = self.first()
-        while obj:
-            yield obj
-            obj = self.next()
-
-
-class PtnHistIter(object):
-    def __init__(self, bs, ptn_id, bin_width, time):
+class PtnHistIter(Iter):
+    def __init__(self, bs, **kwargs):
         assert(type(bs) == BStore)
         self.itr = Bq.Bptn_hist_iter(bs.bs)
-        self.ptn_id = ptn_id
-        self.bin_width = bin_width
-        self.time = time
-
-    def first(self):
-        if self.itr.start(self.ptn_id, self.bin_width, self.time):
-            return PTN_HIST(self.itr.obj())
-        return None
-
-    def last(self):
-        if self.itr.end(self.ptn_id, self.bin_width, self.time):
-            return PTN_HIST(self.itr.obj())
-        return None
-
-    def next(self):
-        return PTN_HIST(self.itr.next())
+        self.itr.set_filter(**kwargs)
+        assert(self.itr)
 
     def obj(self):
         return PTN_HIST(self.itr.obj())
 
-    def pos(self):
-        return self.itr.get_pos()
 
-    def pos_set(self, pos):
-        return self.itr.set_pos(pos)
+class CompHistIter(Iter):
+    def __init__(self, bs, **kwargs):
+        assert(type(bs) == BStore)
+        self.itr = Bq.Bcomp_hist_iter(bs.bs)
+        self.itr.set_filter(**kwargs)
+        assert(self.itr)
 
-    def __iter__(self):
-        obj = self.first()
-        while obj:
-            yield obj
-            obj = self.next()
+    def obj(self):
+        return COMP_HIST(self.itr.obj())

@@ -12,7 +12,6 @@ from baler import Bq
 class Messages(object):
     def __init__(self, bs):
         self.mitr = Bq.Bmsg_iter(bs)
-        self.mitr.start(0, 0, 0)
 
     def __iter__(self):
         for m in self.mitr:

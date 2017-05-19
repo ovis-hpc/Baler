@@ -10,10 +10,23 @@ from test_util.util import *
 
 logger = logging.getLogger(__name__)
 
+class Debug(object): pass
+
+DEBUG = Debug() # DEBUG object
+
 BTEST_N_DAEMONS = 4
 
 FWD = 1
 REV = 2
+
+def print_head(lst, n = 10):
+    i = 0
+    for obj in lst:
+        print obj
+        i += 1
+        if i == n:
+            break
+
 
 class TestBSA(unittest.TestCase):
     @classmethod
@@ -26,6 +39,8 @@ class TestBSA(unittest.TestCase):
             _b = BStore.open("bstore_sos", "store.%d" % i, os.O_RDWR, 0)
             bss.append(_b)
         cls.bss = bss
+        DEBUG.bss = bss
+        DEBUG.bsa = cls.bsa
         pass
 
     @classmethod
@@ -123,9 +138,9 @@ class TestBSA(unittest.TestCase):
         tkn0 = itr0.next()
         tkn0 = itr0.next()
 
-        pos = itr0.pos()
+        pos = itr0.get_pos()
         self.assertIsNotNone(pos)
-        itr1.pos_set(pos)
+        itr1.set_pos(pos)
 
         tkn1 = itr1.obj()
 
@@ -169,11 +184,11 @@ class TestBSA(unittest.TestCase):
         p1 = itr1.next()
         self.assertTrue(p1)
 
-        pos = itr1.pos()
+        pos = itr1.get_pos()
         assert(pos)
 
         itr2 = PtnIter(self.bsa)
-        itr2.pos_set(pos)
+        itr2.set_pos(pos)
         p2 = itr2.obj()
 
         count = 0
@@ -187,6 +202,22 @@ class TestBSA(unittest.TestCase):
         self.assertIsNone(p2)
         self.assertTrue(count)
         pass
+
+    def test_ptn_iter_fwd(self):
+        pass
+
+    def debug_ptn_iter_fwd_rev(self):
+        itr1 = PtnIter(self.bsa)
+        itr2 = PtnIter(self.bsa)
+        print""
+        print "---- rev ----"
+        ptn = itr2.last()
+        while ptn:
+            print str(ptn)
+            ptn = itr2.prev()
+        print "---- fwd ----"
+        for ptn in itr1:
+            print str(ptn)
 
     def test_ptn_iter_fwd_rev(self):
         itr1 = PtnIter(self.bsa)
@@ -213,25 +244,25 @@ class TestBSA(unittest.TestCase):
             count += 1
         self.assertEqual(count, card)
 
-    def test_ptn_iter_find(self):
+    def test_ptn_iter_find_id_fwd(self):
         itr = PtnIter(self.bsa)
-        ptn = itr.find(1)
+        ptn = itr.find_fwd(ptn_id=1)
         while ptn:
             next_ptn = itr.next()
             if not next_ptn:
                 break
-            self.assertGreaterEqual(next_ptn.first_seen, ptn.first_seen)
+            self.assertGreaterEqual(next_ptn.ptn_id , ptn.ptn_id)
             ptn = next_ptn
 
-    def test_ptn_iter_find_pos(self):
+    def test_ptn_iter_find_id_pos(self):
         itr1 = PtnIter(self.bsa)
-        ptn1 = itr1.find(1)
+        ptn1 = itr1.find_fwd(ptn_id=1)
         ptn1 = itr1.next()
         ptn1 = itr1.next()
-        pos = itr1.pos()
+        pos = itr1.get_pos()
         self.assertIsNotNone(pos)
         itr2 = PtnIter(self.bsa)
-        itr2.pos_set(pos)
+        itr2.set_pos(pos)
         ptn2 = itr2.obj()
         self.assertTrue(ptn2)
         count = 0
@@ -269,21 +300,49 @@ class TestBSA(unittest.TestCase):
         msgs2.sort()
         self.assertEqual(msgs1, msgs2)
 
-    def test_msg_iter_rev(self):
-        itr = MsgRevIter(self.bsa)
-        msgs1 = []
-        for msg in itr:
-            host_str = str(msg.host)
-            host_check = msg.text().split(" ")[0]
-            self.assertEqual(host_str, host_check)
-            msgs1.append(str(msg))
-        msgs1.sort()
-        msgs2 = []
+    def debug_msg_iter_rev(self):
+        DEBUG.msgs = msgs = []
+        DEBUG.smsgs = smsgs = []
         for bs in self.bss:
+            itr = MsgIter(bs)
+            msg = itr.last()
+            msgs.append(msg)
+            smsgs.append(str(msg))
+        itr = MsgIter(self.bsa)
+        DEBUG.msg = msg = itr.last()
+        self.assertIn(str(msg), smsgs)
+        return
+        for bs in self.bss:
+            DEBUG.old_msg = old_msg = None
+            DEBUG.count = 0
             for msg in MsgRevIter(bs):
-                msgs2.append(str(msg))
-        msgs2.sort()
-        self.assertEqual(msgs1, msgs2)
+                DEBUG.msg = msg
+                if old_msg:
+                    self.assertLessEqual(msg.timestamp, old_msg.timestamp)
+                    if (msg.timestamp == old_msg.timestamp):
+                        self.assertLessEqual(msg.comp_id, old_msg.comp_id)
+                DEBUG.old_msg = old_msg = msg
+                DEBUG.count += 1
+        old_msg = None
+        for msg in MsgRevIter(self.bsa):
+            if old_msg:
+                self.assertLessEqual(msg.timestamp, old_msg.timestamp)
+                if (msg.timestamp == old_msg.timestamp):
+                    self.assertLessEqual(msg.comp_id, old_msg.comp_id)
+            old_msg = msg
+
+    def test_msg_iter_rev(self):
+        DEBUG.msgs1 = msgs1 = [m for m in MsgRevIter(self.bsa)]
+        DEBUG.msgs2 = msgs2 = [m for m in MsgIter(self.bsa)]
+        DEBUG.smsgs1 = smsgs1 = [str(m) for m in msgs1]
+        DEBUG.smsgs2 = smsgs2 = [str(m) for m in msgs2]
+        DEBUG.d1 = d1 = set(smsgs1) - set(smsgs2)
+        DEBUG.d2 = d2 = set(smsgs2) - set(smsgs1)
+        self.assertEqual(d1, set())
+        self.assertEqual(d2, set())
+        smsgs2.reverse()
+        self.assertEqual(smsgs1, smsgs2)
+        return
 
     def test_msg_iter_fwd_rev(self):
         itr = MsgIter(self.bsa)
@@ -303,20 +362,20 @@ class TestBSA(unittest.TestCase):
         self.assertTrue(len(msgs1))
         self.assertEqual(msgs1, msgs2)
 
-    def test_msg_iter_find_comp(self):
+    def test_msg_iter_filter_comp(self):
         name = "node00044"
         comp = self.bsa.tknFindByName(name)
         self.assertIsNotNone(comp)
         msgs0 = []
         msgs1 = []
-        for msg in MsgIterFind(self.bsa, 0, 0, comp.tkn_id):
+        for msg in MsgIterFilter(self.bsa, comp_id=comp.tkn_id):
             self.assertEqual(msg.comp_id, comp.tkn_id)
             msgs0.append(str(msg))
         for bs in self.bss:
             comp = bs.tknFindByName(name)
             if not comp:
                 continue
-            for msg in MsgIterFind(bs, 0, 0, comp.tkn_id):
+            for msg in MsgIterFilter(bs, comp_id=comp.tkn_id):
                 self.assertEqual(msg.comp_id, comp.tkn_id)
                 msgs1.append(str(msg))
         msgs0.sort()
@@ -324,14 +383,15 @@ class TestBSA(unittest.TestCase):
         self.assertTrue(len(msgs0)>0)
         self.assertEqual(msgs0, msgs1)
 
-    def test_msg_iter_find_comp_time(self):
+    def test_msg_iter_filter_comp_time(self):
         name = "node00044"
         bsa_time = 1435363200
+        bsa_tv = (bsa_time, 0)
         comp = self.bsa.tknFindByName(name)
         self.assertIsNotNone(comp)
         msgs0 = []
         msgs1 = []
-        for msg in MsgIterFind(self.bsa, 0, bsa_time, comp.tkn_id):
+        for msg in MsgIterFilter(self.bsa, tv_begin=bsa_tv, comp_id=comp.tkn_id):
             self.assertGreaterEqual(msg.timestamp, bsa_time)
             self.assertEqual(msg.comp_id, comp.tkn_id)
             msgs0.append(str(msg))
@@ -339,7 +399,7 @@ class TestBSA(unittest.TestCase):
             comp = bs.tknFindByName(name)
             if not comp:
                 continue
-            for msg in MsgIterFind(bs, 0, bsa_time, comp.tkn_id):
+            for msg in MsgIterFilter(bs, tv_begin=bsa_tv, comp_id=comp.tkn_id):
                 self.assertGreaterEqual(msg.timestamp, bsa_time)
                 self.assertEqual(msg.comp_id, comp.tkn_id)
                 msgs1.append(str(msg))
@@ -348,15 +408,16 @@ class TestBSA(unittest.TestCase):
         self.assertTrue(len(msgs0)>0)
         self.assertEqual(msgs0, msgs1)
 
-    def test_msg_iter_find_time(self):
+    def test_msg_iter_filter_time(self):
         bsa_time = 1435363200
+        bsa_tv = (bsa_time, 0)
         msgs0 = []
         msgs1 = []
-        for msg in MsgIterFind(self.bsa, 0, bsa_time, 0):
+        for msg in MsgIterFilter(self.bsa, tv_begin=bsa_tv):
             self.assertGreaterEqual(msg.timestamp, bsa_time)
             msgs0.append(str(msg))
         for bs in self.bss:
-            for msg in MsgIterFind(bs, 0, bsa_time, 0):
+            for msg in MsgIterFilter(bs, tv_begin=bsa_tv):
                 self.assertGreaterEqual(msg.timestamp, bsa_time)
                 msgs1.append(str(msg))
         msgs0.sort()
@@ -364,11 +425,11 @@ class TestBSA(unittest.TestCase):
         self.assertTrue(len(msgs0)>0)
         self.assertEqual(msgs0, msgs1)
 
-    def test_msg_iter_find_ptn(self):
+    def test_msg_iter_filter_ptn(self):
         bsa_ptn_id = 263
         msgs0 = []
         msgs1 = []
-        for msg in MsgIterFind(self.bsa, bsa_ptn_id, 0, 0):
+        for msg in MsgIterFilter(self.bsa, ptn_id=bsa_ptn_id):
             self.assertEqual(msg.ptn_id, bsa_ptn_id)
             msgs0.append(str(msg))
         ptn = self.bsa.ptnFindById(bsa_ptn_id)
@@ -376,7 +437,7 @@ class TestBSA(unittest.TestCase):
             _ptn = bs.ptnFindByStr(str(ptn))
             if not _ptn:
                 continue
-            for msg in MsgIterFind(bs, _ptn.ptn_id, 0, 0):
+            for msg in MsgIterFilter(bs, ptn_id=_ptn.ptn_id):
                 self.assertEqual(msg.ptn_id, _ptn.ptn_id)
                 msgs1.append(str(msg))
         msgs0.sort()
@@ -384,13 +445,14 @@ class TestBSA(unittest.TestCase):
         self.assertTrue(len(msgs0)>0)
         self.assertEqual(msgs0, msgs1)
 
-    def test_msg_iter_find_ptn_time(self):
+    def test_msg_iter_filter_ptn_time(self):
         bsa_ptn_id = 263
         bsa_time = 1435363200
+        bsa_tv = (bsa_time, 0)
         msgs0 = []
         msgs1 = []
 
-        for msg in MsgIterFind(self.bsa, bsa_ptn_id, bsa_time, 0):
+        for msg in MsgIterFilter(self.bsa, ptn_id=bsa_ptn_id, tv_begin=bsa_tv):
             self.assertEqual(msg.ptn_id, bsa_ptn_id)
             self.assertGreaterEqual(msg.timestamp, bsa_time)
             msgs0.append(str(msg))
@@ -400,7 +462,7 @@ class TestBSA(unittest.TestCase):
             _ptn = bs.ptnFindByStr(str(ptn))
             if not _ptn:
                 continue
-            for msg in MsgIterFind(bs, _ptn.ptn_id, bsa_time, 0):
+            for msg in MsgIterFilter(bs, ptn_id=_ptn.ptn_id, tv_begin=bsa_tv):
                 self.assertEqual(msg.ptn_id, _ptn.ptn_id)
                 self.assertGreaterEqual(msg.timestamp, bsa_time)
                 msgs1.append(str(msg))
@@ -409,15 +471,17 @@ class TestBSA(unittest.TestCase):
         self.assertTrue(len(msgs0)>0)
         self.assertEqual(msgs0, msgs1)
 
-    def test_msg_iter_find_ptn_comp_time(self):
+    def test_msg_iter_filter_ptn_comp_time(self):
         bsa_ptn_id = 263
         name = "node00063"
         bsa_time = 1435363200
+        bsa_tv = (bsa_time, 0)
         msgs0 = []
         msgs1 = []
         comp = self.bsa.tknFindByName(name)
 
-        for msg in MsgIterFind(self.bsa, bsa_ptn_id, bsa_time, comp.tkn_id):
+        for msg in MsgIterFilter(self.bsa, ptn_id=bsa_ptn_id, tv_begin=bsa_tv,
+                                 comp_id=comp.tkn_id):
             self.assertEqual(msg.ptn_id, bsa_ptn_id)
             self.assertEqual(msg.comp_id, comp.tkn_id)
             self.assertGreaterEqual(msg.timestamp, bsa_time)
@@ -431,7 +495,8 @@ class TestBSA(unittest.TestCase):
             _comp = bs.tknFindByName(name)
             if not _comp:
                 continue
-            for msg in MsgIterFind(bs, _ptn.ptn_id, bsa_time, _comp.tkn_id):
+            for msg in MsgIterFilter(bs, ptn_id=_ptn.ptn_id, tv_begin=bsa_tv,
+                                     comp_id=_comp.tkn_id):
                 self.assertEqual(msg.ptn_id, _ptn.ptn_id)
                 self.assertEqual(msg.comp_id, _comp.tkn_id)
                 self.assertGreaterEqual(msg.timestamp, bsa_time)
@@ -452,10 +517,10 @@ class TestBSA(unittest.TestCase):
             msg0 = itr0.next()
             n -= 1
 
-        pos = itr0.pos()
+        pos = itr0.get_pos()
 
         itr1 = MsgIter(self.bsa)
-        itr1.pos_set(pos)
+        itr1.set_pos(pos)
         msg1 = itr1.obj()
         self.assertEqual(msg0, msg1)
 
@@ -506,9 +571,9 @@ class TestBSA(unittest.TestCase):
         tkn0 = itr0.next()
         tkn0 = itr0.next()
 
-        pos = itr0.pos()
+        pos = itr0.get_pos()
         itr1 = PtnTknIter(bs, 0, 0)
-        itr1.pos_set(pos)
+        itr1.set_pos(pos)
         tkn1 = itr1.obj()
 
         self.assertEqual(tkn0, tkn1)
@@ -523,7 +588,7 @@ class TestBSA(unittest.TestCase):
         tkn = bs.tknFindByName(name)
         if not tkn:
             return data
-        itr = TknHistIter(bs, tkn.tkn_id, 3600, 0)
+        itr = TknHistIter(bs, tkn_id=tkn.tkn_id, bin_width=3600)
         for hist in itr:
             self.assertEqual(tkn.tkn_id, hist.tkn_id)
             key = (hist.bin_width, hist.time)
@@ -558,7 +623,7 @@ class TestBSA(unittest.TestCase):
         bs = self.bss[0]
         name = "Zero"
         tkn = bs.tknFindByName(name)
-        itr = TknHistIter(bs, tkn.tkn_id, 3600, 0)
+        itr = TknHistIter(bs, tkn_id=tkn.tkn_id, bin_width=3600)
         count = 0
         for x in itr:
             o = itr.obj()
@@ -569,18 +634,27 @@ class TestBSA(unittest.TestCase):
     def __test_hist_iter_pos(self, ItrCls, bin_width, time, _id):
         # _id can be tkn_id, ptn_id or (comp_id, ptn_id)
         if ItrCls == CompHistIter:
-            itr1 = ItrCls(self.bsa, bin_width, time, _id[0], _id[1])
-            itr2 = ItrCls(self.bsa, 0, 0, 0, 0)
+            itr1 = ItrCls(self.bsa,
+                          bin_width=bin_width,
+                          tv_begin=(time, 0),
+                          comp_id=_id[0],
+                          ptn_id=_id[1])
+            itr2 = ItrCls(self.bsa)
         else:
-            itr1 = ItrCls(self.bsa, _id, bin_width, time)
-            itr2 = ItrCls(self.bsa, 0, 0, 0)
+            itr1 = ItrCls(self.bsa,
+                          tkn_id=_id,
+                          ptn_id=_id,
+                          bin_width=bin_width,
+                          tv_begin=(time, 0))
+            itr2 = ItrCls(self.bsa)
         itr1.first()
         itr1.next()
         itr1.next()
         itr1.next()
         itr1.next()
-        pos = itr1.pos()
-        itr2.pos_set(pos)
+        pos = itr1.get_pos()
+        self.assertIsNotNone(pos)
+        itr2.set_pos(pos)
 
         obj1 = itr1.obj()
         obj2 = itr2.obj()
@@ -591,12 +665,32 @@ class TestBSA(unittest.TestCase):
             obj2 = itr2.next()
         self.assertEqual(obj1, obj2)
 
+    def test_tkn_hist_iter_filter(self):
+        BW = [60, 3600]
+        TS = [0, BTEST_TS_BEGIN + 4*BTEST_TS_INC]
+        TKN = [None, "Zero"]
+
+        for (bw, ts, tkn) in itertools.product(BW, TS, TKN):
+            tkn_id = 0 if not tkn else self.bsa.tknFindByName(tkn).tkn_id
+            itr = TknHistIter(self.bsa, bin_width=bw, tv_begin=(ts, 0),
+                              tkn_id=tkn_id)
+            for h in itr:
+                if tkn_id:
+                    self.assertEqual(tkn_id, h.tkn_id)
+                self.assertEqual(bw, h.bin_width)
+                self.assertLessEqual(ts, h.time)
+
     def test_tkn_hist_iter_pos(self):
         BW = [60, 3600]
         TS = [0, BTEST_TS_BEGIN + 4*BTEST_TS_INC]
         TKN = [None, "Zero"]
+        if False:
+            print ""
         for (bw, ts, tkn) in itertools.product(BW, TS, TKN):
             tkn_id = 0 if not tkn else self.bsa.tknFindByName(tkn).tkn_id
+            if False:
+                # debug stuff
+                print "(%d, %d, '%s', %d)" % (bw, ts, tkn, tkn_id)
             self.__test_hist_iter_pos(TknHistIter, bw, ts, tkn_id)
 
     def test_ptn_hist_iter_pos(self):
@@ -610,13 +704,15 @@ class TestBSA(unittest.TestCase):
         data = {}
         for ptn in PtnIter(bs):
             pdata = {}
-            for hist in PtnHistIter(bs, ptn.ptn_id, 3600, 0):
+            for hist in PtnHistIter(bs, ptn_id=ptn.ptn_id, bin_width=3600):
                 key = (hist.bin_width, hist.time)
                 self.assertFalse(key in pdata)
                 pdata[key] = hist.msg_count
+            self.assertTrue(pdata)
             key = str(ptn)
             self.assertFalse(key in data)
             data[key] = pdata
+        self.assertTrue(data)
         return data
 
     def __ptn_hist_data_merge(self, d0, d1={}):
@@ -653,7 +749,7 @@ class TestBSA(unittest.TestCase):
         self.assertEqual(data_bsa, data_bss)
 
     def test_ptn_hist_obj(self):
-        itr = PtnHistIter(self.bsa, 256, 3600, 0)
+        itr = PtnHistIter(self.bsa, ptn_id=256, bin_width=3600)
         h0 = itr.first()
         h0 = itr.next()
         h0 = itr.next()
@@ -663,7 +759,13 @@ class TestBSA(unittest.TestCase):
     def __comp_hist_data(self, bs, bin_width, time, comp_id, ptn_id):
         ret = {}
         prev = None
-        for hist in CompHistIter(bs, bin_width, time, comp_id, ptn_id):
+        kwargs = {
+            "bin_width": bin_width,
+            "tv_begin": (time, 0),
+            "comp_id": comp_id,
+            "ptn_id": ptn_id
+        }
+        for hist in CompHistIter(bs, **kwargs):
             if prev:
                 self.assertGreater(hist, prev)
             comp = bs.tknFindById(hist.comp_id)
@@ -722,4 +824,8 @@ if __name__ == "__main__":
     LOGFMT = '%(asctime)s %(name)s %(levelname)s: %(message)s'
     logging.basicConfig(format=LOGFMT)
     logger.setLevel(logging.INFO)
+    _pystart = os.environ.get("PYTHONSTARTUP")
+    if _pystart:
+        execfile(_pystart)
+    unittest.TestLoader.testMethodPrefix = "test_"
     unittest.main()
