@@ -11,6 +11,11 @@ libsyslog_parser_la_LIBADD = ../baler/libbaler.la -ly -ll -lc
 # libsyslog_parser_la_LDFLAGS = -g -O0
 lib_LTLIBRARIES += libsyslog_parser.la
 
+libcraylog_parser_la_SOURCES = craylog_parser.y craylog_lexer.l craylog.h
+libcraylog_parser_la_CFLAGS = $(AM_CFLAGS)
+libcraylog_parser_la_LIBADD = ../baler/libbaler.la -ly -ll -lc
+lib_LTLIBRARIES += libcraylog_parser.la
+
 libbstore_sos_la_SOURCES = bstore_sos.c
 libbstore_sos_la_CFLAGS = $(AM_CFLAGS) @SOS_INCDIR_FLAG@
 libbstore_sos_la_LIBADD = ../baler/libbaler.la -lsos @SOS_LIBDIR_FLAG@ @SOS_LIB64DIR_FLAG@
