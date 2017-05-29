@@ -135,11 +135,19 @@ enum btkn_type {
 	 * Text unrecognized as a particular token type
 	 */
 	BTKN_TYPE_TEXT,
+	BTKN_TYPE_LAST_BUILTIN,
 	/**
-	 * All other token types are defined dynamically by the store
-	 * and opportunistically returned by the parser.
+	 * First user-defined token. Range between BTKN_TYPE_TEXT and
+	 * BTKN_TYPE_FIRST_USER reserved for expanding built-in types
+	 * without colliding with user-defined types.
+	 *
+	 * User types are defined by the parser
 	 */
-	BTKN_TYPE_LAST,
+	BTKN_TYPE_FIRST_USER = 32,
+	/**
+	 * Types are stored in a mask that is 64 bits wide
+	 */
+	BTKN_TYPE_LAST = 64,
 };
 typedef uint64_t btkn_type_t;
 
@@ -156,7 +164,7 @@ struct btkn_attr {
 static
 const char *btkn_attr_type_str(btkn_type_t t)
 {
-	if (t < BTKN_TYPE_LAST)
+	if (t < BTKN_TYPE_LAST_BUILTIN)
 		return btkn_type_str[t];
 	return NULL;
 }

@@ -966,6 +966,8 @@ int __process_cmd_tokens_line_cb(char *line, void *_ctxt)
 				line,
 				strlen(line));
 	if (has_tkn_id) {
+		if (ctxt->tkn_type == BTKN_TYPE_TYPE)
+			tkn->tkn_type_mask |= BTKN_TYPE_MASK(tkn_id);
 		if (bstore_tkn_add_with_id(ctxt->store, tkn)) {
 			berr("error inserting token '%s' with id %d\n", line, tkn_id);
 		}
@@ -998,6 +1000,10 @@ int process_cmd_tokens(struct bconfig_list *cfg)
 	}
 	const char *path = bp_path->s1;
         ctxt->tkn_type = btkn_type(bp_type->s1);
+	if (ctxt->tkn_type < 0) {
+		berr("Invalid token type '%s' specified in configuration file.\n", bp_type->s1);
+		exit(1);
+	}
 	ctxt->store = bstore;
 	int rc = bprocess_file_by_line_w_comment(path,
 					__process_cmd_tokens_line_cb, ctxt);

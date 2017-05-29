@@ -64,7 +64,7 @@ def get_hist_args(it, key, args):
         if start != 0 and end != 0:
             dur = end - start
         else:
-            dur = it.duration(key)
+            dur = it.duration()
             # in case one or the other of start/end were specified
             dur = dur - start - end
         bin_width = default_bin_width(dur)
@@ -205,7 +205,11 @@ def multi_bar(x, y, title_str, bin_width, args):
 
     axis.xaxis.set_major_formatter(MyXFormatter())
     lr = tuple(r[0] for r in rects)
-    ll = tuple(ptn for ptn in args.ptn_ids.split(','))
+    if args.ptn_ids:
+        ptn_ids = str(args.ptn_ids).split(',')
+    else:
+        ptn_ids = [ str(args.ptn_id) ]
+    ll = tuple(ptn for ptn in ptn_ids)
     axis.legend(lr, ll)
     s = dt.datetime.fromtimestamp(min_x)
     year_str = str(s.year)
@@ -240,8 +244,9 @@ def plot_comp_hist(bs, args):
 
     start, end, bin_width = get_hist_args(it, comp_id, args)
 
-    cnt, x, y = it.as_xy_arrays(comp_id, ptn_id, bin_width,
-                                start_time=start, end_time=end)
+    it.set_filter(comp_id=comp_id, ptn_id=ptn_id, bin_width=bin_width,
+                  tv_begin=(start, end))
+    cnt, x, y = it.as_xy_arrays()
     if cnt == 0:
         print("No history information found for component {0} and pattern {1}". \
               format(comp_id, ptn_id))
@@ -298,9 +303,8 @@ def plot_tkn_hist(bs, args):
                          "specified with --tkn")
     it = Bq.Btkn_hist_iter(bs)
     start, end, bin_width = get_hist_args(it, tkn_id, args)
-    it.set_filter(tkn_id=tkn_id, bin_width=bin_width, tv_begin=(start,0))
-    cnt, x, y = it.as_xy_arrays(tkn_id, bin_width,
-                                start_time=start, end_time=end)
+    it.set_filter(tkn_id=tkn_id, bin_width=bin_width, tv_begin=(start,end))
+    cnt, x, y = it.as_xy_arrays()
     if cnt == 0:
         print("No history information found for token {0}".format(tkn_id))
         return
@@ -318,6 +322,36 @@ def fmt_tstamp(ts, args):
     if args.color:
        return BOLD + YELLOW + t + RESET + " "
     return t
+
+def show_summary(bs, args):
+    if not args.ptn_id:
+        ptn_id = 0
+    else:
+        ptn_id = args.ptn_id
+    comp_id = tkn_id_from_args(args)
+    if not comp_id:
+        comp_id = 0
+    start, end = get_times_from_args(args)
+
+    mi = Bq.Bmsg_iter(bs)
+    pi = Bq.Bptn_iter(bs)
+    ptn_count = pi.count(0)
+    print("Pattern Count        : {0}".format(ptn_count))
+    msg_count = mi.count(1)
+    print("Message Count        : {0}".format(msg_count))
+    print("Messages per Pattern : 1/{0}".format(msg_count / ptn_count))
+    if mi.start(comp_id, ptn_id, start):
+        m = mi.next()
+        print("First Message        : {0}".format(fmt_tstamp(m.tv_sec(), args)))
+        if args.verbose:
+            print_msg(bs, m, args)
+        mi.end()
+        m = mi.next()
+        print("Last Message         : {0}".format(fmt_tstamp(m.tv_sec(), args)))
+        if args.verbose:
+            print_msg(bs, m, args)
+    del mi
+    del pi
 
 def skip_token(tkn):
     return False
@@ -356,8 +390,8 @@ def show_ptn_tkns(bs, args):
     col = []
     cnt = []
     for pos in range(0, tkn_count):
-        it = Bq.Bptn_tkn_iter(bs)
-        it.find(ptn.ptn_id(), pos)
+        it = Bq.Bptn_tkn_iter(bs, ptn_id=ptn.ptn_id(), tkn_pos=pos)
+        it.first()
         pti.append(it)
         col.append(4)
         cnt.append(0)
@@ -367,17 +401,14 @@ def show_ptn_tkns(bs, args):
     while more:
         more = False
         for pos in range(0, tkn_count):
+            tkn = None
             try:
-                if pti[pos]:
-                    if pti[pos].next():
-                        tkn = pti[pos].obj()
-                    else:
-                        tkn = None
-                else:
-                    continue
+                tkn = pti[pos].obj()
+                if not pti[pos].next():
+                    pti[pos] = None
             except:
-                pti[pos] = None
-                continue
+                 pti[pos] = None
+                 continue
             if tkn:
                 if skip_token(tkn):
                     pti[pos] = None
@@ -389,7 +420,9 @@ def show_ptn_tkns(bs, args):
                 cnt[pos] += 1
 
     # Print the header
-    print("Ptn Id: {0} {1}".format(ptn.ptn_id(), str(ptn).center(sum(col)+len(col), ' ')))
+    print("Ptn Id: {0} {1}".format(ptn.ptn_id(),
+                                   str(ptn).center(sum(col)+len(col),
+                                                   ' ')))
     for pos in range(0, tkn_count):
         print("{0} ".format(str(pos).center(col[pos], ' ')), end='')
     print("")
@@ -400,8 +433,8 @@ def show_ptn_tkns(bs, args):
 
     # reset the iterators
     for pos in range(0, tkn_count):
-        it = Bq.Bptn_tkn_iter(bs)
-        it.find(ptn.ptn_id(), pos)
+        it = Bq.Bptn_tkn_iter(bs, ptn_id=ptn.ptn_id(), tkn_pos=pos)
+        it.first()
         pti[pos] = it
 
     more = True
@@ -411,10 +444,9 @@ def show_ptn_tkns(bs, args):
             tkn = None
             try:
                 if pti[pos]:
-                    if pti[pos].next():
-                        tkn = pti[pos].obj()
-                    else:
-                        tkn = None
+                    tkn = pti[pos].obj()
+                    if not pti[pos].next():
+                        pti[pos] = None
             except:
                 pti[pos] = None
             if tkn:
@@ -487,6 +519,16 @@ def plot_ptn_dist(bs, args):
              verticalalignment='bottom')
     plt.show()
 
+def print_msg(bs, m, args):
+    comp_str = fmt_comp_str(bs, m.comp_id(), args)
+    print("{0:12} {1:12} {2:20}".format(m.ptn_id(), comp_str,
+                                        fmt_tstamp(m.tv_sec(), args)),
+          end=' ')
+    for tkn in m:
+        tkn_str = fmt_tkn_str(tkn, args)
+        print("{0}".format(tkn_str), end='')
+    print("")
+
 def show_msgs(bs, args):
     if not args.ptn_id:
         ptn_id = 0
@@ -513,14 +555,7 @@ def show_msgs(bs, args):
         if end > 0 and m.tv_sec() > end:
             break
         msg_count += 1
-        comp_str = fmt_comp_str(bs, m.comp_id(), args)
-        print("{0:12} {1:12} {2:20}".format(m.ptn_id(), comp_str,
-                                            fmt_tstamp(m.tv_sec(), args)),
-              end=' ')
-        for tkn in m:
-            tkn_str = fmt_tkn_str(tkn, args)
-            print("{0}".format(tkn_str), end='')
-        print("")
+        print_msg(bs, m, args)
     do_footer(hf, args)
     do_footer("{0} Record(s)".format(msg_count), args)
 
@@ -579,11 +614,15 @@ tkn_type_ids = {
 
 def show_tkns(bs, args):
     if args.tkn_type:
-        typ_str = args.tkn_type.upper()
-        try:
-            tkn_type = tkn_type_ids[typ_str]
-        except:
-            raise NameError("{0} is an invalid type name")
+        type_str = args.tkn_type.upper()
+        if type_str in tkn_type_ids:
+            tkn_type = tkn_type_ids[type_str]
+        else:
+            tkn = bs.tkn_by_name("_{0}_".format(type_str))
+            if not tkn:
+                raise NameError("{0} is an invalid type name".format(type_str))
+            tkn_type = tkn.tkn_id()
+            del tkn
     else:
         tkn_type = None
 
@@ -602,25 +641,33 @@ def show_tkns(bs, args):
         print("{0:12} {1:32} {2:12}". \
               format(tkn.tkn_id(), tkn.tkn_str(), tkn.tkn_count()), end=' ')
         for typ in tkn:
-            print("{0}".format(typ), end=' ')
+            print("{0}".format(bs.tkn_type_str(typ)), end=' ')
         print("")
     print(hf)
     print("{0} Record(s)".format(tkn_count))
 
 def fmt_comp_str(bs, comp_id, args):
-    if args.raw_id:
+    try:
+        if args.raw_id:
+            return str(comp_id)
+        tkn = bs.tkn_by_id(comp_id)
+        if tkn:
+            return tkn.tkn_str()
         return str(comp_id)
-    tkn = bs.tkn_by_id(comp_id)
-    return tkn.tkn_str()
+    except:
+        return str(comp_id)
 
 def fmt_tkn_str(tkn, args):
     tkn_str = ""
     if args and args.color:
         if tkn.tkn_id() in type_colors:
             tkn_str = type_colors[tkn.tkn_id()]
-        else:
+        elif tkn.first_type() in type_colors:
             tkn_str = type_colors[tkn.first_type()]
-    tkn_str += tkn.ptn_tkn_str()
+    if tkn.tkn_id() == Bq.BTKN_TYPE_WHITESPACE:
+        tkn_str += " "
+    else:
+        tkn_str += tkn.ptn_tkn_str()
     if args and args.color:
         tkn_str += RESET
     return tkn_str
@@ -709,6 +756,16 @@ def show_matching_ptns(bs, args):
     do_footer(hf, args)
     do_footer("{0} Record(s)".format(ptn_count), args)
 
+def print_ptn(p, args):
+    print("{0:12} {1:12} {2:20} {3:20}". \
+          format(p.ptn_id(), p.msg_count(),
+                 fmt_tstamp(p.first_seen(), args),
+                 fmt_tstamp(p.last_seen(), args)), end=' ')
+    for tkn in p:
+        tkn_str = fmt_tkn_str(tkn, args)
+        print("{0}".format(tkn_str), end='')
+    print("")
+
 def show_ptns(bs, args):
     pi = Bq.Bptn_iter(bs)
     start, end = get_times_from_args(args)
@@ -719,23 +776,22 @@ def show_ptns(bs, args):
         '-'.ljust(32, '-'))
     do_header(hf, args)
 
-    pi.find(start)
+    pi.set_filter(tv_begin=start)
     ptn_count = 0
+    msg_count = 0
     for p in pi:
         if end > 0 and p.first_seen() > end:
             break
+        if args.ptn_id:
+            p = bs.ptn_by_id(args.ptn_id)
+            if p is None:
+                break
         ptn_count += 1
-        print("{0:12} {1:12} {2:20} {3:20}". \
-              format(p.ptn_id(), p.msg_count(),
-                     fmt_tstamp(p.first_seen(), args),
-                     fmt_tstamp(p.last_seen(), args)), end=' ')
-        for tkn in p:
-            tkn_str = fmt_tkn_str(tkn, args)
-            print("{0}".format(tkn_str), end='')
-        print("")
+        print_ptn(p, args)
+        msg_count += p.msg_count()
 
     do_footer(hf, args)
-    do_footer("{0} Record(s)".format(ptn_count), args)
+    do_footer("{0} Patterns(s) {1} Messages(s)".format(ptn_count, msg_count), args)
 
 def show_ptn_hist(bs, args):
     if not args.ptn_id:
@@ -835,7 +891,7 @@ def show_comp_hist(bs, args):
     if not comp_id:
         comp_id = 0
         # raise ValueError("The --comp_id or --comp_str arguments must be " \
-        # "specified with --comp")
+        #                 "specified with --comp")
     if args.bin_width:
         bin_width = xlate_bin_width(args)
     else:
@@ -844,7 +900,6 @@ def show_comp_hist(bs, args):
     chi = Bq.Bcomp_hist_iter(bs)
     chi.set_filter(comp_id=comp_id, ptn_id=ptn_id, bin_width=bin_width,
                    tv_begin=(start, 0))
-    comp_str = fmt_comp_str(bs, comp_id, args)
     if not args.csv:
         do_header("{0:12} {1:12} {2:20} {3:12} {4:12}". \
                   format("Component", "Ptn Id", "Timestamp",
@@ -862,6 +917,7 @@ def show_comp_hist(bs, args):
     for h in chi:
         if end > 0 and h.time() > end:
             break
+        comp_str = fmt_comp_str(bs, h.comp_id(), args)
         if not args.csv:
             print("{0:12} {1:12} {2:20} {3:12} {4:12}" \
                   .format(comp_str, h.ptn_id(),
@@ -901,6 +957,10 @@ if __name__ == "__main__":
                         help="Query patterns.")
     parser.add_argument("--comp", action="store_true",
                         help="Query component histories")
+    parser.add_argument("--summary", action="store_true",
+                        help="Show a summary of the database")
+    parser.add_argument("--verbose", action="store_true",
+                        help="Show more detailed summary information")
     parser.add_argument("--tkn", action="store_true",
                         help="Query tokens")
     parser.add_argument("--tkn_type",
@@ -959,6 +1019,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
     bs = Bq.Bstore()
     bs.open(args.path)
+
+    if args.summary:
+        show_summary(bs, args)
 
     if args.plot:
         import matplotlib.pyplot as plt

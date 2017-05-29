@@ -720,7 +720,7 @@ static bstore_t bs_open(bstore_plugin_t plugin, const char *path, int flags, int
 	 * these special tokens, the tkn_type_id == tkn_id.
 	 */
 	btkn_type_t type;
-	for (type = BTKN_TYPE_FIRST+1; type < BTKN_TYPE_LAST; type++) {
+	for (type = BTKN_TYPE_FIRST+1; type < BTKN_TYPE_LAST_BUILTIN; type++) {
 		char type_name[80];
 		btkn_t tkn;
 		btkn_id_t tkn_id;
@@ -829,8 +829,6 @@ static int __add_tkn_with_id(bstore_sos_t bss, btkn_t tkn, uint64_t count)
 	size_t sz;
 	sos_obj_t tkn_obj;
 
-	assert((tkn->tkn_id < BTKN_TYPE_LAST)
-	       || (tkn->tkn_id >= 0x100));
 	/* Allocate a new object */
 	tkn_obj = sos_obj_new(bss->token_value_schema);
 	if (!tkn_obj)
@@ -1839,8 +1837,7 @@ static bmsg_t __make_msg(bstore_sos_t bss, bsos_iter_t i, sos_obj_t msg_obj)
 	decode_msg(dmsg, tkn_ids->data->array.data.byte_, smsg->tkn_count);
 	/* fill from the back */
 	x = dmsg->argc - 1;
-	for (y = ptn->tkn_count - 1; x >= 0 && y >= 0; y--) {
-		assert( y >= x );
+	for (y = ptn->tkn_count - 1; y >= 0; y--) {
 		btkn_type_t tkn_type = ptn->str->u64str[y] & 0xFF;
 		if (btkn_type_is_wildcard(tkn_type)) {
 			dmsg->argv[y] = dmsg->argv[x];
@@ -1849,7 +1846,7 @@ static bmsg_t __make_msg(bstore_sos_t bss, bsos_iter_t i, sos_obj_t msg_obj)
 			dmsg->argv[y] = ptn->str->u64str[y];
 		}
 	}
-	assert(x == y);
+	assert(y == -1);
 	assert(x == -1);
 	dmsg->argc = ptn->tkn_count;
 

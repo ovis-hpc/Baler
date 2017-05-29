@@ -108,7 +108,7 @@ void btkn_dump()
 
 btkn_type_t btkn_type(const char *str)
 {
-	return bget_str_idx(btkn_type_str, BTKN_TYPE_LAST, str);
+	return bget_str_idx(btkn_type_str, sizeof(btkn_type_str) / sizeof(btkn_type_str[0]), str);
 }
 
 uint64_t btkn_type_mask_from_str(const char *str)

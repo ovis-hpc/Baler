@@ -22,6 +22,7 @@ cdef extern from "sys/time.h":
 
 cdef extern from "baler/btkn_types.h":
     ctypedef uint64_t btkn_type_t
+    cdef int BTKN_TYPE_FIRST
     cdef int BTKN_TYPE_TYPE
     cdef int BTKN_TYPE_PRIORITY
     cdef int BTKN_TYPE_VERSION
@@ -41,6 +42,8 @@ cdef extern from "baler/btkn_types.h":
     cdef int BTKN_TYPE_WORD
     cdef int BTKN_TYPE_TEXT
     cdef int BTKN_TYPE_WHITESPACE
+    cdef int BTKN_TYPE_LAST_BUILTIN
+    cdef int BTKN_TYPE_FIRST_USER
     cdef int BTKN_TYPE_LAST
 
 cdef extern from "baler/btypes.h":

@@ -12,6 +12,48 @@ cimport Bs
 cpdef uint64_t btkn_type_mask_from_str(const char *_str):
     return Bs.btkn_type_mask_from_str(_str)
 
+BTKN_TYPE_TYPE = Bs.BTKN_TYPE_TYPE
+BTKN_TYPE_PRIORITY = Bs.BTKN_TYPE_PRIORITY
+BTKN_TYPE_VERSION = Bs.BTKN_TYPE_VERSION
+BTKN_TYPE_TIMESTAMP = Bs.BTKN_TYPE_TIMESTAMP
+BTKN_TYPE_HOSTNAME = Bs.BTKN_TYPE_HOSTNAME
+BTKN_TYPE_SERVICE = Bs.BTKN_TYPE_SERVICE
+BTKN_TYPE_PID = Bs.BTKN_TYPE_PID
+BTKN_TYPE_IP4_ADDR = Bs.BTKN_TYPE_IP4_ADDR
+BTKN_TYPE_IP6_ADDR = Bs.BTKN_TYPE_IP6_ADDR
+BTKN_TYPE_ETH_ADDR = Bs.BTKN_TYPE_ETH_ADDR
+BTKN_TYPE_HEX_INT = Bs.BTKN_TYPE_HEX_INT
+BTKN_TYPE_DEC_INT = Bs.BTKN_TYPE_DEC_INT
+BTKN_TYPE_SEPARATOR = Bs.BTKN_TYPE_SEPARATOR
+BTKN_TYPE_FLOAT = Bs.BTKN_TYPE_FLOAT
+BTKN_TYPE_PATH = Bs.BTKN_TYPE_PATH
+BTKN_TYPE_URL = Bs.BTKN_TYPE_URL
+BTKN_TYPE_WORD = Bs.BTKN_TYPE_WORD
+BTKN_TYPE_TEXT = Bs.BTKN_TYPE_TEXT
+BTKN_TYPE_WHITESPACE = Bs.BTKN_TYPE_WHITESPACE
+
+tkn_type_strs = {
+    Bs.BTKN_TYPE_TYPE : "<type>",
+    Bs.BTKN_TYPE_PRIORITY : "<prio>",
+    Bs.BTKN_TYPE_VERSION : "<vers>",
+    Bs.BTKN_TYPE_TIMESTAMP : "<ts>",
+    Bs.BTKN_TYPE_HOSTNAME : "<host>",
+    Bs.BTKN_TYPE_SERVICE : "<svc>",
+    Bs.BTKN_TYPE_PID : "<pid>",
+    Bs.BTKN_TYPE_IP4_ADDR : "<ip4>",
+    Bs.BTKN_TYPE_IP6_ADDR : "<ip6>",
+    Bs.BTKN_TYPE_ETH_ADDR : "<mac>",
+    Bs.BTKN_TYPE_HEX_INT : "<hex>",
+    Bs.BTKN_TYPE_DEC_INT : "<dec>",
+    Bs.BTKN_TYPE_SEPARATOR : "<sep>",
+    Bs.BTKN_TYPE_FLOAT : "<float>",
+    Bs.BTKN_TYPE_PATH : "<path>",
+    Bs.BTKN_TYPE_URL : "<url>",
+    Bs.BTKN_TYPE_WORD : "<word>",
+    Bs.BTKN_TYPE_TEXT : "*",
+    Bs.BTKN_TYPE_WHITESPACE : " "
+}
+
 cdef class Bstore:
 
     cdef Bs.bstore_t c_store
@@ -74,48 +116,17 @@ cdef class Bstore:
             return ptn
         return None
 
-
-BTKN_TYPE_TYPE = Bs.BTKN_TYPE_TYPE
-BTKN_TYPE_PRIORITY = Bs.BTKN_TYPE_PRIORITY
-BTKN_TYPE_VERSION = Bs.BTKN_TYPE_VERSION
-BTKN_TYPE_TIMESTAMP = Bs.BTKN_TYPE_TIMESTAMP
-BTKN_TYPE_HOSTNAME = Bs.BTKN_TYPE_HOSTNAME
-BTKN_TYPE_SERVICE = Bs.BTKN_TYPE_SERVICE
-BTKN_TYPE_PID = Bs.BTKN_TYPE_PID
-BTKN_TYPE_IP4_ADDR = Bs.BTKN_TYPE_IP4_ADDR
-BTKN_TYPE_IP6_ADDR = Bs.BTKN_TYPE_IP6_ADDR
-BTKN_TYPE_ETH_ADDR = Bs.BTKN_TYPE_ETH_ADDR
-BTKN_TYPE_HEX_INT = Bs.BTKN_TYPE_HEX_INT
-BTKN_TYPE_DEC_INT = Bs.BTKN_TYPE_DEC_INT
-BTKN_TYPE_SEPARATOR = Bs.BTKN_TYPE_SEPARATOR
-BTKN_TYPE_FLOAT = Bs.BTKN_TYPE_FLOAT
-BTKN_TYPE_PATH = Bs.BTKN_TYPE_PATH
-BTKN_TYPE_URL = Bs.BTKN_TYPE_URL
-BTKN_TYPE_WORD = Bs.BTKN_TYPE_WORD
-BTKN_TYPE_TEXT = Bs.BTKN_TYPE_TEXT
-BTKN_TYPE_WHITESPACE = Bs.BTKN_TYPE_WHITESPACE
-
-tkn_type_strs = {
-    Bs.BTKN_TYPE_TYPE : "<type>",
-    Bs.BTKN_TYPE_PRIORITY : "<prio>",
-    Bs.BTKN_TYPE_VERSION : "<vers>",
-    Bs.BTKN_TYPE_TIMESTAMP : "<ts>",
-    Bs.BTKN_TYPE_HOSTNAME : "<host>",
-    Bs.BTKN_TYPE_SERVICE : "<svc>",
-    Bs.BTKN_TYPE_PID : "<pid>",
-    Bs.BTKN_TYPE_IP4_ADDR : "<ip4>",
-    Bs.BTKN_TYPE_IP6_ADDR : "<ip6>",
-    Bs.BTKN_TYPE_ETH_ADDR : "<mac>",
-    Bs.BTKN_TYPE_HEX_INT : "<hex>",
-    Bs.BTKN_TYPE_DEC_INT : "<dec>",
-    Bs.BTKN_TYPE_SEPARATOR : "<sep>",
-    Bs.BTKN_TYPE_FLOAT : "<float>",
-    Bs.BTKN_TYPE_PATH : "<path>",
-    Bs.BTKN_TYPE_URL : "<url>",
-    Bs.BTKN_TYPE_WORD : "<word>",
-    Bs.BTKN_TYPE_TEXT : "*",
-    Bs.BTKN_TYPE_WHITESPACE : " "
-}
+    def tkn_type_str(self, typ_id):
+        if typ_id >= Bs.BTKN_TYPE_LAST:
+            raise ValueError("The type id {0} is not valid.".format(typ_id))
+        if typ_id in tkn_type_strs:
+            return tkn_type_strs[typ_id]
+        tkn = self.tkn_by_id(typ_id)
+        if not tkn:
+            raise ValueError("The user-defined type id {0} was not found.".format(typ_id))
+        typ_str = tkn.tkn_str()
+        del tkn
+        return typ_str
 
 cdef class Btkn:
     cpdef Bs.btkn_t c_tkn
@@ -168,9 +179,7 @@ cdef class Btkn:
     def __next__(self):
         while self.c_typ < Bs.BTKN_TYPE_LAST:
             if Bs.btkn_has_type(self.c_tkn, self.c_typ) != 0:
-                if self.c_typ == Bs.BTKN_TYPE_WHITESPACE:
-                    typ = "<space>"
-                typ = tkn_type_strs[self.c_typ]
+                typ = self.c_typ
                 self.c_typ += 1
                 return typ
             self.c_typ += 1
@@ -966,10 +975,7 @@ cdef class Bcomp_hist_iter(Biter):
     cdef int iterFilterSet(self, Bs.bstore_iter_filter_t f):
         return Bs.bstore_comp_hist_iter_filter_set(self.c_iter, f)
 
-    def _iterFind(self, fwd, **kwargs):
-        cdef Bs.timeval tval
-        cdef Bs.timeval *tv
-        cdef Bs.bcomp_hist_s hist;
+    cdef make_hist(self, Bs.bcomp_hist_t hist, kwargs):
         try:
             kw_tv = kwargs["tv"]
             hist.time =  kw_tv[0]
@@ -987,10 +993,16 @@ cdef class Bcomp_hist_iter(Biter):
             hist.bin_width = kwargs["bin_width"]
         except:
             hist.bin_width = 3600
+
+    def _iterFind(self, fwd, **kwargs):
+        cdef Bs.timeval tval
+        cdef Bs.timeval *tv
+        cdef Bs.bcomp_hist_s c_hist
+        self.make_hist(&c_hist, kwargs)
         if fwd:
-            return Bs.bstore_comp_hist_iter_find_fwd(self.c_iter, &hist)
+            return Bs.bstore_comp_hist_iter_find_fwd(self.c_iter, &c_hist)
         else:
-            return Bs.bstore_comp_hist_iter_find_rev(self.c_iter, &hist)
+            return Bs.bstore_comp_hist_iter_find_rev(self.c_iter, &c_hist)
 
     def iterFindFwd(self, **kwargs):
         return self._iterFind(self, 1, **kwargs)
@@ -1019,10 +1031,11 @@ cdef class Bcomp_hist_iter(Biter):
         cdef int rc
         cdef void *c_obj
 
+        rec_no = 0
         x = Array.Array()
         y = Array.Array()
+
         rc = Bs.bstore_comp_hist_iter_first(self.c_iter)
-        rec_no = 0
         while rc == 0:
             c_obj = Bs.bstore_comp_hist_iter_obj(self.c_iter, &self.c_comp_h)
             assert(c_obj)
@@ -1086,10 +1099,7 @@ cdef class Btkn_hist_iter(Biter):
     cdef int iterLast(self):
         return Bs.bstore_tkn_hist_iter_last(self.c_iter)
 
-    def _iterFind(self, fwd, **kwargs):
-        cdef Bs.timeval tval
-        cdef Bs.timeval *tv
-        cdef Bs.btkn_hist_s hist;
+    cdef make_hist(self, Bs.btkn_hist_t hist, kwargs):
         try:
             kw_tv = kwargs["tv"]
             hist.time =  kw_tv[0]
@@ -1103,10 +1113,16 @@ cdef class Btkn_hist_iter(Biter):
             hist.bin_width = kwargs["bin_width"]
         except:
             hist.bin_width = 3600
+
+    def _iterFind(self, fwd, **kwargs):
+        cdef Bs.timeval tval
+        cdef Bs.timeval *tv
+        cdef Bs.btkn_hist_s c_hist;
+        self.make_hist(&c_hist, kwargs)
         if fwd:
-            return Bs.bstore_tkn_hist_iter_find_fwd(self.c_iter, &hist)
+            return Bs.bstore_tkn_hist_iter_find_fwd(self.c_iter, &c_hist)
         else:
-            return Bs.bstore_tkn_hist_iter_find_rev(self.c_iter, &hist)
+            return Bs.bstore_tkn_hist_iter_find_rev(self.c_iter, &c_hist)
 
     def iterFindFwd(self, **kwargs):
         return self._iterFind(self, 1, **kwargs)
@@ -1142,11 +1158,10 @@ cdef class Btkn_hist_iter(Biter):
 
         return end - start
 
-    def as_xy_arrays(self):
+    def as_xy_arrays(self, **kwargs):
         cdef int rec_no
         cdef int rc
         cdef void *c_obj
-
         x = Array.Array()
         y = Array.Array()
         rc = Bs.bstore_tkn_hist_iter_first(self.c_iter)

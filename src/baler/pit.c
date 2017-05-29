@@ -106,9 +106,15 @@ int main(int argc, char **argv)
 			if (wqe->data.in.hostname)
 				printf("%s ", wqe->data.in.hostname->cstr);
 			TAILQ_FOREACH(e, &(wqe->data.in.tkn_q), link) {
-				printf("    %-8s : '%s'\n",
-				       ptn_type_strs[btkn_first_type(e->tkn)],
-				       e->tkn->tkn_str->cstr);
+				const char *type_str = ptn_type_strs[btkn_first_type(e->tkn)];
+				if (type_str)
+					printf("    %-8s : '%s'\n",
+					       type_str,
+					       e->tkn->tkn_str->cstr);
+				else
+					printf("    %-8d : '%s'\n",
+					       btkn_first_type(e->tkn),
+					       e->tkn->tkn_str->cstr);
 			}
 		}
 		btkn_tailq_free_entries(&(wqe->data.in.tkn_q));
