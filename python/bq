@@ -245,7 +245,7 @@ def plot_comp_hist(bs, args):
     start, end, bin_width = get_hist_args(it, comp_id, args)
 
     it.set_filter(comp_id=comp_id, ptn_id=ptn_id, bin_width=bin_width,
-                  tv_begin=(start, end))
+                  tv_begin=(start, 0), tv_end=(end, 0))
     cnt, x, y = it.as_xy_arrays()
     if cnt == 0:
         print("No history information found for component {0} and pattern {1}". \
@@ -303,7 +303,8 @@ def plot_tkn_hist(bs, args):
                          "specified with --tkn")
     it = Bq.Btkn_hist_iter(bs)
     start, end, bin_width = get_hist_args(it, tkn_id, args)
-    it.set_filter(tkn_id=tkn_id, bin_width=bin_width, tv_begin=(start,end))
+    it.set_filter(tkn_id=tkn_id, bin_width=bin_width, tv_begin=(start, 0),
+                  tv_end=(end, 0))
     cnt, x, y = it.as_xy_arrays()
     if cnt == 0:
         print("No history information found for token {0}".format(tkn_id))
@@ -776,7 +777,7 @@ def show_ptns(bs, args):
         '-'.ljust(32, '-'))
     do_header(hf, args)
 
-    pi.set_filter(tv_begin=start)
+    pi.set_filter(tv_begin=(start, 0))
     ptn_count = 0
     msg_count = 0
     for p in pi:
