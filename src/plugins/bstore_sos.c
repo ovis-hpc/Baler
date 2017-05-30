@@ -95,6 +95,10 @@ struct sos_schema_template token_value_schema = {
 			.indexed = 1,
 			.idx_type = "HTBL",
 		},
+		{
+			.name = "desc",
+			.type = SOS_TYPE_CHAR_ARRAY,
+		},
 		{ NULL }
 	}
 };
@@ -108,35 +112,44 @@ typedef struct tkn_value_s {
 
 #define MSG_IDX_TYPE "BXTREE"
 #define MSG_IDX_ARGS "ORDER=5 SIZE=7"
+const char *pt_key[] = { "ptn_id", "epoch_us" };
+const char *ct_key[] = { "comp_id", "epoch_us" };
+const char *tc_key[] = { "epoch_us", "comp_id" };
 struct sos_schema_template message_schema = {
 	.name = "Message",
 	.attrs = {
+		{
+			.name = "epoch_us",
+			.type = SOS_TYPE_UINT64,
+		},
+		{
+			.name = "ptn_id",
+			.type = SOS_TYPE_UINT64,
+		},
+		{
+			.name = "comp_id",
+			.type = SOS_TYPE_UINT64,
+		},
 		{	/* ptn_id:usecs */
 			.name = "pt_key",
-			.type = SOS_TYPE_STRUCT,
-			.size = 16,
+			.type = SOS_TYPE_JOIN,
+			.size = 2,
+			.join_list = pt_key,
 			.indexed = 1,
-			.key_type = "UINT128",
-			.idx_type = MSG_IDX_TYPE,
-			.idx_args = MSG_IDX_ARGS,
 		},
 		{	/* comp_id:usecs */
 			.name = "ct_key",
-			.type = SOS_TYPE_STRUCT,
-			.size = 16,
+			.type = SOS_TYPE_JOIN,
+			.size = 2,
+			.join_list = ct_key,
 			.indexed = 1,
-			.key_type = "UINT128",
-			.idx_type = MSG_IDX_TYPE,
-			.idx_args = MSG_IDX_ARGS,
 		},
 		{	/* usecs:comp_id */
 			.name = "tc_key",
-			.type = SOS_TYPE_STRUCT,
-			.size = 16,
+			.type = SOS_TYPE_JOIN,
+			.size = 2,
+			.join_list = tc_key,
 			.indexed = 1,
-			.key_type = "UINT128",
-			.idx_type = MSG_IDX_TYPE,
-			.idx_args = MSG_IDX_ARGS,
 		},
 		{
 			.name = "tkn_count",
@@ -150,22 +163,10 @@ struct sos_schema_template message_schema = {
 	}
 };
 
-struct pt_msg_key {
-	__be64 uint64_t ptn_id;
-	__be64 uint64_t usecs;
-};
-struct tc_msg_key {
-	__be64 uint64_t usecs;
-	__be64 uint64_t comp_id;
-};
-struct ct_msg_key {
-	__be64 uint64_t comp_id;
-	__be64 uint64_t usecs;
-};
 typedef struct __attribute__ ((__packed__)) msg_s {
-	struct pt_msg_key pt_key;	/* ptn + time */
-	struct ct_msg_key ct_key;	/* comp + time */
-	struct tc_msg_key tc_key;	/* time + comp */
+	uint64_t epoch_us;
+	uint64_t ptn_id;
+	uint64_t comp_id;
 	uint64_t tkn_count;
 	union sos_obj_ref_s tkn_ids;
 } *msg_t;
@@ -215,100 +216,86 @@ typedef struct ptn_s {
 	union sos_obj_ref_s tkn_type_ids;
 } *ptn_t;
 
+const char *ptn_pos_tkn_key[] = { "ptn_id", "pos", "tkn_id" };
 struct sos_schema_template pattern_token_schema = {
 	.name = "PatternToken",
 	.attrs = {
 		{
-			.name = "ptn_pos_tkn_key",
-			.type = SOS_TYPE_STRUCT,
-			.indexed = 1,
-			// .idx_type = "H2BXT",
-			.idx_type = "BXTREE",
-			.idx_args = "ORDER=5 SIZE=3",
-			.size = 24,
-			.key_type = "MEMCMP",
+			.name = "ptn_id",
+			.type = SOS_TYPE_UINT64,
 		},
 		{
-			.name = "count",
+			.name = "pos",
 			.type = SOS_TYPE_UINT64,
+		},
+		{
+			.name = "tkn_id",
+			.type = SOS_TYPE_UINT64,
+		},
+		{
+			.name = "ptn_pos_tkn_key",
+			.type = SOS_TYPE_JOIN,
+			.size = 3,
+			.join_list = ptn_pos_tkn_key,
+			.indexed = 1,
 		},
 		{ NULL }
 	}
 };
-
-#pragma pack(4)
-typedef struct ptn_pos_tkn_s {
-	struct {
-		__be64 uint64_t ptn_id;
-		__be64 uint64_t pos;
-		__be64 uint64_t tkn_id;
-	} key;
-	// uint64_t count;
-} *ptn_pos_tkn_t;
-#pragma pop()
 
 // #define HIST_IDX "H2BXT"
 #define HIST_IDX "BXTREE"
 #define HIST_IDX_ARGS "ORDER=5 SIZE=19"
 
+const char *tkn_hist_key[] = { "bin_width", "epoch", "tkn_id" };
 struct sos_schema_template token_hist_schema = {
 	.name = "TokenHist",
 	.attrs = {
 		{
-			.name = "tkn_hist_key",
-			.type = SOS_TYPE_STRUCT,
-			.size = 16,
-			.indexed = 1,
-			.idx_type = HIST_IDX,
-			.idx_args = HIST_IDX_ARGS,
-			.key_type = "MEMCMP",
+			.name = "bin_width",
+			.type = SOS_TYPE_UINT32
 		},
 		{
-			.name = "count",
-			.type = SOS_TYPE_UINT64,
+			.name = "epoch",
+			.type = SOS_TYPE_UINT32
+		},
+		{
+			.name = "tkn_id",
+			.type = SOS_TYPE_UINT64
+		},
+		{
+			.name = "tkn_hist_key",
+			.type = SOS_TYPE_JOIN,
+			.size = 3,
+			.join_list = tkn_hist_key,
+			.indexed = 1,
 		},
 		{ NULL }
 	}
 };
 
-#pragma pack(4)
-typedef struct tkn_hist_s {
-	struct {
-		__be32 uint32_t bin_width;
-		__be32 uint32_t time;
-		__be64 uint64_t tkn_id;
-	} key;
-	// uint64_t count;
-} *tkn_hist_t;
-#pragma pop()
-
-static inline
-void tkn_hist_htobe(tkn_hist_t tkn_h)
-{
-	tkn_h->key.bin_width = htobe32(tkn_h->key.bin_width);
-	tkn_h->key.time = htobe32(tkn_h->key.time);
-	tkn_h->key.tkn_id = htobe64(tkn_h->key.tkn_id);
-}
-
-static inline
-void tkn_hist_betoh(tkn_hist_t tkn_h)
-{
-	tkn_h->key.bin_width = be32toh(tkn_h->key.bin_width);
-	tkn_h->key.time = be32toh(tkn_h->key.time);
-	tkn_h->key.tkn_id = be64toh(tkn_h->key.tkn_id);
-}
-
+const char *ptn_hist_key[] = { "bin_width", "epoch", "ptn_id" };
 struct sos_schema_template pattern_hist_schema = {
 	.name = "PatternHist",
 	.attrs = {
 		{
+			.name = "bin_width",
+			.type = SOS_TYPE_UINT32
+		},
+		{
+			.name = "epoch",
+			.type = SOS_TYPE_UINT32
+		},
+		{
+			.name = "ptn_id",
+			.type = SOS_TYPE_UINT64
+		},
+		{
 			.name = "ptn_hist_key",
-			.type = SOS_TYPE_STRUCT,
-			.size = 16,
+			.type = SOS_TYPE_JOIN,
+			.size = 3,
+			.join_list = ptn_hist_key,
 			.indexed = 1,
-			.idx_type = HIST_IDX,
-			.idx_args = HIST_IDX_ARGS,
-			.key_type = "MEMCMP",
 		},
 		{
 			.name = "count",
@@ -318,44 +305,32 @@ struct sos_schema_template pattern_hist_schema = {
 	}
 };
 
-#pragma pack(4)
-typedef struct ptn_hist_s {
-	struct {
-		__be32 uint32_t bin_width;
-		__be32 uint32_t time;
-		__be64 uint64_t ptn_id;
-	} key;
-	// uint64_t count;
-} *ptn_hist_t;
-#pragma pop()
-
-static inline
-void ptn_hist_htobe(ptn_hist_t ptn_h)
-{
-	ptn_h->key.bin_width = htobe32(ptn_h->key.bin_width);
-	ptn_h->key.time = htobe32(ptn_h->key.time);
-	ptn_h->key.ptn_id = htobe64(ptn_h->key.ptn_id);
-}
-
-static inline
-void ptn_hist_betoh(ptn_hist_t ptn_h)
-{
-	ptn_h->key.bin_width = be32toh(ptn_h->key.bin_width);
-	ptn_h->key.time = be32toh(ptn_h->key.time);
-	ptn_h->key.ptn_id = be64toh(ptn_h->key.ptn_id);
-}
-
+const char *comp_hist_key[] = { "bin_width", "epoch", "comp_id", "ptn_id" };
 struct sos_schema_template component_hist_schema = {
 	.name = "ComponentHist",
 	.attrs = {
 		{
+			.name = "bin_width",
+			.type = SOS_TYPE_UINT32
+		},
+		{
+			.name = "epoch",
+			.type = SOS_TYPE_UINT32
+		},
+		{
+			.name = "comp_id",
+			.type = SOS_TYPE_UINT64
+		},
+		{
+			.name = "ptn_id",
+			.type = SOS_TYPE_UINT64
+		},
+		{
 			.name = "comp_hist_key",
-			.type = SOS_TYPE_STRUCT,
-			.size = 24,
+			.type = SOS_TYPE_JOIN,
+			.size = 4,
+			.join_list = comp_hist_key,
 			.indexed = 1,
-			.idx_type = HIST_IDX,
-			.idx_args = HIST_IDX_ARGS,
-			.key_type = "MEMCMP"
 		},
 		{
 			.name = "count",
@@ -364,36 +339,6 @@ struct sos_schema_template component_hist_schema = {
 		{ NULL }
 	}
 };
-
-#pragma pack(4)
-typedef struct comp_hist_s {
-	struct {
-		__be32 uint32_t bin_width;
-		__be32 uint32_t time;
-		__be64 uint64_t comp_id;
-		__be64 uint64_t ptn_id;
-	} key;
-	// uint64_t count;
-} *comp_hist_t;
-#pragma pop()
-
-static inline
-void comp_hist_htobe(comp_hist_t comp_h)
-{
-	comp_h->key.bin_width = htobe32(comp_h->key.bin_width);
-	comp_h->key.time = htobe32(comp_h->key.time);
-	comp_h->key.ptn_id = htobe64(comp_h->key.ptn_id);
-	comp_h->key.comp_id = htobe64(comp_h->key.comp_id);
-}
-
-static inline
-void comp_hist_betoh(comp_hist_t comp_h)
-{
-	comp_h->key.bin_width = be32toh(comp_h->key.bin_width);
-	comp_h->key.time = be32toh(comp_h->key.time);
-	comp_h->key.ptn_id = be64toh(comp_h->key.ptn_id);
-	comp_h->key.comp_id = be64toh(comp_h->key.comp_id);
-}
 
 static size_t encode_id(uint64_t id, uint8_t *s);
 static size_t encoded_id_len(uint64_t id);
@@ -1803,7 +1748,6 @@ static bmsg_t __make_msg(bstore_sos_t bss, bsos_iter_t i, sos_obj_t msg_obj)
 {
 	struct sos_value_s v_, *tkn_ids;
 	int rc;
-	msg_t tv;
 	bmsg_t dmsg;
 	msg_t smsg;
 	size_t txt_len;
@@ -1815,7 +1759,7 @@ static bmsg_t __make_msg(bstore_sos_t bss, bsos_iter_t i, sos_obj_t msg_obj)
 		return NULL;
 	smsg = sos_obj_ptr(msg_obj);
 
-	ptn_id = be64toh(smsg->pt_key.ptn_id);
+	ptn_id = smsg->ptn_id;
 	ptn = bs_ptn_find(&bss->base, ptn_id);
 	if (!ptn)
 		goto out;
@@ -1828,13 +1772,13 @@ static bmsg_t __make_msg(bstore_sos_t bss, bsos_iter_t i, sos_obj_t msg_obj)
 	if (!dmsg)
 		goto out;
 
-	dmsg->ptn_id = be64toh(smsg->pt_key.ptn_id);
-	uint64_t usecs = be64toh(smsg->pt_key.usecs);
-	dmsg->timestamp.tv_sec = usecs / 1000000;
-	dmsg->timestamp.tv_usec = usecs % 1000000;
-	dmsg->comp_id = be64toh(smsg->ct_key.comp_id);
+	dmsg->ptn_id = ptn_id;
+	dmsg->timestamp.tv_sec = smsg->epoch_us / 1000000;
+	dmsg->timestamp.tv_usec = smsg->epoch_us % 1000000;
+	dmsg->comp_id = smsg->comp_id;
 	dmsg->argc = smsg->tkn_count;
 	decode_msg(dmsg, tkn_ids->data->array.data.byte_, smsg->tkn_count);
+
 	/* fill from the back */
 	x = dmsg->argc - 1;
 	for (y = ptn->tkn_count - 1; y >= 0; y--) {
@@ -1864,23 +1808,19 @@ static bmsg_t __make_msg(bstore_sos_t bss, bsos_iter_t i, sos_obj_t msg_obj)
 static sos_obj_t __next_matching_msg(int rc, bsos_iter_t i, int forwards)
 {
 	msg_t msg;
-	uint64_t msg_ptn, msg_time, msg_comp;
 	sos_obj_t obj;
 	struct timeval tv;
 
 	for (;0 == rc; rc = (forwards ? sos_iter_next(i->iter) : sos_iter_prev(i->iter))) {
 		obj = sos_iter_obj(i->iter);
 		msg = sos_obj_ptr(obj);
-		msg_ptn = be64toh(msg->pt_key.ptn_id);
-		msg_time = be64toh(msg->pt_key.usecs);
-		tv.tv_sec = msg_time / 1000000;
-		tv.tv_usec = msg_time % 1000000;
-		msg_comp = be64toh(msg->ct_key.comp_id);
+		tv.tv_sec = msg->epoch_us / 1000000;
+		tv.tv_usec = msg->epoch_us % 1000000;
 
 		/* ptn_id specified and doesn't match, exit */
 		if (i->filter.ptn_id) {
 			/* We're using the pt_msg_key index */
-			if (i->filter.ptn_id != msg_ptn)
+			if (i->filter.ptn_id != msg->ptn_id)
 				goto enoent;
 
 			if (i->filter.tv_begin.tv_sec &&
@@ -1892,7 +1832,8 @@ static sos_obj_t __next_matching_msg(int rc, bsos_iter_t i, int forwards)
 				goto enoent;
 
 			/* Skip component id's that don't match */
-			if (i->filter.comp_id && (i->filter.comp_id != msg_comp)) {
+			if (i->filter.comp_id
+			    && (i->filter.comp_id != msg->comp_id)) {
 				sos_obj_put(obj);
 				continue;
 			} else {
@@ -1901,7 +1842,7 @@ static sos_obj_t __next_matching_msg(int rc, bsos_iter_t i, int forwards)
 			}
 		}
 
-		if (i->filter.comp_id && (i->filter.comp_id != msg_comp)) {
+		if (i->filter.comp_id && (i->filter.comp_id != msg->comp_id)) {
 			/* We're using the ct_msg_key index. If comp_id doesn't
 			 * match, we've completed the iteration
 			 */
@@ -1937,10 +1878,6 @@ __bs_msg_iter_find(bmsg_iter_t iter, int fwd, const struct timeval *tv,
 	sos_obj_t obj = NULL;
 	SOS_KEY(msg_key);
 	uint64_t usecs;
-	struct pt_msg_key *pt_key;
-	struct ct_msg_key *ct_key;
-	struct tc_msg_key *tc_key;
-	ods_key_value_t kv = msg_key->as.ptr;
 
 	bsos_iter_t i = (bsos_iter_t)iter;
 	bstore_sos_t bss = (bstore_sos_t)i->bs;
@@ -1971,27 +1908,19 @@ __bs_msg_iter_find(bmsg_iter_t iter, int fwd, const struct timeval *tv,
 
 	switch (i->iter_type) {
 	case MSG_ITER_PTN_TIME:
-		pt_key = (struct pt_msg_key *)kv->value;
-		pt_key->ptn_id = htobe64(ptn_id);
-		pt_key->usecs = htobe64(usecs);
+		sos_key_join(msg_key, bss->pt_key_attr, ptn_id, usecs);
 		break;
 	case MSG_ITER_COMP_TIME:
-		ct_key = (struct ct_msg_key *)kv->value;
-		ct_key->comp_id = htobe64(comp_id);
-		ct_key->usecs = htobe64(usecs);
+		sos_key_join(msg_key, bss->ct_key_attr, comp_id, usecs);
 		break;
 	case MSG_ITER_TIME_COMP:
-		tc_key = (struct tc_msg_key *)kv->value;
-		tc_key->usecs = htobe64(usecs);
-		tc_key->comp_id = htobe64(comp_id);
+		sos_key_join(msg_key, bss->tc_key_attr, usecs, comp_id);
 		break;
 	default:
 		assert(0 == "BAD ITER_TYPE");
 		rc = EINVAL;
 		goto err;
 	}
-
-	kv->len = 16;
 
 	rc = (fwd)?(sos_iter_sup(i->iter, msg_key)):
 		   (sos_iter_inf(i->iter, msg_key));
@@ -2442,20 +2371,17 @@ static int bs_ptn_tkn_add(bstore_t bs, bptn_id_t ptn_id, uint64_t tkn_pos,
 {
 	bstore_sos_t bss = (bstore_sos_t)bs;
 	SOS_KEY(key);
-	ods_key_value_t kv = key->as.ptr;
-	ptn_pos_tkn_t ppt_k = (ptn_pos_tkn_t)kv->value;
 	sos_index_t idx;
 	int rc;
 
-	ppt_k->key.ptn_id = htobe64(ptn_id);
-	ppt_k->key.pos = htobe64(tkn_pos);
-	ppt_k->key.tkn_id = htobe64(tkn_id);
-	kv->len = sizeof(ppt_k->key);
+	sos_key_join(key, bss->ptn_pos_tkn_key_attr, ptn_id, tkn_pos, tkn_id);
 
 	if (bstore_lock)
 		pthread_mutex_lock(&bss->ptn_tkn_lock);
+
 	idx = sos_attr_index(bss->ptn_pos_tkn_key_attr);
 	rc = sos_index_visit(idx, key, hist_cb, NULL);
+
 	if (bstore_lock)
 		pthread_mutex_unlock(&bss->ptn_tkn_lock);
 	return rc;
@@ -2539,8 +2465,6 @@ static btkn_t bs_ptn_tkn_find(bstore_t bs, bptn_id_t ptn_id, uint64_t tkn_pos,
 {
 	bstore_sos_t bss = (bstore_sos_t)bs;
 	SOS_KEY(key);
-	ods_key_value_t kv = key->as.ptr;
-	ptn_pos_tkn_t ppt_k = (ptn_pos_tkn_t)kv->value;
 	sos_obj_ref_t ref;
 	sos_index_t idx;
 	btkn_t tkn;
@@ -2552,11 +2476,7 @@ static btkn_t bs_ptn_tkn_find(bstore_t bs, bptn_id_t ptn_id, uint64_t tkn_pos,
 	if (errno != ENOKEY) /* expect ENOKEY if !tkn */
 		return NULL;
 
-	ppt_k->key.ptn_id = htobe64(ptn_id);
-	ppt_k->key.pos = htobe64(tkn_pos);
-	ppt_k->key.tkn_id = htobe64(tkn_id);
-	kv->len = sizeof(ppt_k->key);
-
+	sos_key_join(key, bss->ptn_pos_tkn_key_attr, ptn_id, tkn_pos, tkn_id);
 	if (bstore_lock)
 		pthread_mutex_lock(&bss->ptn_tkn_lock);
 	idx = sos_attr_index(bss->ptn_pos_tkn_key_attr);
@@ -2584,36 +2504,24 @@ static int bs_ptn_hist_update(bstore_t bs,
 {
 	bstore_sos_t bss = (bstore_sos_t)bs;
 	SOS_KEY(ph_key);
-	ods_key_value_t ph_k = ph_key->as.ptr;
-	ptn_hist_t ptn_k = (ptn_hist_t)ph_k->value;
 	SOS_KEY(ch_key);
-	ods_key_value_t ch_k = ch_key->as.ptr;
-	comp_hist_t comp_k = (comp_hist_t)ch_k->value;
 	sos_index_t idx;
 	int bin, rc;
 
-	ph_k->len = sizeof(ptn_k->key);
-	ch_k->len = sizeof(comp_k->key);
-
 	/* Pattern Histogram */
-	ptn_k->key.ptn_id = htobe64(ptn_id);
-	ptn_k->key.time = htobe32((uint32_t)secs);
-	ptn_k->key.bin_width = htobe32((uint32_t)bin_width);
+	sos_key_join(ph_key, bss->ptn_hist_key_attr, bin_width, secs, ptn_id);
 	idx = sos_attr_index(bss->ptn_hist_key_attr);
 	rc = sos_index_visit(idx, ph_key, hist_cb, NULL);
 
 	/* Date Histogram */
-	ptn_k->key.ptn_id = htobe64(BPTN_ID_SUM_ALL);
-	ptn_k->key.time = htobe32((uint32_t)secs);
-	ptn_k->key.bin_width = htobe32((uint32_t)bin_width);
+	sos_key_join(ph_key, bss->ptn_hist_key_attr,
+		     bin_width, secs, BPTN_ID_SUM_ALL);
 	idx = sos_attr_index(bss->ptn_hist_key_attr);
 	rc = sos_index_visit(idx, ph_key, hist_cb, NULL);
 
 	/* Component Histogram */
-	comp_k->key.comp_id = htobe64(comp_id);
-	comp_k->key.ptn_id = htobe64(ptn_id);
-	comp_k->key.time = htobe32((uint32_t)secs);
-	comp_k->key.bin_width = htobe32(bin_width);
+	sos_key_join(ch_key, bss->comp_hist_key_attr,
+		     bin_width, secs, comp_id, ptn_id);
 	idx = sos_attr_index(bss->comp_hist_key_attr);
 	rc = sos_index_visit(idx, ch_key, hist_cb, NULL);
 
@@ -2627,14 +2535,9 @@ static int bs_tkn_hist_update(bstore_t bs, time_t secs, time_t bin_width, btkn_i
 {
 	SOS_KEY(key);
 	bstore_sos_t bss = (bstore_sos_t)bs;
-	ods_key_value_t hist_k = key->as.ptr;
-	tkn_hist_t tkn_k = (tkn_hist_t)hist_k->value;
 	sos_index_t idx = sos_attr_index(bss->tkn_hist_key_attr);
 
-	hist_k->len = sizeof(tkn_k->key);
-	tkn_k->key.tkn_id = htobe64(tkn_id);
-	tkn_k->key.time = htobe32(secs);
-	tkn_k->key.bin_width = htobe32(bin_width);
+	sos_key_join(key, bss->tkn_hist_key_attr, bin_width, secs, tkn_id);
 	return sos_index_visit(idx, key, hist_cb, NULL);
 }
 
@@ -2662,21 +2565,16 @@ static int bs_msg_add(bstore_t bs, struct timeval *tv, bmsg_t msg)
 	if (!msg_obj)
 		goto err_0;
 
-	uint64_t usecs = htobe64(tv->tv_sec * 1000000 + tv->tv_usec);
 	msg_value = sos_obj_ptr(msg_obj);
-	msg_value->pt_key.usecs = usecs;
-	msg_value->ct_key.usecs = usecs;
-	msg_value->tc_key.usecs = usecs;
-	msg_value->pt_key.ptn_id = htobe64(msg->ptn_id);
-	msg_value->ct_key.comp_id = htobe64(msg->comp_id);
-	msg_value->tc_key.comp_id = htobe64(msg->comp_id);
+	msg_value->epoch_us = tv->tv_sec * 1000000 + tv->tv_usec;
+	msg_value->ptn_id = msg->ptn_id;
+	msg_value->comp_id = msg->comp_id;
 
-	/* Input `msg` is a sequence of token IDs. baler2 stored a message as
-	 * <ptn_id, wild_card_arg1, wild_card_arg2, ...> to save some space. So,
-	 * we can apply the same idea here. */
-
+	/* Only token id's are saved in the message. If it is a type-id, it
+	 * can be recovered from the ptn and thereby save space in the
+	 * message object
+	 */
 	wc = 0;
-
 	for (i = 0; i < msg->argc; i++) {
 		tkn_type = msg->argv[i] & 0xFF;
 		if (btkn_type_is_wildcard(tkn_type)) {
@@ -2717,18 +2615,14 @@ static int bs_msg_add(bstore_t bs, struct timeval *tv, bmsg_t msg)
 	return rc;
 }
 
-static int __ptn_tkn_iter_check(bsos_iter_t i)
-{
+ static int __ptn_tkn_iter_check(bsos_iter_t i)
+ {
 	sos_key_t key;
-	bptn_id_t ptn_id;
-	uint64_t tkn_pos;
-	ptn_pos_tkn_t ppt;
+	uint64_t ptn_id , tkn_pos, tkn_id;
 	key = sos_iter_key(i->iter);
 	if (!key)
-		return errno;
-	ppt = (void*)sos_key_value(key);
-	ptn_id = be64toh(ppt->key.ptn_id);
-	tkn_pos = be64toh(ppt->key.pos);
+ 		return errno;
+	sos_key_split(key, sos_iter_attr(i->iter), &ptn_id, &tkn_pos, &tkn_id);
 	sos_key_put(key);
 	if ((tkn_pos != i->filter.tkn_pos) || (ptn_id != i->filter.ptn_id))
 		return ENOENT;
@@ -2739,28 +2633,22 @@ static btkn_t make_ptn_tkn(bsos_iter_t i)
 {
 	bstore_sos_t bss = (bstore_sos_t)i->bs;
 	int rc;
-	ptn_pos_tkn_t ppt_o;
 	btkn_t tkn;
-	bptn_id_t ptn_id_;
-	uint64_t tkn_pos_;
-	btkn_id_t tkn_id_;
-	sos_key_t key_o;
+	uint64_t ptn_id, tkn_pos, tkn_id;
+	sos_key_t key;
 	sos_obj_ref_t ref;
 
-	key_o = sos_iter_key(i->iter);
-	if (!key_o)
+	key = sos_iter_key(i->iter);
+	if (!key)
 		goto out;
 
-	ppt_o = (typeof(ppt_o))sos_key_value(key_o);
-	ptn_id_ = be64toh(ppt_o->key.ptn_id);
-	tkn_pos_ = be64toh(ppt_o->key.pos);
-	tkn_id_ = be64toh(ppt_o->key.tkn_id);
-	sos_key_put(key_o);
+	sos_key_split(key, sos_iter_attr(i->iter), &ptn_id, &tkn_pos, &tkn_id);
+	sos_key_put(key);
 
-	if ((tkn_pos_ != i->filter.tkn_pos) || (ptn_id_ != i->filter.ptn_id))
+	if ((tkn_pos != i->filter.tkn_pos) || (ptn_id != i->filter.ptn_id))
 		goto out;
 
-	tkn = bs_tkn_find_by_id(i->bs, tkn_id_);
+	tkn = bs_tkn_find_by_id(i->bs, tkn_id);
 	ref = sos_iter_ref(i->iter);
 	tkn->tkn_count = ref.idx_data.uint64_[1];
 	return tkn;
@@ -2783,8 +2671,6 @@ static int bs_ptn_tkn_iter_first(bptn_tkn_iter_t iter)
 	bsos_iter_t i = (bsos_iter_t)iter;
 	bstore_sos_t bss = (bstore_sos_t)i->bs;
 	SOS_KEY(key);
-	ods_key_value_t kv = key->as.ptr;
-	ptn_pos_tkn_t ppt_k = (ptn_pos_tkn_t)kv->value;
 	int rc;
 
 	/* Check if this position is not a wild card */
@@ -2797,10 +2683,9 @@ static int bs_ptn_tkn_iter_first(bptn_tkn_iter_t iter)
 	}
 	if (rc != ENOKEY) /* expect ENOKEY if !tkn */
 		return rc;
-	ppt_k->key.ptn_id = htobe64(i->filter.ptn_id);
-	ppt_k->key.pos = htobe64(i->filter.tkn_pos);
-	ppt_k->key.tkn_id = 0;
-	kv->len = sizeof(ppt_k->key);
+
+	sos_key_join(key, sos_iter_attr(i->iter),
+		     i->filter.ptn_id, i->filter.tkn_pos, 0L);
 
 	rc = sos_iter_sup(i->iter, key);
 	return __ptn_tkn_iter_check(i);
@@ -2811,8 +2696,6 @@ static int bs_ptn_tkn_iter_last(bptn_tkn_iter_t iter)
 	bsos_iter_t i = (bsos_iter_t)iter;
 	bstore_sos_t bss = (bstore_sos_t)i->bs;
 	SOS_KEY(key);
-	ods_key_value_t kv = key->as.ptr;
-	ptn_pos_tkn_t ppt_k = (ptn_pos_tkn_t)kv->value;
 	int rc;
 
 	/* Check if this position is not a wild card */
@@ -2826,10 +2709,8 @@ static int bs_ptn_tkn_iter_last(bptn_tkn_iter_t iter)
 	if (rc != ENOKEY) /* expect ENOKEY if !tkn */
 		return rc;
 
-	ppt_k->key.ptn_id = htobe64(i->filter.ptn_id);
-	ppt_k->key.pos = htobe64(i->filter.tkn_pos);
-	ppt_k->key.tkn_id = -1;
-	kv->len = sizeof(ppt_k->key);
+	sos_key_join(key, sos_iter_attr(i->iter),
+		     i->filter.ptn_id, i->filter.tkn_pos, -1L);
 
 	rc = sos_iter_inf(i->iter, key);
 	return __ptn_tkn_iter_check(i);
@@ -2922,77 +2803,68 @@ static void bs_tkn_hist_iter_free(btkn_hist_iter_t i)
 static int __tkn_hist_next(bsos_iter_t i)
 {
 	int rc = 0;
-	struct tkn_hist_s tkn_s;
+	uint32_t bin_width, time_s;
+	uint64_t tkn_id;
 	sos_key_t key_o = sos_iter_key(i->iter);
 	time_t start_time = i->filter.tv_begin.tv_sec;
 	time_t end_time = i->filter.tv_end.tv_sec;
 	sos_obj_ref_t ref;
 	for ( ; 0 == rc;
-	      sos_key_put(key_o),
-		      key_o = (0 == (rc = sos_iter_next(i->iter))?sos_iter_key(i->iter):NULL)) {
+	      key_o = (0 == (rc = sos_iter_next(i->iter))?sos_iter_key(i->iter):NULL)) {
+		sos_key_split(key_o, sos_iter_attr(i->iter),
+			      &bin_width, &time_s, &tkn_id);;
+		sos_key_put(key_o);
 
-		/* copy-out tkn_s value and convert BE-to-host*/
-		tkn_s = *(tkn_hist_t)sos_key_value(key_o);
-		tkn_hist_betoh(&tkn_s);
-
-		if (i->filter.bin_width &&
-				(i->filter.bin_width != tkn_s.key.bin_width))
+		if (i->filter.bin_width && (i->filter.bin_width != bin_width))
 			/* Bin width doesn't match, no more matches */
 			break;
 
-		if ((start_time && tkn_s.key.time < start_time) ||
-				(end_time && end_time <  tkn_s.key.time))
+		if ((start_time && time_s < start_time)
+		    || (end_time && end_time < time_s))
 			/* Time doesn't match, no more matches */
 			break;
 
-		if (i->filter.tkn_id && (i->filter.tkn_id != tkn_s.key.tkn_id))
+		if (i->filter.tkn_id && (i->filter.tkn_id != tkn_id))
 			/* tkn id doesn't match, keep looking */
 			continue;
 
 		/* Everything matches */
-		sos_key_put(key_o);
 		return 0;
 	}
-	if (key_o)
-		sos_key_put(key_o);
 	return ENOENT;
 }
 
 static int __tkn_hist_prev(bsos_iter_t i)
 {
 	int rc = 0;
-	struct tkn_hist_s tkn_s;
+	uint32_t bin_width, time_s;
+	uint64_t tkn_id;
 	sos_key_t key_o = sos_iter_key(i->iter);
 	time_t start_time = i->filter.tv_begin.tv_sec;
 	time_t end_time = i->filter.tv_end.tv_sec;
 	sos_obj_ref_t ref;
 	for ( ; 0 == rc;
-	      sos_key_put(key_o),
-		      key_o = (0 == (rc = sos_iter_prev(i->iter))?sos_iter_key(i->iter):NULL)) {
+	      key_o = (0 == (rc = sos_iter_prev(i->iter))?sos_iter_key(i->iter):NULL)) {
+		sos_key_split(key_o, sos_iter_attr(i->iter),
+			      &bin_width, &time_s, &tkn_id);;
+		sos_key_put(key_o);
 
-		tkn_s = *(tkn_hist_t)sos_key_value(key_o);
-		tkn_hist_betoh(&tkn_s);
-
-		if (i->filter.bin_width &&
-				(i->filter.bin_width != tkn_s.key.bin_width))
+		if (i->filter.bin_width && (i->filter.bin_width != bin_width))
 			/* Bin width doesn't match, no more matches */
 			break;
 
-		if ((start_time && tkn_s.key.time < start_time) ||
-				(end_time && end_time < tkn_s.key.time))
+		if ((start_time && time_s < start_time)
+		    || (end_time && end_time < time_s))
 			/* Time doesn't match, no more matches */
 			break;
 
-		if (i->filter.tkn_id && (i->filter.tkn_id != tkn_s.key.tkn_id))
+		if (i->filter.tkn_id && (i->filter.tkn_id != tkn_id))
 			/* tkn id doesn't match, keep looking */
 			continue;
 
 		/* Everything matches */
-		sos_key_put(key_o);
 		return 0;
 	}
-	if (key_o)
-		sos_key_put(key_o);
 	return ENOENT;
 }
 
@@ -3002,42 +2874,36 @@ __bs_tkn_hist_iter_find(btkn_hist_iter_t iter, int fwd, btkn_hist_t tkn_h)
 	bstore_sos_t bss = (bstore_sos_t)iter->bs;
 	bsos_iter_t i = (bsos_iter_t)iter;
 	SOS_KEY(key);
-	ods_key_value_t hist_k = key->as.ptr;
-	tkn_hist_t tkn_k = (tkn_hist_t)hist_k->value;
-	sos_obj_t hist_o;
-	int (*iter_fn)(sos_iter_t, sos_key_t);
-	int (*step_fn)(bsos_iter_t);
 	int rc;
 
+	if (!tkn_h->bin_width)
+		tkn_h->bin_width = i->filter.bin_width;
+	if (!tkn_h->tkn_id)
+		tkn_h->tkn_id = i->filter.tkn_id;
+
 	if (fwd) {
-		iter_fn = sos_iter_sup;
-		step_fn = __tkn_hist_next;
+		if (!tkn_h->time)
+			tkn_h->time = i->filter.tv_begin.tv_sec;
 	} else {
-		iter_fn = sos_iter_inf;
-		step_fn = __tkn_hist_prev;
-	}
+		if (!tkn_h->time) {
+			if (i->filter.tv_end.tv_sec)
+				tkn_h->time = i->filter.tv_end.tv_sec;
+			else
+				tkn_h->time = -1;
+		}
+		if (!tkn_h->tkn_id)
+			tkn_h->tkn_id = -1L;
 
-	tkn_k->key.tkn_id = (tkn_h->tkn_id)?(tkn_h->tkn_id):(i->filter.tkn_id);
-	tkn_k->key.bin_width = (tkn_h->bin_width)?(tkn_h->bin_width)
-						 :(i->filter.bin_width);
-	tkn_k->key.time = (tkn_h->time)?(tkn_h->time)
-				       :((fwd)?(i->filter.tv_begin.tv_sec)
-					      :(i->filter.tv_end.tv_sec));
-	tkn_hist_htobe(tkn_k);
-	if (!fwd) {
-		if (!tkn_k->key.tkn_id)
-			tkn_k->key.tkn_id = -1;
-		if (!tkn_k->key.bin_width)
-			tkn_k->key.bin_width = -1;
-		if (!tkn_k->key.time)
-			tkn_k->key.time = -1;
+		if (!tkn_h->bin_width)
+			tkn_h->bin_width = -1;
 	}
-	hist_k->len = sizeof(tkn_k->key);
+	sos_key_join(key, bss->tkn_hist_key_attr,
+		     tkn_h->bin_width, tkn_h->time, tkn_h->tkn_id);
 
-	rc = iter_fn(i->iter, key);
+	rc = fwd ? sos_iter_sup(i->iter, key) : sos_iter_inf(i->iter, key);
 	if (rc)
 		return rc;
-	return step_fn(i);
+	return fwd ? __tkn_hist_next(i) : __tkn_hist_prev(i);
 }
 
 static int
@@ -3079,17 +2945,16 @@ static btkn_hist_t bs_tkn_hist_iter_obj(btkn_hist_iter_t iter, btkn_hist_t tkn_h
 {
 	bsos_iter_t i = (bsos_iter_t)iter;
 	sos_key_t key_o;
-	tkn_hist_t tkn_o;
 	sos_obj_ref_t ref;
 
 	key_o = sos_iter_key(i->iter);
 	if (!key_o)
 		return NULL;
-	tkn_o = (tkn_hist_t)sos_key_value(key_o);
-	tkn_h->tkn_id = be64toh(tkn_o->key.tkn_id);
-	tkn_h->bin_width = be32toh(tkn_o->key.bin_width);
-	tkn_h->time = be32toh(tkn_o->key.time);
+
+	sos_key_split(key_o, sos_iter_attr(i->iter),
+		      &tkn_h->bin_width, &tkn_h->time, &tkn_h->tkn_id);
 	sos_key_put(key_o);
+
 	ref = sos_iter_ref(i->iter);
 	tkn_h->tkn_count = ref.idx_data.uint64_[1];
 
@@ -3174,15 +3039,6 @@ static void bs_ptn_hist_iter_free(bptn_hist_iter_t i)
 	free(i);
 }
 
-int ptn_hist_match(bsos_iter_t i, ptn_hist_t ptn_o)
-{
-	if ((i->filter.ptn_id && (i->filter.ptn_id != ptn_o->key.ptn_id))
-	    || (i->filter.bin_width && (i->filter.bin_width != ptn_o->key.bin_width))) {
-		return 0;
-	}
-	return 1;
-}
-
 /*
  * Index order is:
  * - bin_width
@@ -3194,36 +3050,31 @@ int __ptn_hist_next(bsos_iter_t i)
 {
 	int rc = 0;
 	sos_key_t key_o = sos_iter_key(i->iter);
-	struct ptn_hist_s ptn_s;
 	time_t start_time = i->filter.tv_begin.tv_sec;
 	time_t end_time = i->filter.tv_end.tv_sec;
+	uint32_t bin_width, time_s;
+	uint64_t ptn_id;
 	for ( ; 0 == rc;
-	      sos_key_put(key_o),
-		      key_o = (0 == (rc = sos_iter_next(i->iter))?sos_iter_key(i->iter):NULL)) {
+	      key_o = (0 == (rc = sos_iter_next(i->iter))?sos_iter_key(i->iter):NULL)) {
+		sos_key_split(key_o, sos_iter_attr(i->iter),
+			      &bin_width, &time_s, &ptn_id);
+		sos_key_put(key_o);
 
-		/* copy-out key and convert BE-to-host */
-		ptn_s = *(ptn_hist_t)sos_key_value(key_o);
-		ptn_hist_betoh(&ptn_s);
-
-		if (i->filter.bin_width &&
-				(i->filter.bin_width != ptn_s.key.bin_width))
+		if (i->filter.bin_width && (i->filter.bin_width != bin_width))
 			/* Bin width doesn't match, no more matches */
 			break;
 
-		if ((start_time && ptn_s.key.time < start_time) ||
-				(end_time && end_time < ptn_s.key.time))
+		if ((start_time && time_s < start_time)
+		    || (end_time && end_time < time_s))
 			/* Time doesn't match, no more matches */
 			break;
-		if (i->filter.ptn_id && (i->filter.ptn_id != ptn_s.key.ptn_id))
+		if (i->filter.ptn_id && (i->filter.ptn_id != ptn_id))
 			/* ptn id doesn't match, skip mismatch */
 			continue;
 
 		/* Everything matches, return it */
-		sos_key_put(key_o);
 		return 0;
 	}
-	if (key_o)
-		sos_key_put(key_o);
 	return ENOENT;
 }
 
@@ -3231,37 +3082,32 @@ static int __ptn_hist_prev(bsos_iter_t i)
 {
 	int rc = 0;
 	sos_key_t key_o = sos_iter_key(i->iter);
-	struct ptn_hist_s ptn_s;
 	time_t start_time = i->filter.tv_begin.tv_sec;
 	time_t end_time = i->filter.tv_end.tv_sec;
+	uint32_t bin_width, time_s;
+	uint64_t ptn_id;
+
 	for ( ; 0 == rc;
-	      sos_key_put(key_o),
-		      key_o = (0 == (rc = sos_iter_prev(i->iter))?sos_iter_key(i->iter):NULL)) {
+	      key_o = (0 == (rc = sos_iter_prev(i->iter))?sos_iter_key(i->iter):NULL)) {
+		sos_key_split(key_o, sos_iter_attr(i->iter),
+			      &bin_width, &time_s, &ptn_id);
+		sos_key_put(key_o);
 
-		/* copy-out key and convert BE-to-host */
-		ptn_s = *(ptn_hist_t)sos_key_value(key_o);
-		ptn_hist_betoh(&ptn_s);
-
-		if (i->filter.bin_width &&
-				(i->filter.bin_width != ptn_s.key.bin_width))
+		if (i->filter.bin_width && (i->filter.bin_width != bin_width))
 			/* Bin width doesn't match, no more matches */
 			break;
 
-		if ((start_time && ptn_s.key.time < start_time) ||
-				(end_time && end_time < ptn_s.key.time))
+		if ((start_time && time_s < start_time)
+		    || (end_time && end_time < time_s))
 			/* Time doesn't match, no more matches */
 			break;
 
-		if (i->filter.ptn_id && (i->filter.ptn_id != ptn_s.key.ptn_id))
+		if (i->filter.ptn_id && (i->filter.ptn_id != ptn_id))
 			/* ptn id doesn't match, skip mismatch */
 			continue;
 
-		/* Everything matches, return it */
-		sos_key_put(key_o);
 		return 0;
 	}
-	if (key_o)
-		sos_key_put(key_o);
 	return ENOENT;
 }
 
@@ -3271,42 +3117,34 @@ __bs_ptn_hist_iter_find(bptn_hist_iter_t iter, int fwd, bptn_hist_t ptn_h)
 	bstore_sos_t bss = (bstore_sos_t)iter->bs;
 	bsos_iter_t i = (bsos_iter_t)iter;
 	SOS_KEY(key);
-	ods_key_value_t hist_k = key->as.ptr;
-	ptn_hist_t ptn_k = (ptn_hist_t)hist_k->value;
-	sos_obj_t hist_o;
-	int (*iter_fn)(sos_iter_t, sos_key_t);
-	int (*step_fn)(bsos_iter_t);
 	int rc;
 
+	if (!ptn_h->ptn_id)
+		ptn_h->ptn_id = i->filter.ptn_id;
+	if (!ptn_h->bin_width)
+		ptn_h->bin_width = i->filter.bin_width;
+
 	if (fwd) {
-		iter_fn = sos_iter_sup;
-		step_fn = __ptn_hist_next;
+		if (!ptn_h->time)
+		    ptn_h->time = i->filter.tv_begin.tv_sec;
 	} else {
-		iter_fn = sos_iter_inf;
-		step_fn = __ptn_hist_prev;
+		if (!ptn_h->time)
+		    ptn_h->time = i->filter.tv_end.tv_sec;
+		if (!ptn_h->ptn_id)
+			ptn_h->ptn_id = -1L;
+		if (!ptn_h->bin_width)
+			ptn_h->bin_width = -1;
+		if (!ptn_h->time)
+			ptn_h->time = -1;
 	}
 
-	ptn_k->key.ptn_id = (ptn_h->ptn_id)?(ptn_h->ptn_id):(i->filter.ptn_id);
-	ptn_k->key.bin_width = (ptn_h->bin_width)?(ptn_h->bin_width)
-						 :(i->filter.bin_width);
-	ptn_k->key.time = (ptn_h->time)?(ptn_h->time)
-				       :((fwd)?(i->filter.tv_begin.tv_sec)
-					      :(i->filter.tv_end.tv_sec));
-	ptn_hist_htobe(ptn_k);
-	if (!fwd) {
-		if (!ptn_k->key.ptn_id)
-			ptn_k->key.ptn_id = -1;
-		if (!ptn_k->key.bin_width)
-			ptn_k->key.bin_width = -1;
-		if (!ptn_k->key.time)
-			ptn_k->key.time = -1;
-	}
-	hist_k->len = sizeof(ptn_k->key);
+	sos_key_join(key, sos_iter_attr(i->iter),
+		     ptn_h->bin_width, ptn_h->time, ptn_h->ptn_id);
 
-	rc = iter_fn(i->iter, key);
+	rc = fwd ? sos_iter_sup(i->iter, key) : sos_iter_inf(i->iter, key);
 	if (rc)
 		return rc;
-	return step_fn(i);
+	return fwd ? __ptn_hist_next(i) : __ptn_hist_prev(i);
 }
 
 static int
@@ -3348,18 +3186,17 @@ static int bs_ptn_hist_iter_last(bptn_hist_iter_t iter)
 static bptn_hist_t bs_ptn_hist_iter_obj(bptn_hist_iter_t iter, bptn_hist_t ptn_h)
 {
 	bsos_iter_t i = (bsos_iter_t)iter;
-	ptn_hist_t ptn_o;
 	sos_obj_ref_t ref;
 	sos_key_t key_o;
 
 	key_o = sos_iter_key(i->iter);
 	if (!key_o)
 		return NULL;
-	ptn_o = (typeof(ptn_o))sos_key_value(key_o);
-	ptn_h->ptn_id = be64toh(ptn_o->key.ptn_id);
-	ptn_h->time = be32toh(ptn_o->key.time);
-	ptn_h->bin_width =  be32toh(ptn_o->key.bin_width);
+
+	sos_key_split(key_o, sos_iter_attr(i->iter),
+		      &ptn_h->bin_width, &ptn_h->time, &ptn_h->ptn_id);
 	sos_key_put(key_o);
+
 	ref = sos_iter_ref(i->iter);
 	ptn_h->msg_count = ref.idx_data.uint64_[1];
 	return ptn_h;
@@ -3453,79 +3290,72 @@ static void bs_comp_hist_iter_free(bcomp_hist_iter_t i)
 static int __comp_hist_next(bsos_iter_t i)
 {
 	int rc = 0;
-	struct comp_hist_s comp_s;
+	uint32_t bin_width, time_s;
+	uint64_t comp_id, ptn_id;
 	sos_key_t key_o = sos_iter_key(i->iter);
 	time_t start_time = i->filter.tv_begin.tv_sec;
 	time_t end_time = i->filter.tv_end.tv_sec;
 	for ( ; 0 == rc;
-	      sos_key_put(key_o),
-		      key_o = (0 == (rc = sos_iter_next(i->iter))?sos_iter_key(i->iter):NULL)) {
+	      key_o = (0 == (rc = sos_iter_next(i->iter))?sos_iter_key(i->iter):NULL)) {
+		sos_key_split(key_o, sos_iter_attr(i->iter),
+			      &bin_width, &time_s, &comp_id, &ptn_id);
+		sos_key_put(key_o);
 
-		comp_s = *(comp_hist_t)sos_key_value(key_o);
-		comp_hist_betoh(&comp_s);
-
-		if (i->filter.bin_width &&
-				(i->filter.bin_width != comp_s.key.bin_width))
+		if (i->filter.bin_width && (i->filter.bin_width != bin_width))
 			/* Bin width is primary order, no more matches */
 			break;
 
-		if ((start_time && comp_s.key.time < start_time) ||
-				(end_time && end_time < comp_s.key.time))
-			/* Time doesn't match and is secondar, no more matches */
+		if ((start_time && time_s < start_time)
+		    || (end_time && end_time < time_s))
+			/* Time doesn't match and is secondary, no more matches */
 			break;
-		if (i->filter.comp_id &&
-				(i->filter.comp_id != comp_s.key.comp_id))
+
+		if (i->filter.comp_id && (i->filter.comp_id != comp_id))
 			/* comp id doesn't match */
 			continue;
 
-		if (i->filter.ptn_id && (i->filter.ptn_id != comp_s.key.ptn_id))
+		if (i->filter.ptn_id && (i->filter.ptn_id != ptn_id))
 			continue;
 
 		/* Everything matches, return it */
-		sos_key_put(key_o);
 		return 0;
 	}
-	if (key_o)
-		sos_key_put(key_o);
 	return ENOENT;
 }
 
 static int __comp_hist_prev(bsos_iter_t i)
 {
 	int rc = 0;
-	struct comp_hist_s comp_s;
+	uint32_t bin_width, time_s;
+	uint64_t comp_id, ptn_id;
 	sos_key_t key_o = sos_iter_key(i->iter);
 	time_t start_time = i->filter.tv_begin.tv_sec;
 	time_t end_time = i->filter.tv_end.tv_sec;
 	for ( ; 0 == rc;
-	      sos_key_put(key_o),
-		      key_o = (0 == (rc = sos_iter_prev(i->iter))?sos_iter_key(i->iter):NULL)) {
-		comp_s = *(comp_hist_t)sos_key_value(key_o);
-		comp_hist_betoh(&comp_s);
-		if (i->filter.bin_width &&
-				(i->filter.bin_width != comp_s.key.bin_width))
+	      key_o = (0 == (rc = sos_iter_prev(i->iter))?sos_iter_key(i->iter):NULL)) {
+		sos_key_split(key_o, sos_iter_attr(i->iter),
+			      &bin_width, &time_s, &comp_id, &ptn_id);
+		sos_key_put(key_o);
+
+		if (i->filter.bin_width && (i->filter.bin_width != bin_width))
 			/* Bin width is primary order, no more matches */
 			break;
 
-		if ((start_time && comp_s.key.time < start_time) ||
-				(end_time && end_time < comp_s.key.time))
+		if ((start_time && time_s < start_time)
+		    || (end_time && end_time < time_s))
 			/* Time doesn't match and is secondar, no more matches */
 			break;
 
-		if (i->filter.comp_id &&
-				(i->filter.comp_id != comp_s.key.comp_id))
+		if (i->filter.comp_id && (i->filter.comp_id != comp_id))
 			/* comp id doesn't match */
 			continue;
 
-		if (i->filter.ptn_id && (i->filter.ptn_id != comp_s.key.ptn_id))
+		if (i->filter.ptn_id && (i->filter.ptn_id != ptn_id))
 			continue;
 
 		/* Everything matches, return it */
-		sos_key_put(key_o);
 		return 0;
 	}
-	if (key_o)
-		sos_key_put(key_o);
 	return ENOENT;
 }
 
@@ -3535,47 +3365,39 @@ __bs_comp_hist_iter_find(bcomp_hist_iter_t iter, int fwd, bcomp_hist_t comp_h)
 	bstore_sos_t bss = (bstore_sos_t)iter->bs;
 	bsos_iter_t i = (bsos_iter_t)iter;
 	SOS_KEY(key);
-	ods_key_value_t hist_k = key->as.ptr;
-	comp_hist_t comp_k = (comp_hist_t)hist_k->value;
-	sos_obj_t hist_o;
-	int (*iter_fn)(sos_iter_t, sos_key_t);
-	int (*step_fn)(bsos_iter_t);
 	int rc;
 
+	if (!comp_h->ptn_id)
+		comp_h->ptn_id = i->filter.ptn_id;
+	if (!comp_h->comp_id)
+		comp_h->comp_id = i->filter.comp_id;
+	if (!comp_h->bin_width)
+		comp_h->bin_width = i->filter.bin_width;
 	if (fwd) {
-		iter_fn = sos_iter_sup;
-		step_fn = __comp_hist_next;
+		if (!comp_h->time)
+			comp_h->time = i->filter.tv_begin.tv_sec;
 	} else {
-		iter_fn = sos_iter_inf;
-		step_fn = __comp_hist_prev;
+		if (!comp_h->time) {
+			if (i->filter.tv_end.tv_sec)
+				comp_h->time = i->filter.tv_end.tv_sec;
+			else
+				comp_h->time = -1;
+		}
+		if (!comp_h->ptn_id)
+			comp_h->ptn_id = -1;
+		if (!comp_h->comp_id)
+			comp_h->comp_id = -1;
+		if (!comp_h->bin_width)
+			comp_h->bin_width = -1;
 	}
+	sos_key_join(key, sos_iter_attr(i->iter),
+		     comp_h->bin_width, comp_h->time,
+		     comp_h->comp_id, comp_h->ptn_id);
 
-	comp_k->key.ptn_id = (comp_h->ptn_id)?(comp_h->ptn_id)
-					     :(i->filter.ptn_id);
-	comp_k->key.comp_id = (comp_h->comp_id)?(comp_h->comp_id)
-					       :(i->filter.comp_id);
-	comp_k->key.bin_width = (comp_h->bin_width)?(comp_h->bin_width)
-						   :(i->filter.bin_width);
-	comp_k->key.time = (comp_h->time)?(comp_h->time)
-					 :((fwd)?(i->filter.tv_begin.tv_sec)
-						:(i->filter.tv_end.tv_sec));
-	comp_hist_htobe(comp_k);
-	if (!fwd) {
-		if (!comp_k->key.ptn_id)
-			comp_k->key.ptn_id = -1;
-		if (!comp_k->key.comp_id)
-			comp_k->key.comp_id = -1;
-		if (!comp_k->key.bin_width)
-			comp_k->key.bin_width = -1;
-		if (!comp_k->key.time)
-			comp_k->key.time = -1;
-	}
-	hist_k->len = sizeof(comp_k->key);
-
-	rc = iter_fn(i->iter, key);
+	rc = fwd ? sos_iter_sup(i->iter, key) : sos_iter_inf(i->iter, key);
 	if (rc)
 		return rc;
-	return step_fn(i);
+	return fwd ? __comp_hist_next(i) : __comp_hist_prev(i);
 }
 
 static int
@@ -3616,23 +3438,23 @@ static int bs_comp_hist_iter_last(bcomp_hist_iter_t iter)
 	return bs_comp_hist_iter_find_rev(iter, &hist);
 }
 
-static bcomp_hist_t bs_comp_hist_iter_obj(bcomp_hist_iter_t iter, bcomp_hist_t comp_h)
+static bcomp_hist_t bs_comp_hist_iter_obj(bcomp_hist_iter_t iter,
+					  bcomp_hist_t comp_h)
 {
 	bsos_iter_t i = (bsos_iter_t)iter;
 	int rc = 0;
-	comp_hist_t comp_o;
 	sos_obj_ref_t ref;
 	sos_key_t key_o;
 
 	key_o = sos_iter_key(i->iter);
 	if (!key_o)
 		return NULL;
-	comp_o = (typeof(comp_o))sos_key_value(key_o);
-	comp_h->comp_id = be64toh(comp_o->key.comp_id);
-	comp_h->ptn_id = be64toh(comp_o->key.ptn_id);
-	comp_h->bin_width = be32toh(comp_o->key.bin_width);
-	comp_h->time = be32toh(comp_o->key.time);
+
+	sos_key_split(key_o, sos_iter_attr(i->iter),
+		      &comp_h->bin_width, &comp_h->time,
+		      &comp_h->comp_id, &comp_h->ptn_id);
 	sos_key_put(key_o);
+
 	ref = sos_iter_ref(i->iter);
 	comp_h->msg_count = ref.idx_data.uint64_[1];
 	return comp_h;
