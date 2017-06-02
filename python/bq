@@ -34,12 +34,16 @@ def tkn_id_from_args(args):
             return tkn.tkn_id()
         else:
             raise NameError("There is no token with the name {0}".format(args.tkn_str))
-    elif args.tkn_id:
-        tkn = bs.tkn_by_id(args.tkn_id)
-        if tkn:
-            return tkn.tkn_id()
+    elif args.tkn_id is not None:
+        if args.tkn_id != 0:
+            tkn = bs.tkn_by_id(args.tkn_id)
+            if tkn:
+                return tkn.tkn_id()
+            else:
+                raise NameError("There is no token with the id {0}"
+                                .format(args.tkn_id))
         else:
-            raise NameError("There is no token with the id {0}".format(args.tkn_id))
+            return 0
     return None
 
 def get_times_from_args(args):
@@ -303,8 +307,8 @@ def plot_tkn_hist(bs, args):
                          "specified with --tkn")
     it = Bq.Btkn_hist_iter(bs)
     start, end, bin_width = get_hist_args(it, tkn_id, args)
-    it.set_filter(tkn_id=tkn_id, bin_width=bin_width, tv_begin=(start, 0),
-                  tv_end=(end, 0))
+    it.set_filter(tkn_id=tkn_id, bin_width=bin_width,
+                  tv_begin=(start, 0), tv_end=(end, 0))
     cnt, x, y = it.as_xy_arrays()
     if cnt == 0:
         print("No history information found for token {0}".format(tkn_id))
@@ -550,7 +554,8 @@ def show_msgs(bs, args):
         '-'.ljust(20, '-'), '-'.ljust(32, '-'))
     do_header(hf, args)
     mi = Bq.Bmsg_iter(bs)
-    mi.set_filter(comp_id=comp_id, ptn_id=ptn_id, tv_begin=(start, 0))
+    mi.set_filter(comp_id=comp_id, ptn_id=ptn_id,
+                  tv_begin=(start, 0), tv_end=(end, 0))
     msg_count = 0
     for m in mi:
         if end > 0 and m.tv_sec() > end:
@@ -777,7 +782,7 @@ def show_ptns(bs, args):
         '-'.ljust(32, '-'))
     do_header(hf, args)
 
-    pi.set_filter(tv_begin=(start, 0))
+    pi.set_filter(tv_begin=(start, 0), tv_end=(end, 0))
     ptn_count = 0
     msg_count = 0
     for p in pi:
@@ -823,6 +828,7 @@ def show_ptn_hist(bs, args):
 
     msg_count = 0
     rec_count = 0
+    phi.first()
     for h in phi:
         if end > 0 and h.time() > end:
             break
@@ -843,37 +849,39 @@ def show_ptn_hist(bs, args):
 
 def show_tkn_hist(bs, args):
     tkn_id = tkn_id_from_args(args)
-    if not tkn_id:
+    if tkn_id is None:
         raise ValueError("The --tkn_id or --tkn_str arguments must be " \
                          "specified with --tkn")
-
 
     ti = Bq.Btkn_hist_iter(bs)
     start, end, bin_width = get_hist_args(ti, tkn_id, args)
     ti.set_filter(tkn_id=tkn_id, bin_width=bin_width, tv_begin=(start,0))
     if not args.csv:
-        do_header("{0:12} {1:20} {2:12} {3:12}".format("Tkn Id", "Timestamp",
-                                                       "Bin Width", "Msg Count"), args)
-        hf = "{0} {1} {2} {3}".format('-'.ljust(12,'-'),
-                                      '-'.ljust(20,'-'), '-'.ljust(12,'-'),
-                                      '-'.ljust(12,'-'))
+        do_header("{0:12} {1:20} {2:20} {3:12} {4:12}"
+                  .format("Tkn Id", "Tkn Text", "Timestamp",
+                          "Bin Width", "Msg Count"), args)
+        hf = "{0} {1} {2} {3} {4}".format('-'.ljust(12,'-'),
+                                          '-'.ljust(20,'-'),
+                                          '-'.ljust(20,'-'), '-'.ljust(12,'-'),
+                                          '-'.ljust(12,'-'))
         do_header(hf, args)
     else:
-        do_header("# {0},{1},{2},{3}".format("Tkn Id", "Timestamp",
+        do_header("# {0},{1},{2},{3},{4}".format("Tkn Id", "Tkn Text", "Timestamp",
                                              "Bin Width", "Msg Count"), args)
     msg_count = 0
     rec_count = 0
     for h in ti:
+        tkn = bs.tkn_by_id(h.tkn_id())
         if end > 0 and h.time() > end:
             break
         if not args.csv:
-            do_header("{0:12} {1:20} {2:12} {3:12}" \
-                  .format(h.tkn_id(),
+            do_header("{0:12} {1:20} {2:20} {3:12} {4:12}" \
+                  .format(h.tkn_id(), tkn.tkn_str(),
                           fmt_tstamp(h.time(), args),
                           h.bin_width(), h.tkn_count()), args)
         else:
-            print("{0},{1},{2},{3}" \
-                  .format(h.tkn_id(), fmt_tstamp(h.time(), args),
+            print("{0},{1},{2},{3},{4}" \
+                  .format(h.tkn_id(), tkn.tkn_str(), fmt_tstamp(h.time(), args),
                           h.bin_width(), h.tkn_count()))
         rec_count += 1
         msg_count += h.tkn_count()

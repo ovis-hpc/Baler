@@ -7,6 +7,7 @@ cimport numpy as np
 from libc.stdint cimport *
 from libc.stdlib cimport *
 from sosdb import Array
+import os
 cimport Bs
 
 cpdef uint64_t btkn_type_mask_from_str(const char *_str):
@@ -70,7 +71,8 @@ cdef class Bstore:
         self.path = path
         self.c_store = Bs.bstore_open(self.plugin, self.path, flags, mode)
         if self.c_store is NULL:
-            raise ValueError()
+            raise ValueError("Error {0} opening the baler database at '{1}'."
+                             .format(os.errno, self.path))
         return self
 
     def close(self):
@@ -329,12 +331,13 @@ cdef class Biter:
         """ Count the entries left in the iterator """
         pos = self.get_pos() # to recover the position
         count = 0
-        rc = 0
-        while rc == 0:
+        rc = True
+        while rc:
             count += 1
             rc = self.next()
         # recover the position
-        self.set_pos(pos)
+        if pos:
+            self.set_pos(pos)
         return count
 
     cdef Bs.bstore_iter_t iterNew(self):
