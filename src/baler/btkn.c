@@ -57,7 +57,7 @@
 pthread_mutex_t tkn_lock;
 struct btkn_list_head tkn_list;
 
-static int store_comparator(void *a, const void *b)
+static int store_comparator(const void *a, const void *b)
 {
 	return strcmp((char *)a, (char *)b);
 }

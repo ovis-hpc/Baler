@@ -54,7 +54,9 @@
  * \brief Read-only aggregation store.
  */
 
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/time.h>
