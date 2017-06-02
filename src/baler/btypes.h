@@ -362,7 +362,7 @@ typedef struct btkn_tailq_entry {
 
 #define BTKN_TYPE_MASK(_t_) (1L << ((btkn_type_t)_t_ - 1L))
 static int btkn_has_type(btkn_t tkn, btkn_type_t typ) {
-	return (tkn->tkn_type_mask & BTKN_TYPE_MASK(typ));
+	return (0L != (tkn->tkn_type_mask & BTKN_TYPE_MASK(typ)));
 }
 static btkn_type_t btkn_first_type(btkn_t tkn) {
 	return ffsl(tkn->tkn_type_mask);

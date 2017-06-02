@@ -24,8 +24,10 @@ typedef struct craylog_parser {
 
 
 /* User-defined token types for the Cray syslog parser */
-#define BTKN_TYPE_DEC_LIST	32
-#define BTKN_TYPE_HEX_DUMP	33
-#define BTKN_TYPE_CHAR_DUMP	34
+#define BTKN_TYPE_ASIC_RTR_NODE	32
+#define BTKN_TYPE_ASIC_RTR_LINK	33
+#define BTKN_TYPE_DEC_LIST	34
+#define BTKN_TYPE_HEX_DUMP	35
+#define BTKN_TYPE_CHAR_DUMP	36
 
 #endif

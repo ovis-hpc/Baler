@@ -2,19 +2,22 @@
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
 #endif
+#include <stdio.h>
 #include <time.h>
 #include <string.h>
 #include <assert.h>
 #include <stdlib.h>
+#include <regex.h>
 #include "baler/binput.h"
 #include "baler/butils.h"
 #include "baler/btkn_types.h"
 #include "craylog.h"
-#include <stdio.h>
 /* #include "craylog_parser.h" */
 
 #define YYDEBUG	1
 #define YYERROR_VERBOSE 1
+
+static regex_t host_regex;
 
 /**
  * This table contains unix time stamp for each hour of the day in each month.
@@ -524,19 +527,44 @@ msg_token:	TEXT_TKN	{ enqueue_token(yy_wqe, $1, BTKN_TYPE_TEXT); }
 
 void enqueue_token(struct bwq_entry *wqe, btkn_t tkn, btkn_type_t typ)
 {
-    btkn_tailq_entry_t e = malloc(sizeof *e);
-    e->tkn = tkn;
-    tkn->tkn_type_mask = BTKN_TYPE_MASK(typ);
-    TAILQ_INSERT_TAIL(&wqe->data.in.tkn_q, e, link);
-    wqe->data.in.tkn_count++;
-    if (typ == BTKN_TYPE_HOSTNAME)
-	wqe->data.in.hostname = bstr_dup(tkn->tkn_str);
+	regmatch_t match[10];
+	int rc;
+	btkn_tailq_entry_t e;
+
+	e = malloc(sizeof *e);
+	assert(e);
+	e->tkn = tkn;
+
+	if (typ == BTKN_TYPE_HOSTNAME) {
+		/* See if this is really a RTR ASIC message */
+		memset(match, 0, sizeof(match));
+		rc = regexec(&host_regex, tkn->tkn_str->cstr,
+			     sizeof(match) / sizeof(match[0]), &match[0],
+			     0);
+		if (!rc) {
+			if (tkn->tkn_str->cstr[match[4].rm_so+2] == 'n')
+				typ = BTKN_TYPE_ASIC_RTR_NODE;
+			else
+				typ = BTKN_TYPE_ASIC_RTR_LINK;
+		}
+	}
+
+	tkn->tkn_type_mask = BTKN_TYPE_MASK(typ);
+	TAILQ_INSERT_TAIL(&wqe->data.in.tkn_q, e, link);
+	wqe->data.in.tkn_count++;
+
+	if (typ == BTKN_TYPE_HOSTNAME)
+		wqe->data.in.hostname = bstr_dup(tkn->tkn_str);
 }
 
 static void __attribute__ ((constructor)) parser_lib_init(void)
 {
 	tzset();
 	init_ts_ym();
+	char *re = "(c[[:digit:]]+-[[:digit:]]+)(c[[:digit:]]+){1}"
+		"(s[[:digit:]]+){1}([ag][[:digit:]]+[nl][[:digit:]]+){1}";
+	int rc = regcomp(&host_regex, re, REG_EXTENDED);
+	assert(rc == 0);
 }
 
 static void __attribute__ ((destructor)) parser_lib_term(void)
