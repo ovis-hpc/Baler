@@ -1316,6 +1316,7 @@ static void bs_ptn_iter_pos_free(btkn_iter_t iter, bstore_iter_pos_t _pos)
 	}
 	sos_iter_pos_put(sos_iter, pos->sos_pos);
 	free(pos);
+	sos_iter_free(sos_iter);
 }
 
 static bptn_iter_t bs_ptn_iter_new(bstore_t bs)
@@ -2621,7 +2622,7 @@ static int bs_msg_add(bstore_t bs, struct timeval *tv, bmsg_t msg)
 	uint64_t ptn_id , tkn_pos, tkn_id;
 	key = sos_iter_key(i->iter);
 	if (!key)
- 		return errno;
+		return errno;
 	sos_key_split(key, sos_iter_attr(i->iter), &ptn_id, &tkn_pos, &tkn_id);
 	sos_key_put(key);
 	if ((tkn_pos != i->filter.tkn_pos) || (ptn_id != i->filter.ptn_id))
