@@ -1,6 +1,8 @@
 /**
  */
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 #include "bhash_u.h"
 #include "fnv_hash.h"
 #include <sys/types.h>

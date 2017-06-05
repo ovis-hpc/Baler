@@ -112,7 +112,7 @@ int main(int argc, char **argv)
 					       type_str,
 					       e->tkn->tkn_str->cstr);
 				else
-					printf("    %-8d : '%s'\n",
+					printf("    %-8lu : '%s'\n",
 					       btkn_first_type(e->tkn),
 					       e->tkn->tkn_str->cstr);
 			}
