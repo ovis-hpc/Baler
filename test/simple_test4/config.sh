@@ -19,6 +19,7 @@ export BTEST_TS_INC=600
 export BTEST_NODE_BEGIN=0
 export BTEST_NODE_LEN=17
 export BTEST_N_PATTERNS=8
+export BTEST_N_TRAILING=2
 
 export BTEST_BLOCKING_MQ=1  # 1==on, 0==off
 export BTEST_MQ_THREADS=4

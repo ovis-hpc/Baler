@@ -9,6 +9,7 @@ our @BENV_LIST = qw(
 		BTEST_NODE_BEGIN
 		BTEST_NODE_LEN
 		BTEST_N_PATTERNS
+		BTEST_N_TRAILING
 		);
 
 our @ISA = qw(Exporter);

@@ -12,10 +12,10 @@ open my $fin, "./gen-ptns.pl |" or die "Cannot run ./gen-ptns.pl script";
 binmode $fin, ":utf8";
 my @PTNS = <$fin>;
 
-for my $P (@PTNS) {
-	chomp $P;
-	$P =~ s/\x{2022}/\%d/g;
-}
+# for my $P (@PTNS) {
+# 	chomp $P;
+# 	$P =~ s/\x{2022}/\%d/g;
+# }
 
 my @TSTA = ();
 my @NODES = ();
@@ -41,8 +41,12 @@ for my $TS_TEXT (@TSTA) {
 	for my $PTN (@PTNS) {
 		$N=$BTEST_NODE_BEGIN;
 		for my $NODE (@NODES) {
-			printf "$TS_TEXT $NODE $PTN\n", $TS, $N
-					if ($N % scalar(@PTNS) != $NP);
+			if ($N % scalar(@PTNS) != $NP) {
+				my $text = "$TS_TEXT $NODE $PTN";
+				$text =~ s/\x{2022}/$TS/;
+				$text =~ s/\x{2022}/$N/g;
+				print $text;
+			}
 			$num++;
 			$N++;
 		}

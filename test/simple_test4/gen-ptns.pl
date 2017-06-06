@@ -20,6 +20,11 @@ my @simple_word = (
 );
 
 my $ptn_prefix = "This is pattern";
+my $ptn_suffix = "";
+for (my $i = 0; $i < $BTEST_N_TRAILING; $i++) {
+	$ptn_suffix .= " \x{2022}";
+}
+
 
 for (my $i = 0; $i < $BTEST_N_PATTERNS; $i++) {
 	print get_pattern($i), "\n";
@@ -29,6 +34,7 @@ exit 0;
 
 sub get_pattern {
 	glob $ptn_prefix;
+	glob $ptn_suffix;
 	my $ret = "$ptn_prefix";
 	my ($num) = @_;
 	my $dirty = 0;
@@ -45,6 +51,6 @@ sub get_pattern {
 	if (not $dirty) {
 		$ret .= " " . $simple_word[0];
 	}
-	$ret .= ": \x{2022} - \x{2022}"; # ts - node
+	$ret .= ": \x{2022} - \x{2022}$ptn_suffix"; # ts - node
 	return $ret;
 }
