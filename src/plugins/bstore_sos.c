@@ -943,7 +943,7 @@ static int bs_tkn_add_with_id(bstore_t bs, btkn_t tkn)
 	tkn_obj = sos_obj_find(bss->tkn_text_attr, text_key);
 	if (tkn_obj) {
 		sos_obj_put(tkn_obj);
-		rc = ENOENT;
+		rc = EEXIST;
 		goto err_0;
 	}
 	rc = __add_tkn_with_id(bss, tkn, 0);
