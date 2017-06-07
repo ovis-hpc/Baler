@@ -31,6 +31,13 @@ for ($N=0; $N<$BTEST_NODE_LEN; $N++) {
 	push @NODES, $NODE;
 }
 
+my $LONG_TKN = "";
+
+for ($I=0; $I<$BTEST_LONG_TOKEN_LEN; $I+=1) {
+	$LONG_TKN .= "9";
+}
+
+
 my $num = 0;
 
 my $NP;
@@ -44,6 +51,7 @@ for my $TS_TEXT (@TSTA) {
 			if ($N % scalar(@PTNS) != $NP) {
 				my $text = "$TS_TEXT $NODE $PTN";
 				$text =~ s/\x{2022}/$TS/;
+				$text =~ s/\x{2022}/$LONG_TKN/;
 				$text =~ s/\x{2022}/$N/g;
 				print $text;
 			}

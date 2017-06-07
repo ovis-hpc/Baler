@@ -51,6 +51,7 @@ sub get_pattern {
 	if (not $dirty) {
 		$ret .= " " . $simple_word[0];
 	}
-	$ret .= ": \x{2022} - \x{2022}$ptn_suffix"; # ts - node
+	$ret .= ": \x{2022} - \x{2022} \x{2022}$ptn_suffix";
+	# ts - node LONG_TKN TRAILING_TKNS
 	return $ret;
 }
