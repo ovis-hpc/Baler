@@ -891,19 +891,31 @@ static btkn_id_t bs_tkn_add(bstore_t bs, btkn_t tkn)
 {
 	int rc;
 	bstore_sos_t bss = (bstore_sos_t)bs;
-	struct missing_cb_ctxt ctxt = {0};
-	SOS_KEY(text_key);
+	struct missing_cb_ctxt ctxt = {.bss = bss, .tkn = tkn};
+	SOS_KEY_SZ(stack_key, 2048);
+	sos_key_t text_key = stack_key;
+
 	if (bstore_lock)
 		pthread_mutex_lock(&bss->dict_lock);
 
+	if (tkn->tkn_str->blen > 2048) {
+		text_key = sos_key_new(tkn->tkn_str->blen);
+		if (!text_key) {
+			ctxt.tkn->tkn_id = 0;
+			goto out;
+		}
+	}
+
 	/* If the token is already added, return it's id */
 	encode_tkn_key(text_key, tkn->tkn_str->cstr, tkn->tkn_str->blen);
-	ctxt.bss = bss;
-	ctxt.tkn = tkn;
 	rc = sos_index_visit(sos_attr_index(bss->tkn_text_attr), text_key,
 			     tkn_add_cb, &ctxt);
 
 	sos_obj_put(ctxt.obj);
+ out:
+	if (text_key != stack_key) {
+		sos_key_put(text_key);
+	}
 	if (bstore_lock)
 		pthread_mutex_unlock(&bss->dict_lock);
 	return ctxt.tkn->tkn_id;
@@ -914,10 +926,18 @@ static int bs_tkn_add_with_id(bstore_t bs, btkn_t tkn)
 	int rc;
 	sos_obj_t tkn_obj;
 	bstore_sos_t bss = (bstore_sos_t)bs;
-	SOS_KEY(text_key);
+	SOS_KEY_SZ(stack_key, 2048);
+	sos_key_t text_key = stack_key;
 
 	if (bstore_lock)
 		pthread_mutex_lock(&bss->dict_lock);
+	if (tkn->tkn_str->blen > 2048) {
+		text_key = sos_key_new(tkn->tkn_str->blen);
+		if (!text_key) {
+			rc = errno;
+			goto err_0;
+		}
+	}
 	encode_tkn_key(text_key, tkn->tkn_str->cstr, tkn->tkn_str->blen);
 	/* If the token is already added, return an error */
 	tkn_obj = sos_obj_find(bss->tkn_text_attr, text_key);
@@ -928,6 +948,9 @@ static int bs_tkn_add_with_id(bstore_t bs, btkn_t tkn)
 	}
 	rc = __add_tkn_with_id(bss, tkn, 0);
  err_0:
+	if (text_key != stack_key) {
+		sos_key_put(text_key);
+	}
 	if (bstore_lock)
 		pthread_mutex_unlock(&bss->dict_lock);
 	return rc;
