@@ -22,6 +22,8 @@ export BTEST_N_PATTERNS=8
 export BTEST_N_TRAILING=2
 export BTEST_LONG_TOKEN_LEN=128 # must be > 0
 
+export BTEST_BIN_MAX_MSG_LEN=0
+
 export BTEST_BLOCKING_MQ=1  # 1==on, 0==off
 export BTEST_MQ_THREADS=4
 export BTEST_MQ_DEPTH=128
@@ -63,7 +65,8 @@ plugin name=bout_store_hist \
        tkn_type_mask=$BTEST_TKN_TYPE_MASK \
        ptn=$BTEST_PTN_HIST \
        ptn_tkn=$BTEST_PTN_TKN
-plugin name=bin_tcp port=$BTEST_BIN_RSYSLOG_PORT parser=syslog_parser
+plugin name=bin_tcp port=$BTEST_BIN_RSYSLOG_PORT parser=syslog_parser \
+       max_msg_len=$BTEST_BIN_MAX_MSG_LEN
 EOF
 }
 

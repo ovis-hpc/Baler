@@ -94,6 +94,7 @@ struct plugin_ctxt {
 	pthread_t io_thread; /**< Thread handling socket IO. */
 	pthread_t conn_req_thread; /**< Thread handling conn req. */
 	uint16_t port; /**< Port number to listen to. */
+	size_t max_msg_len;
 	binp_parser_t parser;
 	int status; /**< Status of the plugin. */
 };
@@ -105,6 +106,7 @@ struct plugin_ctxt {
  */
 struct conn_ctxt {
 	struct bplugin *plugin; /**< Plugin instance. */
+	int truncate; /* truncate flag */
 	struct sockaddr_in sin;
 	LIST_ENTRY(conn_ctxt) link;
 };
@@ -172,8 +174,42 @@ void read_cb(struct bufferevent *bev, void *arg)
 	do {
 		/* Look for '\n' in the buffer as it is the end of each message. */
 		evbptr = evbuffer_search(input, "\n", 1, NULL);
-		if (evbptr.pos == -1)
+		if (evbptr.pos == -1) {
+			len = evbuffer_get_length(input);
+			if (cctxt->truncate) {
+				/* drop the truncated part */
+				rc = evbuffer_drain(input, len);
+				assert(rc == 0);
+				break;
+			}
+			if (pctxt->max_msg_len && len > pctxt->max_msg_len) {
+				/* process the good part, and truncate */
+				evbptr.pos = pctxt->max_msg_len;
+				cctxt->truncate = 1;
+				goto process;
+			}
+			/* need more data in the buffer */
 			break;
+		}
+
+		if (cctxt->truncate) {
+			/*
+			 * '\n' of the truncated message is found, drain the
+			 * truncated part, reset truncation state, and continue
+			 */
+			rc = evbuffer_drain(input, evbptr.pos+1);
+			assert(rc == 0);
+			cctxt->truncate = 0;
+			continue;
+		}
+		if (pctxt->max_msg_len && evbptr.pos > pctxt->max_msg_len) {
+			/* process the good part, and truncate */
+			evbptr.pos = pctxt->max_msg_len;
+			cctxt->truncate = 1;
+			goto process;
+		}
+
+	process:
 		str = bstr_alloc(evbptr.pos+1);
 		if (!str) {
 			berror("bstr_alloc");
@@ -270,6 +306,7 @@ void conn_cb(struct event_base *evbase, int sock,
 		berr("conn_cb(): malloc() error, errno: %d", errno);
 	}
 	cctxt->plugin = arg;
+	cctxt->truncate = 0;
 	bufferevent_setcb(bev, read_cb, NULL, event_cb, cctxt);
 	bufferevent_enable(bev, EV_READ);
 	#if DEBUG_BALER_CONN
@@ -424,6 +461,10 @@ int plugin_config(struct bplugin *this, struct bpair_str_head *arg_head)
 		ctxt->port = port;
 	}
 
+	bpstr = bpair_str_search(arg_head, "max_msg_len", NULL);
+	if (bpstr)
+		ctxt->max_msg_len = atoi(bpstr->s1);
+
 	bpstr = bpair_str_search(arg_head, "parser", NULL);
 	if (bpstr) {
 		sprintf(libname, "lib%s.so", bpstr->s1);
@@ -549,6 +590,7 @@ struct bplugin* create_plugin_instance()
 	struct plugin_ctxt *ctxt = calloc(1, sizeof(*ctxt));
 	ctxt->status = PSTATUS_STOPPED;
 	ctxt->port = PLUGIN_DEFAULT_PORT;
+	ctxt->max_msg_len = 0;
 	p->context = ctxt;
 	return p;
 }
