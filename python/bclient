@@ -645,6 +645,7 @@ class ServiceCmd(cmd.Cmd):
             ("end", util.Timestamp.fromStr, "TIMESTAMP", 0,
                     util.Timestamp(0, 0)
             ),
+            ("limit", int, "NUM", 0, 0)
         )
 
     def do_msg_query(self, arg):
@@ -660,6 +661,9 @@ class ServiceCmd(cmd.Cmd):
 
             comp_str=TEXT is the component text from the store (e.g.
             "nid00001").  This option overrides `comp_id` option.
+
+            limit=NUM is the limitation to the number of messages. This apply
+            only to the redirection mode.
 
             begin=TIMESTAMP constrains the result messages to have timestamp
             greater than or equals to the given TIMESTAMP.
@@ -698,8 +702,14 @@ class ServiceCmd(cmd.Cmd):
             pager = PageDisplay(itr, MsgFormatter())
             pager.loop()
         else:
+            n = 0
+            limit = kwargs["limit"]
+            fmt = MsgFormatter(color=False)
             for msg in itr:
-                print >>self.cmdout, str(msg)
+                if limit and n == limit:
+                    break
+                print >>self.cmdout, fmt(msg)
+                n += 1
 
     def parser_hist_query(self):
         return CmdArgumentParser(
