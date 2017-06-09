@@ -7,6 +7,7 @@ from matplotlib import cm
 import numpy as np
 import textwrap
 from baler import Bq
+from baler import util
 
 def xlate_bin_width(args):
     bw = args.bin_width
@@ -781,21 +782,26 @@ def show_ptns(bs, args):
         '-'.ljust(12, '-'), '-'.ljust(12, '-'), '-'.ljust(20, '-'), '-'.ljust(20, '-'),
         '-'.ljust(32, '-'))
     do_header(hf, args)
-
-    pi.set_filter(tv_begin=(start, 0), tv_end=(end, 0))
     ptn_count = 0
     msg_count = 0
-    for p in pi:
-        if end > 0 and p.first_seen() > end:
-            break
-        if args.ptn_id:
-            p = bs.ptn_by_id(args.ptn_id)
-            if p is None:
-                break
-        ptn_count += 1
-        print_ptn(p, args)
-        msg_count += p.msg_count()
-
+    if args.ptn_id:
+        # single pattern
+        p = bs.ptn_by_id(args.ptn_id)
+        if p:
+            ptn_count += 1
+            print_ptn(p, args)
+            msg_count += p.msg_count()
+    else:
+        pi.set_filter(tv_begin=(start, 0), tv_end=(end, 0))
+        id_set = util.IDSet(args.ptn_ids) if args.ptn_ids else None
+        for p in pi:
+            if end > 0 and p.first_seen() > end:
+                continue
+            if id_set and p.ptn_id() not in id_set:
+                continue
+            ptn_count += 1
+            print_ptn(p, args)
+            msg_count += p.msg_count()
     do_footer(hf, args)
     do_footer("{0} Patterns(s) {1} Messages(s)".format(ptn_count, msg_count), args)
 
