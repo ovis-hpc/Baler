@@ -681,7 +681,6 @@ class ServiceCmd(cmd.Cmd):
         ts0 = kwargs["begin"]
         ts1 = kwargs["end"]
         ptn_id = kwargs["ptn_id"]
-        print "type ptn_id:", type(ptn_id)
         comp_id = kwargs["comp_id"]
         comp_str = kwargs["comp_str"]
         if comp_str:
