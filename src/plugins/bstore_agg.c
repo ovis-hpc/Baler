@@ -3098,6 +3098,13 @@ static void __bstore_agg_destroy(bsa_t bsa)
 		bstore_close(ent->bs);
 		free(ent);
 	}
+
+	if (bsa->pattern_schema)
+		sos_schema_free(bsa->pattern_schema);
+	if (bsa->token_value_schema)
+		sos_schema_free(bsa->token_value_schema);
+	if (bsa->pattern_token_schema)
+		sos_schema_free(bsa->pattern_token_schema);
 	if (bsa->tkn_sos)
 		sos_container_close(bsa->tkn_sos, SOS_COMMIT_ASYNC);
 	if (bsa->ptn_sos)
