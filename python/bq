@@ -563,6 +563,8 @@ def show_msgs(bs, args):
             break
         msg_count += 1
         print_msg(bs, m, args)
+        if args.limit and msg_count == args.limit:
+            break
     do_footer(hf, args)
     do_footer("{0} Record(s)".format(msg_count), args)
 
@@ -962,6 +964,8 @@ if __name__ == "__main__":
                         help="The path to the Baler store")
     parser.add_argument("-m", "--msg", action="store_true",
                         help="Query messages")
+    parser.add_argument("--limit", type=int,
+                        help="Limit the number of messages to print")
     parser.add_argument("--begin", type=valid_date,
                         help="Specify the start time/date for the query. " \
                         "Format is YYYY/MM/DD HH:MM")
