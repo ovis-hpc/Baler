@@ -59,7 +59,6 @@ import datetime
 import sys
 import curses
 import collections
-from baler import ptn_order
 from baler import Bq
 from baler import util
 from StringIO import StringIO
@@ -514,7 +513,7 @@ class ServiceCmd(cmd.Cmd):
             ("text", str, "REGEX", 0, None),
             ("ids", str, "RANGES", 0, None),
             ("format", str, "FMT", 0, None),
-            ("order", str, "FIELD_ORDER", 0, "ptn_id_asc"),
+            ("order", str, "COMPARATOR", 0, "ptn_id_asc"),
         )
 
     def do_ptn_query(self, arg):
@@ -543,10 +542,23 @@ class ServiceCmd(cmd.Cmd):
               - last_seen: the timestamp text of `last_seen`,
               - last_seen_unix: the seconds since epoch of `last_seen`,
 
-            order=KEY_ORDER orders the results according to the KEY and ORDER.
-            The `ORDER` is either "asc" or "desc". The `KEY` is one of the
-            following: ptn_id, count, first_seen, last_seen, eng. Examples of
-            KEY_ORDER are "ptn_id_asc", "last_seen_desc", and "eng_desc".
+            order=COMPARATOR orders the results according to the comparator.
+            Available comparators are:
+              - ptn_id_asc
+              - ptn_id_desc
+              - tkn_count_asc
+              - tkn_count_desc
+              - msg_count_asc
+              - msg_count_desc
+              - first_seen_asc
+              - first_seen_desc
+              - last_seen_asc
+              - last_seen_desc
+              - eng_ratio, or eng_ratio_desc
+              - eng_ratio_asc
+            Users can implement their own comparators and put them in
+            baler.ptn_cmp_ext package. Please see baler.ptn_cmp_ext.eng module
+            as an example.
 
             >OUTPUT_FILE redirects the query results into a file (overwrite).
             Simply add `>OUTPUT_PATH` at the end of the command (OUTPUT_PATH is
@@ -572,7 +584,9 @@ class ServiceCmd(cmd.Cmd):
                 continue
             result.append(ptn)
         if order:
-            _cmp = ptn_order.get_ptn_cmp(order)
+            _cmp = util.get_ptn_cmp_by_name(order)
+            if not _cmp:
+                raise CmdException("Comparator not found: \"%s\"" % order)
             result.sort(_cmp)
         color = True if self.cmdout.isatty() else False
         formatter = PtnFormatter(fmt, True)
