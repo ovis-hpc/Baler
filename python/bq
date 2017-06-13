@@ -796,7 +796,14 @@ def show_ptns(bs, args):
     else:
         pi.set_filter(tv_begin=(start, 0), tv_end=(end, 0))
         id_set = util.IDSet(args.ptn_ids) if args.ptn_ids else None
-        for p in pi:
+        ptns = [p for p in pi]
+        if args.ptn_order:
+            _cmp = util.get_ptn_cmp_by_name(args.ptn_order)
+            if not _cmp:
+                print("Unknown pattern order: %s" % args.ptn_order)
+                return
+            ptns.sort(_cmp)
+        for p in ptns:
             if end > 0 and p.first_seen() > end:
                 continue
             if id_set and p.ptn_id() not in id_set:
@@ -974,6 +981,7 @@ if __name__ == "__main__":
                         "Format is YYYY/MM/DD HH:MM")
     parser.add_argument("--ptn", action="store_true",
                         help="Query patterns.")
+    parser.add_argument("--ptn-order", type=str, help="Pattern order.")
     parser.add_argument("--comp", action="store_true",
                         help="Query component histories")
     parser.add_argument("--summary", action="store_true",
