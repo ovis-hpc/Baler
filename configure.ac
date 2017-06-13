@@ -155,6 +155,7 @@ AC_CONFIG_FILES([Makefile docs/Makefile src/Makefile
 	dict/Makefile
 	python/Makefile
 	python/abhttp/Makefile
+	python/ptn_cmp_ext/Makefile
 ])
 
 AC_OUTPUT

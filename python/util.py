@@ -58,6 +58,7 @@ import re
 import json
 import Bq
 import curses
+import pkgutil
 from datetime import datetime
 from dateutil import tz
 
@@ -337,3 +338,101 @@ def curses_addnstr(win, r, c, _str, n, offset=0):
                 win.addnstr(r, c, text, n, attr)
             n -= l
             c += l
+
+class PtnCmp(object):
+    def __call__(self, a, b):
+        raise NotImplementedError()
+
+def method_cmp(ma, mb):
+    # ma and mb are both bound methods
+    va = ma()
+    vb = mb()
+    if va < vb:
+        return -1
+    if va > vb:
+        return 1
+    return 0
+
+class PtnCmp_PTN_ID(PtnCmp):
+    def __call__(self, a, b):
+        # a and b are both Bq.bptn
+        return method_cmp(a.ptn_id, b.ptn_id)
+
+class PtnCmp_PTN_ID_ASC(PtnCmp):
+    def __call__(self, a, b):
+        # a and b are both Bq.bptn
+        return method_cmp(a.ptn_id, b.ptn_id)
+
+class PtnCmp_PTN_ID_DESC(PtnCmp):
+    def __call__(self, a, b):
+        # a and b are both Bq.bptn
+        return method_cmp(b.ptn_id, a.ptn_id)
+
+class PtnCmp_FIRST_SEEN_ASC(PtnCmp):
+    def __call__(self, a, b):
+        # a and b are both Bq.bptn
+        return method_cmp(a.first_seen, b.first_seen)
+
+class PtnCmp_FIRST_SEEN_DESC(PtnCmp):
+    def __call__(self, a, b):
+        # a and b are both Bq.bptn
+        return method_cmp(b.first_seen, a.first_seen)
+
+class PtnCmp_LAST_SEEN_ASC(PtnCmp):
+    def __call__(self, a, b):
+        # a and b are both Bq.bptn
+        return method_cmp(a.last_seen, b.last_seen)
+
+class PtnCmp_LAST_SEEN_DESC(PtnCmp):
+    def __call__(self, a, b):
+        # a and b are both Bq.bptn
+        return method_cmp(b.last_seen, a.last_seen)
+
+class PtnCmp_TKN_COUNT_ASC(PtnCmp):
+    def __call__(self, a, b):
+        # a and b are both Bq.bptn
+        return method_cmp(a.tkn_count, b.tkn_count)
+
+class PtnCmp_TKN_COUNT_DESC(PtnCmp):
+    def __call__(self, a, b):
+        # a and b are both Bq.bptn
+        return method_cmp(b.tkn_count, a.tkn_count)
+
+class PtnCmp_MSG_COUNT_ASC(PtnCmp):
+    def __call__(self, a, b):
+        # a and b are both Bq.bptn
+        return method_cmp(a.msg_count, b.msg_count)
+
+class PtnCmp_MSG_COUNT_DESC(PtnCmp):
+    def __call__(self, a, b):
+        # a and b are both Bq.bptn
+        return method_cmp(b.msg_count, a.msg_count)
+
+def get_ptn_cmp_by_name(name):
+    # try built-in PtnCmp first
+    cls_name = "PtnCmp_" + name.upper()
+    cls = None
+    try:
+        cls = globals()[cls_name]
+    except:
+        # not found, search the comparator from the package
+        import baler.ptn_cmp_ext as pce
+        for imp, mname, ispkg in pkgutil.iter_modules(pce.__path__):
+            if ispkg:
+                continue
+            mod = __import__(pce.__name__ + "." + mname, fromlist = "X")
+            try:
+                cls = getattr(mod, cls_name)
+            except:
+                # not found, do nothing
+                continue
+            # found!
+            break
+    if cls and issubclass(cls, PtnCmp):
+        return cls() # return comparator instance
+    return None
+
+def sort_ptns(ptns, cmp_name):
+    _cmp = get_ptn_cmp_by_name(cmp_name)
+    ptns.sort(_cmp)
+    return ptns
