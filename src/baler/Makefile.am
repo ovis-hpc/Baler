@@ -14,11 +14,9 @@ libbaler_la_SOURCES = mq.c bwqueue.c btkn.c bptn.c binput.c boutput.c \
 		      bstore.c \
 		      bmhash.c \
 		      bheap.c \
-		      bmeta.c \
 		      bqueue.c \
 		      bmqueue.c \
 		      binput_private.h \
-		      bmeta_priv.h \
 		      fnv_hash.h \
 		      murmur_hash.h
 libbaler_la_LDFLAGS = $(AM_LDFLAGS) -lpthread -lsos -ldl -lcoll \
@@ -49,10 +47,6 @@ bmap_dump_SOURCES = bmap_dump.c
 bmap_dump_LDADD = libbaler.la
 bin_PROGRAMS += bmap_dump
 
-bmeta_cluster_SOURCES = bmeta_cluster.c
-bmeta_cluster_LDADD = libbaler.la
-bin_PROGRAMS += bmeta_cluster
-
 pkginclude_HEADERS = barray.h \
 		     bcommon.h \
 		     bhash.h \
@@ -62,7 +56,6 @@ pkginclude_HEADERS = barray.h \
 		     binput.h \
 		     bmapper.h \
 		     bmem.h \
-		     bmeta.h \
 		     bmhash.h \
 		     bmlist.h \
 		     bmlist2.h \
