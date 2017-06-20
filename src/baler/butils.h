@@ -386,9 +386,24 @@ int bstr_lev_dist_u32(const struct bstr *a, const struct bstr *b, void *buff,
 								size_t buffsz);
 
 /**
+ * Levenshtein distance of u64 bstr.
+ *
+ * \retval -1 if error.
+ * \retval dist if success.
+ */
+int bstr_lev_dist_u64(const struct bstr *a, const struct bstr *b, void *buff,
+								size_t buffsz);
+
+/**
  * Longest common subsequence length calculation.
  */
 int bstr_lcs_u32(const struct bstr *a, const struct bstr *b, void *buff,
+								size_t buffsz);
+
+/**
+ * Longest common subsequence length calculation for u64.
+ */
+int bstr_lcs_u64(const struct bstr *a, const struct bstr *b, void *buff,
 								size_t buffsz);
 
 /**
@@ -408,12 +423,24 @@ int bstr_lcs_u32(const struct bstr *a, const struct bstr *b, void *buff,
  * \retval errno if error.
  */
 int bstr_lcsX_u32(const struct bstr *a, const struct bstr *b, int *idx,
-					int *idx_len, void *buff, size_t buffsz);
+		  int *idx_len, void *buff, size_t buffsz);
+
+/**
+ * Longest common subsequence extraction for u64.
+ */
+int bstr_lcsX_u64(const struct bstr *a, const struct bstr *b, int *idx,
+		  int *idx_len, void *buff, size_t buffsz);
 
 /**
  * LCS distance between two given bstr (u32 variant)
  */
 int bstr_lcs_dist_u32(const struct bstr *a, const struct bstr *b, void *buff,
+								size_t buffsz);
+
+/**
+ * LCS distance between two given bstr (u64 variant)
+ */
+int bstr_lcs_dist_u64(const struct bstr *a, const struct bstr *b, void *buff,
 								size_t buffsz);
 
 /**
