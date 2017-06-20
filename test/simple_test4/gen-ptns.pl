@@ -8,15 +8,15 @@ binmode STDOUT, ":utf8";
 
 my @simple_word = (
 	"Zero",
-	"One",
-	"Two",
-	"Three",
-	"Four",
-	"Five",
-	"Six",
-	"Seven",
-	"Eight",
-	"Nine",
+	"One One",
+	"Two Two Two",
+	"Three Two Two",
+	"Four Three Three Three",
+	"Five Three Three Three",
+	"Six Three Three Three",
+	"Seven Four Four Four",
+	"Eight Four Four Four",
+	"Nine Four Four Four",
 );
 
 my $ptn_prefix = "This is pattern";

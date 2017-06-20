@@ -130,6 +130,68 @@ cdef class Bstore:
         del tkn
         return typ_str
 
+    cpdef meta_cluster(self, float diff_ratio=0.30,
+                             float refinement_speed=2.0,
+                             float looseness=0.20):
+        cpdef list _list = list()
+        cdef Bs.bmc_params_s params
+        params.diff_ratio = diff_ratio
+        params.refinement_speed = refinement_speed
+        params.looseness = looseness
+        cdef Bs.bmc_list_t bmc_list = Bs.bmc_list_compute(self.c_store, &params)
+        cdef Bs.bmc_list_iter_t itr = Bs.bmc_list_iter_new(bmc_list)
+        cdef Bs.bmc_t c_bmc
+        c_bmc = Bs.bmc_list_iter_first(itr)
+        while (c_bmc):
+            pybmc = Bmc()
+            pybmc.c_init(self, c_bmc)
+            _list.append(pybmc)
+            c_bmc = Bs.bmc_list_iter_next(itr)
+        Bs.bmc_list_iter_free(itr)
+        Bs.bmc_list_free(bmc_list)
+        return _list
+
+cdef class Bmc:
+    cdef Bs.bmc_id_t _meta_id
+    cdef Bptn _meta_ptn
+    cdef list _list
+
+    def __cinit__(self):
+        self._meta_id = 0
+        self._meta_ptn = Bptn()
+        self._list = list()
+        # NOTE: According to Cython doc (extension_types), Python attributes
+        #       of the extension types are deallocated by Cython after
+        #       __dealloc__() method returns.
+
+    cdef c_init(self, Bstore bs, Bs.bmc_t bmc):
+        self._meta_id = bmc.meta_id
+        self._meta_ptn.c_ptn = Bs.bptn_dup(bmc.meta_ptn)
+        self._meta_ptn.store = bs
+        cdef Bs.bmc_iter_t c_iter = Bs.bmc_iter_new(bmc)
+        cdef Bs.bptn_t c_ptn
+        cdef Bptn ptn
+        # note, we did not own c_ptn from c_iter
+        c_ptn = Bs.bmc_iter_first(c_iter)
+        while c_ptn:
+            ptn = Bptn()
+            ptn.c_ptn = Bs.bptn_dup(c_ptn)
+            ptn.store = bs
+            self._list.append(ptn)
+            c_ptn = Bs.bmc_iter_next(c_iter)
+        Bs.bmc_iter_free(c_iter)
+
+    cpdef Bs.bmc_id_t meta_id(self):
+        return self._meta_id
+
+    cpdef Bptn meta_ptn(self):
+        return self._meta_ptn
+
+    def __iter__(self):
+        if self._list:
+            for x in self._list:
+                yield x
+
 cdef class Btkn:
     cpdef Bs.btkn_t c_tkn
     cdef Bs.btkn_type_t c_typ

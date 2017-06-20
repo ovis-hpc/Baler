@@ -29,3 +29,7 @@ bin_PROGRAMS += bmhash_test
 bmqueue_test_SOURCES = bmqueue_test.c
 bmqueue_test_LDADD = ../baler/libbaler.la -lpthread
 bin_PROGRAMS += bmqueue_test
+
+bmeta_test_SOURCES = bmeta_test.c
+bmeta_test_LDADD = ../baler/libbaler.la
+bin_PROGRAMS += bmeta_test

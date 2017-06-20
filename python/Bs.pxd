@@ -83,6 +83,7 @@ cdef extern from "baler/btypes.h":
         uint32_t  argc
         btkn_id_t argv[0]
     ctypedef bmsg *bmsg_t
+    bptn_t bptn_dup(bptn_t ptn)
 
 cdef extern from "baler/bstore.h":
     cdef struct bstore_s
@@ -261,3 +262,35 @@ cdef extern from "baler/bstore.h":
 
 cdef extern from "baler/btkn.h":
     uint64_t btkn_type_mask_from_str(const char *str)
+
+cdef extern from "baler/bmeta.h":
+    cdef struct bmc_params_s:
+        float diff_ratio
+        float looseness
+        float refinement_speed
+    ctypedef bmc_params_s *bmc_params_t
+    ctypedef uint32_t bmc_id_t
+    cdef struct bmc_list_s:
+        pass
+    ctypedef bmc_list_s *bmc_list_t;
+    cdef struct bmc_s:
+        bmc_id_t meta_id
+        bptn_t meta_ptn
+    ctypedef bmc_s *bmc_t
+    cdef struct bmc_list_iter_s:
+        pass
+    ctypedef bmc_list_iter_s *bmc_list_iter_t
+    bmc_list_iter_t bmc_list_iter_new(bmc_list_t bmc_list)
+    bmc_t bmc_list_iter_first(bmc_list_iter_t iter)
+    bmc_t bmc_list_iter_next(bmc_list_iter_t iter)
+    void bmc_list_iter_free(bmc_list_iter_t iter)
+    cdef struct bmc_iter_s:
+        pass
+    ctypedef bmc_iter_s *bmc_iter_t
+    bmc_iter_t bmc_iter_new(bmc_t bmc)
+    bptn_t bmc_iter_first(bmc_iter_t iter)
+    bptn_t bmc_iter_next(bmc_iter_t iter)
+    void bmc_iter_free(bmc_iter_t iter)
+
+    bmc_list_t bmc_list_compute(bstore_t bs, bmc_params_t params)
+    void bmc_list_free(bmc_list_t bmc_list)

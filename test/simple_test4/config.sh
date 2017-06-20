@@ -43,7 +43,8 @@ export BOUT_THREADS=2
 export BIN_THREADS=2
 export BLOG_LEVEL=INFO
 
-source /home/narate/opt/baler4/env.sh
+#source /home/narate/opt/baler4/env.sh
+source env.sh
 
 export PATH=$PREFIX/bin:$PREFIX/sbin:/usr/bin:/usr/sbin:/bin:/sbin
 export LD_LIBRARY_PATH=$PREFIX/lib64:$PREFIX/lib:/home/narate/opt/libevent/lib

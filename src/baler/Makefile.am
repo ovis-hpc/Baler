@@ -18,7 +18,8 @@ libbaler_la_SOURCES = mq.c bwqueue.c btkn.c bptn.c binput.c boutput.c \
 		      bmqueue.c \
 		      binput_private.h \
 		      fnv_hash.h \
-		      murmur_hash.h
+		      murmur_hash.h \
+		      bmeta.c
 libbaler_la_LDFLAGS = $(AM_LDFLAGS) -lpthread -lsos -ldl -lcoll \
 		      @OVIS_LIB_LIBDIR_FLAG@
 libbaler_la_CFLAGS = $(AM_CFLAGS) \
@@ -71,4 +72,5 @@ pkginclude_HEADERS = barray.h \
 		     btypes.h \
 		     butils.h \
 		     bwqueue.h \
-		     mq.h
+		     mq.h \
+		     bmeta.h
