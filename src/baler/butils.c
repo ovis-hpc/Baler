@@ -625,7 +625,6 @@ int bstr_lcsX_u32(const struct bstr *a, const struct bstr *b, int *idx,
 	int len_a = a->blen / sizeof(uint32_t);
 	int len_b = b->blen / sizeof(uint32_t);
 	int i, j, k;
-	uint32_t max;
 
 #define _LCS(x_a,y_b) lcs[(x_a) + (y_b)*len_a]
 
@@ -892,7 +891,7 @@ int bcsv_get_cell(const char *str, const char **end)
 		[','] = 1,
 	};
 
-	while (*s && (in_quote || !delim[*s])) {
+	while (*s && (in_quote || !delim[(unsigned char)*s])) {
 		if (*s == '"') {
 			if (in_quote) {
 				if (*(s+1) == '"') {
