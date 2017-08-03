@@ -548,6 +548,7 @@ static inline bptn_t bptn_dup(bptn_t ptn)
 {
 	bptn_t p = malloc(sizeof(*p));
 	if (p) {
+		*p = *ptn;
 		p->str = bstr_dup(ptn->str);
 		if (!p->str) {
 			free(p);
