@@ -275,7 +275,7 @@ struct bstr *bstr_dup(const struct bstr *b)
 	struct bstr *out = bstr_alloc(b->blen);
 	if (!out)
 		return NULL;
-	memcpy(out->cstr, b->cstr, b->blen);
+	memcpy(out, b, sizeof(struct bstr)+b->blen);
 	return out;
 }
 
