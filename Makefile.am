@@ -1,5 +1,3 @@
-if ENABLE_BALER
-
 EXTRA_DIST = baler.cfg hosts.txt SHA.txt TAG.txt
 
 ACLOCAL_AMFLAGS = -I m4
@@ -21,8 +19,3 @@ endif
 if ENABLE_DOC
 SUBDIRS += docs
 endif
-
-endif
-
-PEDIGREE = $(DESTDIR)/$(bindir)/baler-pedigree
-include $(top_srcdir)/pedigree.am

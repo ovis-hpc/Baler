@@ -49,7 +49,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #include <libgen.h>
-#include "coll/rbt.h"
+#include "rbt.h"
 #include <sos/sos.h>
 #include "btkn.h"
 #include <ctype.h>

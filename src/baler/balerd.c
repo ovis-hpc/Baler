@@ -273,10 +273,6 @@
 #include <assert.h>
 #include <semaphore.h>
 
-#include <event2/event.h>
-#include <event2/thread.h>
-#include <zap/zap.h>
-
 #ifdef ENABLE_OCM
 #include "ocm/ocm.h"
 ocm_t ocm; /**< ocm handle */
@@ -295,7 +291,7 @@ int ocm_cb(struct ocm_event *e);
 #include "bptn.h"
 #include "bwqueue.h"
 #include "bstore.h"
-#include "../../config.h"
+// #include "../../config.h"
 
 /***** Definitions *****/
 typedef enum bmap_idx_enum {
@@ -332,11 +328,6 @@ struct bzmsg *bzmsg_alloc(size_t bstr_len)
 {
 	return malloc(sizeof(struct bzmsg) + bstr_len);
 }
-
-struct bzap_ctxt {
-	pthread_mutex_t mutex;
-	int is_ready;
-};
 
 /***** Command line arguments ****/
 #define BALER_OPT_STR "FC:l:s:S:v:I:O:Q:?"
@@ -425,9 +416,6 @@ enum BCFG_CMD bcfg_cmd_str2enum(const char *s)
 }
 
 /********** Global Variable Section **********/
-zap_t zap;
-zap_ep_t zap_ep;
-struct event_base *evbase;
 
 /**
  * Input queue workers
@@ -589,46 +577,10 @@ void bconfig_list_free(struct bconfig_list *bl) {
 	free(bl);
 }
 
-static
-zap_mem_info_t bzap_mem_info()
-{
-	return NULL;
-}
-
-void snprint_sockaddr(char *buff, size_t len, struct sockaddr *sa)
-{
-	uint64_t x, y;
-	switch (sa->sa_family) {
-	case AF_INET:
-		x = ((struct sockaddr_in*)sa)->sin_addr.s_addr;
-		snprintf(buff, len, "%d.%d.%d.%d",
-				(int)(0xff & (x)),
-				(int)(0xff & (x>>8)),
-				(int)(0xff & (x>>16)),
-				(int)(0xff & (x>>32))
-			);
-		break;
-	default:
-		snprintf(buff, len, "UNKNOWN");
-	}
-}
-
 static inline
 bzmsg_type_e bzmsg_type_inverse(bzmsg_type_e type)
 {
 	return (type ^ 1);
-}
-
-void zap_log_fn(const char *fmt, ...)
-{
-	static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
-	static char buff[4096];
-	va_list ap;
-	pthread_mutex_lock(&mutex);
-	va_start(ap, fmt);
-	vsnprintf(buff, sizeof(buff), fmt, ap);
-	va_end(ap);
-	pthread_mutex_unlock(&mutex);
 }
 
 /**
@@ -648,14 +600,6 @@ void initialize_daemon()
 		binfo("Daemonized");
 	}
 	umask(0);
-	evthread_use_pthreads();
-
-	/* Event base for internal balerd event */
-	evbase = event_base_new();
-	if (!evbase) {
-		berr("event_base_new() error, errno: %d, %m", errno);
-		exit(-1);
-	}
 
 	/* Input/Output Work Queue */
 	binq = bwq_alloci(qdepth);
@@ -1000,7 +944,8 @@ int process_cmd_tokens(struct bconfig_list *cfg)
 	}
 	const char *path = bp_path->s1;
         ctxt->tkn_type = btkn_type(bp_type->s1);
-	if (ctxt->tkn_type < 0) {
+	if (ctxt->tkn_type <= BTKN_TYPE_FIRST
+			|| BTKN_TYPE_LAST < ctxt->tkn_type) {
 		berr("Invalid token type '%s' specified in configuration file.\n", bp_type->s1);
 		exit(1);
 	}
@@ -1550,18 +1495,6 @@ void keepalive_cb(int fd, short what, void *arg)
 	assert(0);
 }
 
-void main_event_routine()
-{
-	/* Instead of periodiaclly getting invoked, this keepalive event is
-	 * looking for an impossible read event on fd -1. Hence, it will forever
-	 * be pending in the evbase and keep evbase from exiting. */
-	struct event *keepalive = event_new(evbase, -1, EV_READ | EV_PERSIST,
-							keepalive_cb, 0);
-	event_add(keepalive, NULL);
-	event_base_dispatch(evbase);
-	bwarn("Exiting main_event_routine()");
-}
-
 /**
  * \brief The main function.
  */
@@ -1598,9 +1531,6 @@ int main(int argc, char **argv)
 	sigaction(SIGUSR1, &logrotate_act, NULL);
 
 	binfo("Baler is ready.");
-
-	/* Main thread handle events pertaining to balerd */
-	main_event_routine();
 
 	/* On exit, clean up the daemon. */
 	cleanup_daemon(0);

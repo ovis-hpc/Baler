@@ -10,15 +10,12 @@ AC_CONFIG_AUX_DIR(config)
 AM_CONFIG_HEADER(config.h)
 AM_INIT_AUTOMAKE([foreign])
 m4_ifdef([AM_SILENT_RULES],
-         [AM_SILENT_RULES([yes])
+	 [AM_SILENT_RULES([yes])
 ])
-AX_PREFIX_CONFIG_H_G(src/baler-config.h)
 AM_PROG_LIBTOOL
-AC_LIB_RPATH
 
 LT_INIT
 
-AC_PROG_CC()
 AC_PROG_CC_C99()
 
 if test "$ac_cv_prog_cc_c99" = "no"; then
@@ -29,7 +26,6 @@ AC_PROG_LEX()
 AC_PROG_YACC()
 AM_PROG_CC_C_O()
 
-OVIS_PKGLIBDIR
 OPTION_GITINFO
 
 dnl change sharedstatedir default
@@ -39,92 +35,100 @@ OPTION_DEFAULT_ENABLE([dict], [ENABLE_DICT])
 OPTION_DEFAULT_DISABLE([etc], [ENABLE_ETC])
 
 OPTION_DEFAULT_ENABLE([python], [ENABLE_PYTHON])
-if test -z "$ENABLE_SWIG_TRUE"
-then
+AM_COND_IF([ENABLE_PYTHON], [
 	AM_PATH_PYTHON(2.7)
 	AX_PYTHON_DEVEL
-fi
+	AC_PATH_PROG([CYTHON], [cython])
+	if test -z "$CYTHON"; then
+		AC_MSG_ERROR([baler python module requires cython to build])
+	fi
+])
 
+dnl ==================================================
+dnl == libevent, required
 OPTION_DEFAULT_ENABLE([libevent], [ENABLE_LIBEVENT])
-OPTION_WITH([libevent], [LIBEVENT],[/usr])
-OPTION_WITH_EVENT
+OPTION_WITH([libevent], [LIBEVENT])
+SAVED_CFLAGS=$CFLAGS
+SAVED_LDFLAGS=$LDFLAGS
+CFLAGS="$SAVED_CFLAGS $LIBEVENT_INCDIR_FLAG"
+LDFLAGS="$SAVED_LDFLAGS $LIBEVENT_LIBDIR_FLAG $LIBEVENT_LIB64DIR_FLAG"
+AC_CHECK_HEADER([event2/event.h],
+	[],
+	[AC_MSG_ERROR([cannot build with libevent header file])]
+)
+AC_CHECK_LIB([event], [event_base_new],
+	[],
+	[AC_MSG_ERROR([cannot build with libevent])]
+)
+CFLAGS=$SAVED_CFLAGS
+LDFLAGS=$SAVED_LDFLAGS
+LIBS=""
+dnl ^^^^^^^^^^^^^^^^ (libevent) ^^^^^^^^^^^^^^^^^^^
 
-OPTION_DEFAULT_ENABLE([ovis-lib], [ENABLE_OVIS_LIB])
-OPTION_WITH_OR_BUILD([ovis-lib],[../lib/src],[coll zap ovis_auth],[ovis-auth.sh],[ovis-lib],[ovis_auth])
-AC_SUBST(OVIS_AUTH_LIBS)
-dnl we can disable our build rules for outer make dist to work when upper level disables baler.
-OPTION_DEFAULT_ENABLE([baler], [ENABLE_BALER], [  requires sos])
-
-if test -d ${OVIS_LIB_LIB64DIR}/ovis-lib ; then
-        ZAP_LIBPATH=${OVIS_LIB_LIB64DIR}/ovis-lib
-else
-        ZAP_LIBPATH=${OVIS_LIB_LIBDIR}/ovis-lib
-fi
-ZAP_LIBPATH=${ZAP_LIBPATH#*/rpm7/BUILDROOT}
-AC_SUBST(ZAP_LIBPATH)
-
-if test "$disable_baler" = "yes"; then
-	# we're just here for configure so dist is correct.
-	enable_sos=no
-	enable_ocm=no
-fi
-
+dnl ==================================================
+dnl == sos, required
 OPTION_DEFAULT_ENABLE([sos], [ENABLE_SOS])
-OPTION_WITH_OR_BUILD([sos], [../sos],[sos/src sos/include ods/src ods/include])
+OPTION_WITH([sos], [SOS])
+AM_COND_IF([ENABLE_SOS],
+	[],
+	[AC_MSG_ERROR([baler needs sos to build/run])]
+)
+SAVED_CFLAGS=$CFLAGS
+SAVED_LDFLAGS=$LDFLAGS
+CFLAGS="$SAVED_CFLAGS $SOS_INCDIR_FLAG"
+LDFLAGS="$SAVED_LDFLAGS $SOS_LIBDIR_FLAG $SOS_LIB64DIR_FLAG"
+AC_CHECK_HEADER([sos/sos.h],
+	[],
+	[AC_MSG_ERROR([cannot build with sos header file])]
+)
+AC_CHECK_LIB([sos], [sos_container_open],
+	[],
+	[AC_MSG_ERROR([cannot build with libsos])]
+)
+CFLAGS=$SAVED_CFLAGS
+LDFLAGS=$SAVED_LDFLAGS
+LIBS=""
+dnl ^^^^^^^^^^^^^^^^ (sos) ^^^^^^^^^^^^^^^^^^^
+
+
+dnl ovis-lib contains zap
+OPTION_WITH([ovis-lib], [OVIS_LIB])
+
+dnl ==================================================
+dnl == zap, optional
+OPTION_DEFAULT_DISABLE([zap], [ENABLE_ZAP])
+AM_COND_IF([ENABLE_ZAP], [
+	SAVED_CFLAGS=$CFLAGS
+	SAVED_LDFLAGS=$LDFLAGS
+	CFLAGS="$SAVED_CFLAGS -I$OVIS_LIB_INCDIR"
+	LDFLAGS="$SAVED_LDFLAGS -L$OVIS_LIB_LIBDIR"
+	AC_CHECK_HEADER([zap/zap.h],
+		[],
+		[AC_MSG_ERROR([cannot build with zap header file])]
+	)
+	AC_CHECK_LIB([zap], [zap_get],
+		[],
+		[AC_MSG_ERROR([cannot build with zap])]
+	)
+	CFLAGS=$SAVED_CFLAGS
+	LDFLAGS=$SAVED_LDFLAGS
+	LIBS=""
+])
+dnl ^^^^^^^^^^^^^^^^ (zap) ^^^^^^^^^^^^^^^^^^^
+
+
+dnl output plugin to model evaluator
+OPTION_DEFAULT_DISABLE([bout-me], [ENABLE_BOUT_ME])
+AM_COND_IF([ENABLE_BOUT_ME],[
+	AM_COND_IF([ENABLE_ZAP],
+		[],
+		[AC_MSG_ERROR([bout-me requires zap])]
+	)
+])
+
 OPTION_DEFAULT_DISABLE([ocm], [ENABLE_OCM])
-OPTION_WITH_OR_BUILD([ocm], [../ocm], [src src/ocm])
-
-if test -z "$ENABLE_OCM_TRUE"; then
-	AC_DEFINE_UNQUOTED([ENABLE_OCM],[1],
-		[configured with ocm (1) or not (undefined)])
-fi
-
-if test -z "$ENABLE_SOS_TRUE"; then
-	AC_DEFINE_UNQUOTED([ENABLE_SOS],[1],
-		[configured with sos (1) or not (undefined)])
-fi
 
 OPTION_DOC
-
-if test "x$WITH_OVIS_LIB" != "xbuild"; then
-	AC_MSG_NOTICE([WITH_OVIS_LIB=$WITH_OVIS_LIB])
-	dnl Check for zap
-	AC_CHECK_LIB(zap, zap_new, [],
-		AC_MSG_ERROR([zap not found. Baler requires zap from ovis-lib]),
-		$OVIS_LIB_LIBDIR_FLAG $OVIS_LIB_LIB64DIR_FLAG
-		)
-	dnl Reset LIBS variable.
-	LIBS=""
-fi
-
-if test "x$WITH_OCM" != "xbuild"; then
-	dnl Check for ocm
-	if test -z "$ENABLE_OCM_TRUE"
-	then
-	AC_CHECK_LIB(ocm, ocm_create, [],
-		     AC_MSG_ERROR([ocm library not found. Please see OVIS/ocm.]),
-		     $OCM_LIBDIR_FLAG $OCM_LIB64DIR_FLAG
-		     )
-	LIBS=""
-	fi
-fi
-
-if test "x$WITH_SOS" != "xbuild"; then
-	AC_MSG_NOTICE([WITH_OVIS_LIB=$WITH_OVIS_LIB])
-	dnl Check for zap
-	AC_CHECK_LIB(sos, sos_container_open, [],
-		AC_MSG_ERROR([sos not found. Baler requires sos (please see OVIS/sos)]),
-		$SOS_LIBDIR_FLAG $SOS_LIB64DIR_FLAG
-		)
-	dnl Reset LIBS variable.
-	LIBS=""
-fi
-
-# Checks for header files.
-
-# Checks for typedefs, structures, and compiler characteristics.
-
-# Checks for library functions.
 
 # For Doxygen
 AC_CHECK_PROGS([DOXYGEN], [doxygen])

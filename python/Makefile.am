@@ -13,7 +13,7 @@ Bq_la_LIBADD = $(top_builddir)/src/baler/libbaler.la
 pkgpyexecdir = $(pkgpythondir)
 
 Bq.c: Bq.pyx Bs.pxd
-	cython --gdb $< -o $@
+	$(CYTHON) --gdb $< -o $@
 
 dist_bin_SCRIPTS = bq bclient
 

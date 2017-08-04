@@ -23,9 +23,8 @@ libbstore_sos_la_LIBADD = ../baler/libbaler.la -lsos @SOS_LIBDIR_FLAG@ @SOS_LIB6
 lib_LTLIBRARIES += libbstore_sos.la
 
 libbstore_agg_la_SOURCES = bstore_agg.c
-libbstore_agg_la_CFLAGS = $(AM_CFLAGS) @SOS_INCDIR_FLAG@ @OVIS_LIB_INCDIR_FLAG@
-libbstore_agg_la_LIBADD = ../baler/libbaler.la -lsos -lcoll -lpthread \
-			  @OVIS_LIB_LIBDIR_FLAG@ @OVIS_LIB_LIB64DIR_FLAG@ \
+libbstore_agg_la_CFLAGS = $(AM_CFLAGS) @SOS_INCDIR_FLAG@
+libbstore_agg_la_LIBADD = ../baler/libbaler.la -lsos -lpthread \
 			  @SOS_LIBDIR_FLAG@ @SOS_LIB64DIR_FLAG@
 lib_LTLIBRARIES += libbstore_agg.la
 
@@ -36,7 +35,7 @@ lib_LTLIBRARIES += librsyslog_parser.la
 
 libbin_tcp_la_SOURCES = bin_tcp.c
 libbin_tcp_la_CFLAGS = $(AM_CFLAGS) @LIBEVENT_INCDIR_FLAG@
-libbin_tcp_la_LIBADD = @EVENTLIBS@ -lpthread -ldl ../baler/libbaler.la
+libbin_tcp_la_LIBADD = -levent -L@LIBEVENT_LIBDIR@ -lpthread -ldl ../baler/libbaler.la
 lib_LTLIBRARIES += libbin_tcp.la
 
 libbin_udp_la_SOURCES = bin_udp.c
@@ -46,14 +45,14 @@ lib_LTLIBRARIES += libbin_udp.la
 
 libbin_rsyslog_tcp_la_SOURCES = bin_rsyslog_tcp.c
 libbin_rsyslog_tcp_la_CFLAGS = $(AM_CFLAGS) @LIBEVENT_INCDIR_FLAG@
-libbin_rsyslog_tcp_la_LIBADD = @EVENTLIBS@ \
+libbin_rsyslog_tcp_la_LIBADD = -levent -L@LIBEVENT_LIBDIR@ \
 			       -lpthread \
 			       ../baler/libbaler.la
 lib_LTLIBRARIES += libbin_rsyslog_tcp.la
 
 libbin_metric_la_SOURCES = bin_metric.c bin_metric.h
 libbin_metric_la_CFLAGS = $(AM_CFLAGS) @LIBEVENT_INCDIR_FLAG@
-libbin_metric_la_LIBADD = @EVENTLIBS@ \
+libbin_metric_la_LIBADD = -levent -L@LIBEVENT_LIBDIR@ \
 			  -lpthread \
 			  ../baler/libbaler.la
 lib_LTLIBRARIES += libbin_metric.la
@@ -103,16 +102,20 @@ libbout_sos_msg_la_LIBADD = ../baler/libbaler.la \
 			    -lsos -lods @SOS_LIBDIR_FLAG@ @SOS_LIB64DIR_FLAG@
 lib_LTLIBRARIES += libbout_sos_msg.la
 
+if ENABLE_BOUT_ME
 libbout_me_la_SOURCES = bout_me.c
-libbout_me_la_CFLAGS = $(AM_CFLAGS) @OVIS_LIB_INCDIR_FLAG@ @LIBEVENT_INCDIR_FLAG@
+libbout_me_la_CFLAGS = $(AM_CFLAGS) @LIBEVENT_INCDIR_FLAG@ -I@OVIS_LIB_INCDIR@
 libbout_me_la_LIBADD = ../baler/libbaler.la \
-		       -lpthread -lzap @EVENTLIBS@ @OVIS_LIB_LIBDIR_FLAG@ @OVIS_LIB_LIB64DIR_FLAG@
+		       -lpthread \
+		       -levent -L@LIBEVENT_LIBDIR@ \
+		       -lzap -L@OVIS_LIB_LIBDIR@
 lib_LTLIBRARIES += libbout_me.la
+endif
 
 libbin_test_la_SOURCES = bin_test.c
-libbin_test_la_CFLAGS = $(AM_CFLAGS) @OVIS_LIB_INCDIR_FLAG@
+libbin_test_la_CFLAGS = $(AM_CFLAGS)
 libbin_test_la_LIBADD = ../baler/libbaler.la \
-			-lpthread @OVIS_LIB_LIBDIR_FLAG@ @OVIS_LIB_LIB64DIR_FLAG@
+			-lpthread
 lib_LTLIBRARIES += libbin_test.la
 
 bsos_part_modify_SOURCES = bsos_part_modify.c

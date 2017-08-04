@@ -72,7 +72,7 @@
 #include <unistd.h>
 #include <stdarg.h>
 #include "sos/sos.h"
-#include "coll/rbt.h"
+#include "../baler/rbt.h"
 
 #include "../baler/butils.h"
 #include "../baler/bstore.h"

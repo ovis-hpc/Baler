@@ -3,9 +3,9 @@
 #include <stdlib.h>
 #include <dlfcn.h>
 #include <limits.h>
-#include <coll/rbt.h>
-#include <bstore.h>
-#include <butils.h>
+#include "rbt.h"
+#include "bstore.h"
+#include "butils.h"
 #include <stdarg.h>
 #include <pthread.h>
 #include <assert.h>

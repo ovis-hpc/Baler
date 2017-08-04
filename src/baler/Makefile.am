@@ -19,20 +19,19 @@ libbaler_la_SOURCES = mq.c bwqueue.c btkn.c bptn.c binput.c boutput.c \
 		      binput_private.h \
 		      fnv_hash.h \
 		      murmur_hash.h \
-		      bmeta.c
-libbaler_la_LDFLAGS = $(AM_LDFLAGS) -lpthread -lsos -ldl -lcoll \
-		      @OVIS_LIB_LIBDIR_FLAG@
+		      bmeta.c \
+		      rbt.h \
+		      rbt.c
+libbaler_la_LDFLAGS = $(AM_LDFLAGS) -lpthread -L$(SOS_LIBDIR) -lsos -ldl
 libbaler_la_CFLAGS = $(AM_CFLAGS) \
-	@OVIS_LIB_INCDIR_FLAG@ @SOS_INCDIR_FLAG@ \
-	@SOS_LIBDIR_FLAG@ @SOS_LIB64DIR_FLAG@
+		     @SOS_INCDIR_FLAG@ \
+		     @SOS_LIBDIR_FLAG@ @SOS_LIB64DIR_FLAG@
 lib_LTLIBRARIES += libbaler.la
 
 balerd_SOURCES = balerd.c
-balerd_LDADD = libbaler.la \
-	       -lcoll -levent -levent_pthreads -lzap -lpthread -ldl
-balerd_CFLAGS = $(AM_CFLAGS) @OVIS_LIB_INCDIR_FLAG@ @LIBEVENT_INCDIR_FLAG@
-#balerd_CFLAGS = -pg @OVIS_LIB_INCDIR_FLAG@ @LIBEVENT_INCDIR_FLAG@
-balerd_LDFLAGS = @OVIS_LIB_LIBDIR_FLAG@ @OVIS_LIB_LIB64DIR_FLAG@ @EVENTLIBS@
+balerd_LDADD = libbaler.la -lpthread -ldl
+balerd_CFLAGS = $(AM_CFLAGS)
+balerd_LDFLAGS = $(AM_LDFLAGS)
 
 pit_SOURCES = pit.c
 pit_LDADD = libbaler.la -ldl
