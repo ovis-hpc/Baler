@@ -1464,14 +1464,15 @@ void thread_join()
  */
 void cleanup_daemon(int x)
 {
-	printf("Closing the store and syncing data...");
+	binfo("Cleaningup daemon...");
+	binfo("Closing the store and syncing data...");
 	fflush(stdout);
 
 	/* Then join the worker threads. */
 	thread_join();
 
 	bstore_close(bstore);
-	printf("complete.\n");
+	binfo("Terminating baler daemon.");
 	exit(0);
 }
 
