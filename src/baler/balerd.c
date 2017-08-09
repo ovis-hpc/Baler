@@ -1489,12 +1489,6 @@ void handle_logrotate(int x)
 	}
 }
 
-void keepalive_cb(int fd, short what, void *arg)
-{
-	berr("keepalive_cb() should not be invoked!!!");
-	assert(0);
-}
-
 /**
  * \brief The main function.
  */
@@ -1502,6 +1496,8 @@ int main(int argc, char **argv)
 {
 	struct sigaction cleanup_act, logrotate_act;
 	sigset_t sigset;
+	pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
+	pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 
 	/*
 	 * Initialize before turning off all the signals or any fatal
@@ -1531,6 +1527,9 @@ int main(int argc, char **argv)
 	sigaction(SIGUSR1, &logrotate_act, NULL);
 
 	binfo("Baler is ready.");
+
+	/* wait indefinitely */
+	pthread_cond_wait(&cond, &mutex);
 
 	/* On exit, clean up the daemon. */
 	cleanup_daemon(0);
