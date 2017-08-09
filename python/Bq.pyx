@@ -1182,7 +1182,7 @@ cdef class Btkn_hist_iter(Biter):
     def _iterFind(self, fwd, **kwargs):
         cdef Bs.timeval tval
         cdef Bs.timeval *tv
-        cdef Bs.btkn_hist_s c_hist;
+        cdef Bs.btkn_hist_s c_hist
         self.make_hist(&c_hist, kwargs)
         if fwd:
             return Bs.bstore_tkn_hist_iter_find_fwd(self.c_iter, &c_hist)
