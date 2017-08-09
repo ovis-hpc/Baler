@@ -1,7 +1,5 @@
 #!/bin/bash
 
-export PREFIX=$HOME/opt/baler4
-
 export BLOG=./balerd.log
 export BSTORE=./store
 export BSTORE_PLUGIN="bstore_sos"
@@ -12,7 +10,7 @@ export BCONFIG=./balerd.cfg
 
 export BTEST_ENG_DICT="../eng-dictionary"
 export BTEST_HOST_LIST="../host.list"
-export BTEST_BIN_RSYSLOG_PORT=33333
+export BTEST_BIN_RSYSLOG_PORT=10514
 export BTEST_TS_BEGIN=1435294800
 export BTEST_TS_LEN=$((3600*24))
 export BTEST_TS_INC=1800
@@ -43,15 +41,9 @@ export BOUT_THREADS=2
 export BIN_THREADS=2
 export BLOG_LEVEL=INFO
 
-#source /home/narate/opt/baler4/env.sh
-source env.sh
-
-export PATH=$PREFIX/bin:$PREFIX/sbin:/usr/bin:/usr/sbin:/bin:/sbin
-export LD_LIBRARY_PATH=$PREFIX/lib64:$PREFIX/lib:/home/narate/opt/libevent/lib
-export ZAP_LIBPATH=$PREFIX/lib/ovis-lib
-export PYTHONPATH=$PREFIX/lib/python2.7/site-packages
-export BSTORE_PLUGIN_PATH=$PREFIX/lib
 export BTEST_TKN_TYPE_MASK="''"
+
+source env.sh
 
 get_btest_config() {
 	cat <<EOF
