@@ -35,7 +35,8 @@ lib_LTLIBRARIES += librsyslog_parser.la
 
 libbin_tcp_la_SOURCES = bin_tcp.c
 libbin_tcp_la_CFLAGS = $(AM_CFLAGS) @LIBEVENT_INCDIR_FLAG@
-libbin_tcp_la_LIBADD = -levent -L@LIBEVENT_LIBDIR@ -lpthread -ldl ../baler/libbaler.la
+libbin_tcp_la_LIBADD = -levent -levent_pthreads -L@LIBEVENT_LIBDIR@ \
+		       -lpthread -ldl ../baler/libbaler.la
 lib_LTLIBRARIES += libbin_tcp.la
 
 libbin_udp_la_SOURCES = bin_udp.c
@@ -45,14 +46,14 @@ lib_LTLIBRARIES += libbin_udp.la
 
 libbin_rsyslog_tcp_la_SOURCES = bin_rsyslog_tcp.c
 libbin_rsyslog_tcp_la_CFLAGS = $(AM_CFLAGS) @LIBEVENT_INCDIR_FLAG@
-libbin_rsyslog_tcp_la_LIBADD = -levent -L@LIBEVENT_LIBDIR@ \
+libbin_rsyslog_tcp_la_LIBADD = -levent -levent_pthreads -L@LIBEVENT_LIBDIR@ \
 			       -lpthread \
 			       ../baler/libbaler.la
 lib_LTLIBRARIES += libbin_rsyslog_tcp.la
 
 libbin_metric_la_SOURCES = bin_metric.c bin_metric.h
 libbin_metric_la_CFLAGS = $(AM_CFLAGS) @LIBEVENT_INCDIR_FLAG@
-libbin_metric_la_LIBADD = -levent -L@LIBEVENT_LIBDIR@ \
+libbin_metric_la_LIBADD = -levent -levent_pthreads -L@LIBEVENT_LIBDIR@ \
 			  -lpthread \
 			  ../baler/libbaler.la
 lib_LTLIBRARIES += libbin_metric.la
@@ -107,7 +108,7 @@ libbout_me_la_SOURCES = bout_me.c
 libbout_me_la_CFLAGS = $(AM_CFLAGS) @LIBEVENT_INCDIR_FLAG@ -I@OVIS_LIB_INCDIR@
 libbout_me_la_LIBADD = ../baler/libbaler.la \
 		       -lpthread \
-		       -levent -L@LIBEVENT_LIBDIR@ \
+		       -levent -levent_pthreads -L@LIBEVENT_LIBDIR@ \
 		       -lzap -L@OVIS_LIB_LIBDIR@
 lib_LTLIBRARIES += libbout_me.la
 endif
