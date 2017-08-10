@@ -291,7 +291,6 @@ int ocm_cb(struct ocm_event *e);
 #include "bptn.h"
 #include "bwqueue.h"
 #include "bstore.h"
-// #include "../../config.h"
 
 /***** Definitions *****/
 typedef enum bmap_idx_enum {
@@ -330,7 +329,7 @@ struct bzmsg *bzmsg_alloc(size_t bstr_len)
 }
 
 /***** Command line arguments ****/
-#define BALER_OPT_STR "FC:l:s:S:v:I:O:Q:?"
+#define BALER_OPT_STR "FC:l:s:S:v:I:O:Q:V?"
 #ifdef ENABLE_OCM
 const char *optstring = BALER_OPT_STR "z:";
 #else
@@ -358,6 +357,7 @@ void display_help_msg()
 "	-I <number>	The number of input queue worker.\n"
 "	-O <number>	The number of output queue worker.\n"
 "	-Q <number>	The queue depth (applied to input and output queues).\n"
+"	-V		Print the verion and exit.\n"
 "	-?		Show help message\n"
 "\n"
 "For more information see balerd(3) manpage.\n"
@@ -1188,6 +1188,11 @@ next_arg:
 		break;
 	case 'Q':
 		qdepth = atoi(optarg);
+		break;
+	case 'V':
+		printf("Version: %s\n", bversion());
+		printf("  GIT-SHA: %s\n", bgitsha());
+		printf("  GIT-TAG: %s\n", bgittag());
 		break;
 	case '?':
 		display_help_msg();

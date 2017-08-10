@@ -579,5 +579,11 @@ const char *brcstr(int rc);
 const char *berrnostr(int _errno);
 
 const char *bsignalstr(int sig);
+
+/* baler information from configure */
+const char *bgittag();
+const char *bgitsha();
+const char *bversion();
+
 #endif // _BUTILS_H
 /**\}*/

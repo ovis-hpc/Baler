@@ -1423,4 +1423,22 @@ const char *bsignalstr(int sig)
 	return _str[sig];
 }
 
+/* config.h is provided by configure script */
+#include "config.h"
+
+const char *bgittag()
+{
+	return GITTAG;
+}
+
+const char *bgitsha()
+{
+	return GITSHA;
+}
+
+const char *bversion()
+{
+	return PACKAGE_VERSION;
+}
+
 /* END OF FILE */
