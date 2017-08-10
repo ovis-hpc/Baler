@@ -123,8 +123,8 @@ cdef extern from "baler/bstore.h":
 
     ctypedef bstore_iter_t btkn_iter_t
     btkn_iter_t bstore_tkn_iter_new(bstore_t bs)
-    bstore_iter_pos_t bstore_tkn_iter_pos_get(btkn_iter_t)
-    int bstore_tkn_iter_pos_set(btkn_iter_t, bstore_iter_pos_t)
+    bstore_iter_pos_handle_t bstore_tkn_iter_pos_get(btkn_iter_t)
+    int bstore_tkn_iter_pos_set(btkn_iter_t, bstore_iter_pos_handle_t)
     btkn_iter_t bstore_tkn_iter_new(bstore_t bs)
     void bstore_tkn_iter_free(btkn_iter_t i)
     unsigned long bstore_tkn_iter_card(btkn_iter_t i)
@@ -145,12 +145,12 @@ cdef extern from "baler/bstore.h":
     int bstore_ptn_iter_prev(bstore_iter_t iter)
     int bstore_ptn_iter_first(bstore_iter_t iter)
     int bstore_ptn_iter_last(bstore_iter_t iter)
-    bstore_iter_pos_t bstore_ptn_iter_pos_get(btkn_iter_t)
-    int bstore_ptn_iter_pos_set(btkn_iter_t, bstore_iter_pos_t)
+    bstore_iter_pos_handle_t bstore_ptn_iter_pos_get(btkn_iter_t)
+    int bstore_ptn_iter_pos_set(btkn_iter_t, bstore_iter_pos_handle_t)
     int bstore_ptn_iter_filter_set(bstore_iter_t i, bstore_iter_filter_t f)
 
-    bstore_iter_pos_t bstore_msg_iter_pos_get(bstore_iter_t)
-    int bstore_msg_iter_pos_set(bstore_iter_t, bstore_iter_pos_t)
+    bstore_iter_pos_handle_t bstore_msg_iter_pos_get(bstore_iter_t)
+    int bstore_msg_iter_pos_set(bstore_iter_t, bstore_iter_pos_handle_t)
     bstore_iter_t bstore_msg_iter_new(bstore_t bs)
     void bstore_msg_iter_free(bstore_iter_t i)
     uint64_t bstore_msg_iter_card(bstore_iter_t i)
@@ -165,8 +165,6 @@ cdef extern from "baler/bstore.h":
     int bstore_msg_iter_last(bstore_iter_t i)
     int bstore_msg_iter_filter_set(bstore_iter_t i, bstore_iter_filter_t f)
 
-    void bstore_iter_pos_free(bstore_iter_t iter, bstore_iter_pos_t pos)
-
     cdef struct bptn_hist_s:
         bptn_id_t ptn_id
         uint32_t bin_width
@@ -177,8 +175,8 @@ cdef extern from "baler/bstore.h":
     ctypedef bstore_iter_t bptn_iter_t
     ctypedef bstore_iter_t bptn_hist_iter_t
 
-    cdef bstore_iter_pos_t bstore_ptn_hist_iter_pos_get(bptn_hist_iter_t)
-    cdef int bstore_ptn_hist_iter_pos_set(bptn_hist_iter_t, bstore_iter_pos_t)
+    cdef bstore_iter_pos_handle_t bstore_ptn_hist_iter_pos_get(bptn_hist_iter_t)
+    cdef int bstore_ptn_hist_iter_pos_set(bptn_hist_iter_t, bstore_iter_pos_handle_t)
     cdef bptn_hist_iter_t bstore_ptn_hist_iter_new(bstore_t bs)
     cdef void bstore_ptn_hist_iter_free(bptn_hist_iter_t it)
     cdef bptn_hist_t bstore_ptn_hist_iter_obj(bptn_hist_iter_t it, bptn_hist_t ptn_h)
@@ -195,8 +193,8 @@ cdef extern from "baler/bstore.h":
     cdef btkn_t bstore_ptn_tkn_find(bstore_t bs,
                                     bptn_id_t ptn_id, uint64_t tkn_pos,
                                     btkn_id_t tkn_id)
-    cdef bstore_iter_pos_t bstore_ptn_tkn_iter_pos_get(bptn_tkn_iter_t)
-    cdef int bstore_ptn_tkn_iter_pos_set(bptn_tkn_iter_t, bstore_iter_pos_t)
+    cdef bstore_iter_pos_handle_t bstore_ptn_tkn_iter_pos_get(bptn_tkn_iter_t)
+    cdef int bstore_ptn_tkn_iter_pos_set(bptn_tkn_iter_t, bstore_iter_pos_handle_t)
     cdef bptn_tkn_iter_t bstore_ptn_tkn_iter_new(bstore_t bs);
     cdef void bstore_ptn_tkn_iter_free(bptn_tkn_iter_t it)
     cdef uint64_t bstore_ptn_tkn_iter_card(bptn_tkn_iter_t it)
@@ -216,8 +214,8 @@ cdef extern from "baler/bstore.h":
     ctypedef btkn_hist_s *btkn_hist_t
 
     ctypedef bstore_iter_t btkn_hist_iter_t
-    bstore_iter_pos_t bstore_tkn_hist_iter_pos_get(btkn_hist_iter_t)
-    int bstore_tkn_hist_iter_pos_set(btkn_hist_iter_t, bstore_iter_pos_t)
+    bstore_iter_pos_handle_t bstore_tkn_hist_iter_pos_get(btkn_hist_iter_t)
+    int bstore_tkn_hist_iter_pos_set(btkn_hist_iter_t, bstore_iter_pos_handle_t)
     btkn_hist_iter_t bstore_tkn_hist_iter_new(bstore_t bs)
     void bstore_tkn_hist_iter_free(btkn_hist_iter_t iter)
     btkn_hist_t bstore_tkn_hist_iter_obj(btkn_hist_iter_t iter, btkn_hist_t tkn_h)
@@ -239,8 +237,8 @@ cdef extern from "baler/bstore.h":
     ctypedef bcomp_hist_s *bcomp_hist_t
     ctypedef bstore_iter_t bcomp_hist_iter_t
 
-    bstore_iter_pos_t bstore_comp_hist_iter_pos_get(bcomp_hist_iter_t)
-    int bstore_comp_hist_iter_pos_set(bcomp_hist_iter_t, bstore_iter_pos_t)
+    bstore_iter_pos_handle_t bstore_comp_hist_iter_pos_get(bcomp_hist_iter_t)
+    int bstore_comp_hist_iter_pos_set(bcomp_hist_iter_t, bstore_iter_pos_handle_t)
     bcomp_hist_iter_t bstore_comp_hist_iter_new(bstore_t bs)
     void bstore_comp_hist_iter_free(bcomp_hist_iter_t iter)
     bcomp_hist_t bstore_comp_hist_iter_obj(bcomp_hist_iter_t iter, bcomp_hist_t comp_h)

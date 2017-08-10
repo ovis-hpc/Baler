@@ -429,10 +429,10 @@ cdef class Biter:
     cdef int iterLast(self):
         raise NotImplementedError
 
-    cdef Bs.bstore_iter_pos_t iterPosGet(self):
+    cdef Bs.bstore_iter_pos_handle_t iterPosGet(self):
         raise NotImplementedError
 
-    cdef int iterPosSet(self, Bs.bstore_iter_pos_t pos):
+    cdef int iterPosSet(self, Bs.bstore_iter_pos_handle_t pos):
         raise NotImplementedError
 
     cdef int iterFilterSet(self, Bs.bstore_iter_filter_t f):
@@ -472,10 +472,10 @@ cdef class Btkn_iter(Biter):
     cdef int iterLast(self):
         return Bs.bstore_tkn_iter_last(self.c_iter)
 
-    cdef Bs.bstore_iter_pos_t iterPosGet(self):
+    cdef Bs.bstore_iter_pos_handle_t iterPosGet(self):
         return Bs.bstore_tkn_iter_pos_get(self.c_iter)
 
-    cdef int iterPosSet(self, Bs.bstore_iter_pos_t c_pos):
+    cdef int iterPosSet(self, Bs.bstore_iter_pos_handle_t c_pos):
         return Bs.bstore_tkn_iter_pos_set(self.c_iter, c_pos)
 
 cdef class Bptn:
@@ -604,10 +604,10 @@ cdef class Bptn_iter(Biter):
     cdef int iterLast(self):
         return Bs.bstore_ptn_iter_last(self.c_iter)
 
-    cdef Bs.bstore_iter_pos_t iterPosGet(self):
+    cdef Bs.bstore_iter_pos_handle_t iterPosGet(self):
         return Bs.bstore_ptn_iter_pos_get(self.c_iter)
 
-    cdef int iterPosSet(self, Bs.bstore_iter_pos_t c_pos):
+    cdef int iterPosSet(self, Bs.bstore_iter_pos_handle_t c_pos):
         return Bs.bstore_ptn_iter_pos_set(self.c_iter, c_pos)
 
     cdef int iterFilterSet(self, Bs.bstore_iter_filter_t f):
@@ -651,10 +651,10 @@ cdef class Bptn_tkn_iter(Biter):
     cdef int iterFilterSet(self, Bs.bstore_iter_filter_t f):
         return Bs.bstore_ptn_tkn_iter_filter_set(self.c_iter, f)
 
-    cdef Bs.bstore_iter_pos_t iterPosGet(self):
+    cdef Bs.bstore_iter_pos_handle_t iterPosGet(self):
         return Bs.bstore_ptn_tkn_iter_pos_get(self.c_iter)
 
-    cdef int iterPosSet(self, Bs.bstore_iter_pos_t c_pos):
+    cdef int iterPosSet(self, Bs.bstore_iter_pos_handle_t c_pos):
         return Bs.bstore_ptn_tkn_iter_pos_set(self.c_iter, c_pos)
 
 cdef class Bmsg:
@@ -743,10 +743,10 @@ cdef class Bmsg_iter(Biter):
     cdef int iterPrev(self):
         return Bs.bstore_msg_iter_prev(self.c_iter)
 
-    cdef Bs.bstore_iter_pos_t iterPosGet(self):
+    cdef Bs.bstore_iter_pos_handle_t iterPosGet(self):
         return Bs.bstore_msg_iter_pos_get(self.c_iter)
 
-    cdef int iterPosSet(self, Bs.bstore_iter_pos_t c_pos):
+    cdef int iterPosSet(self, Bs.bstore_iter_pos_handle_t c_pos):
         return Bs.bstore_msg_iter_pos_set(self.c_iter, c_pos)
 
     cdef int iterFilterSet(self, Bs.bstore_iter_filter_t f):
@@ -930,10 +930,10 @@ cdef class Bptn_hist_iter(Biter):
     cdef int iterLast(self):
         return Bs.bstore_ptn_hist_iter_last(self.c_iter)
 
-    cdef Bs.bstore_iter_pos_t iterPosGet(self):
+    cdef Bs.bstore_iter_pos_handle_t iterPosGet(self):
         return Bs.bstore_ptn_hist_iter_pos_get(self.c_iter)
 
-    cdef int iterPosSet(self, Bs.bstore_iter_pos_t c_pos):
+    cdef int iterPosSet(self, Bs.bstore_iter_pos_handle_t c_pos):
         return Bs.bstore_ptn_hist_iter_pos_set(self.c_iter, c_pos)
 
     cdef int iterFilterSet(self, Bs.bstore_iter_filter_t f):
@@ -1031,10 +1031,10 @@ cdef class Bcomp_hist_iter(Biter):
     cdef int iterLast(self):
         return Bs.bstore_comp_hist_iter_last(self.c_iter)
 
-    cdef Bs.bstore_iter_pos_t iterPosGet(self):
+    cdef Bs.bstore_iter_pos_handle_t iterPosGet(self):
         return Bs.bstore_comp_hist_iter_pos_get(self.c_iter)
 
-    cdef int iterPosSet(self, Bs.bstore_iter_pos_t c_pos):
+    cdef int iterPosSet(self, Bs.bstore_iter_pos_handle_t c_pos):
         return Bs.bstore_comp_hist_iter_pos_set(self.c_iter, c_pos)
 
     cdef int iterFilterSet(self, Bs.bstore_iter_filter_t f):
@@ -1195,10 +1195,10 @@ cdef class Btkn_hist_iter(Biter):
     def iterFindRev(self, **kwargs):
         return self._iterFind(self, 0, **kwargs)
 
-    cdef Bs.bstore_iter_pos_t iterPosGet(self):
+    cdef Bs.bstore_iter_pos_handle_t iterPosGet(self):
         return Bs.bstore_tkn_hist_iter_pos_get(self.c_iter)
 
-    cdef int iterPosSet(self, Bs.bstore_iter_pos_t c_pos):
+    cdef int iterPosSet(self, Bs.bstore_iter_pos_handle_t c_pos):
         return Bs.bstore_tkn_hist_iter_pos_set(self.c_iter, c_pos)
 
     cdef int iterFilterSet(self, Bs.bstore_iter_filter_t f):
