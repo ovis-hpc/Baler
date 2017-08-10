@@ -1366,6 +1366,9 @@ void* binqwkr_routine(void *arg)
 	struct timeval end_time = { 0, 0 };
 	int inp_count = 0;
 	struct bwq_entry *ent;
+	sigset_t sigset;
+	sigfillset(&sigset);
+	pthread_sigmask(SIG_SETMASK, &sigset, NULL); /* block all signals */
 	gettimeofday(&start_time, NULL);
 loop:
 	/* bwq_dq will block the execution if the queue is empty. */
@@ -1420,6 +1423,9 @@ void* boutqwkr_routine(void *arg)
 	struct bout_wkr_ctxt *octxt= arg;
 	struct bwq_entry *ent;
 	struct boutq_data *d;
+	sigset_t sigset;
+	sigfillset(&sigset);
+	pthread_sigmask(SIG_SETMASK, &sigset, NULL); /* block all signals */
 loop:
 	/* bwq_dq will block the execution if the queue is empty. */
 	ent = bwq_dq(&boutq[octxt->worker_id]);
@@ -1464,7 +1470,7 @@ void thread_join()
  */
 void cleanup_daemon(int x)
 {
-	binfo("Cleaningup daemon...");
+	binfo("Cleaningup daemon ... (%s)", bsignalstr(x));
 	binfo("Closing the store and syncing data...");
 	fflush(stdout);
 
@@ -1490,15 +1496,58 @@ void handle_logrotate(int x)
 	}
 }
 
+/* signals that generate core dump from signal(7) */
+int core_signals[] = {
+	SIGQUIT,
+	SIGILL,
+	SIGABRT,
+	SIGFPE,
+	SIGSEGV,
+	SIGBUS,
+	SIGSYS,
+	SIGTRAP,
+	SIGXCPU,
+	SIGXFSZ,
+	SIGIOT,
+	SIGUNUSED,
+	0
+};
+
 /**
  * \brief The main function.
  */
 int main(int argc, char **argv)
 {
 	struct sigaction cleanup_act, logrotate_act;
+	siginfo_t siginfo;
+	int sig;
+	int i;
 	sigset_t sigset;
-	pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
-	pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+
+	/* Mask all signals when the handler is invoked, except for the ones
+	 * that cause core dump. */
+	sigfillset(&sigset);
+	for (i = 0; i < sizeof(core_signals)/sizeof(*core_signals); i++) {
+		sigdelset(&sigset, core_signals[i]);
+	}
+
+	/* SIGHUP, SIGINT, and SIGTERM ==> cleanup_daemon() */
+	cleanup_act.sa_handler = cleanup_daemon;
+	cleanup_act.sa_flags = 0;
+	cleanup_act.sa_mask = sigset;
+	sigaction(SIGHUP, &cleanup_act, NULL);
+	sigaction(SIGINT, &cleanup_act, NULL);
+	sigaction(SIGTERM, &cleanup_act, NULL);
+
+	/* SIGUSR1 ==> handle_logrotate() */
+	/* also add SIGHUP, SIGINT, and SIGTERM into the mask */
+	sigaddset(&sigset, SIGHUP);
+	sigaddset(&sigset, SIGINT);
+	sigaddset(&sigset, SIGTERM);
+	logrotate_act.sa_handler = handle_logrotate;
+	logrotate_act.sa_flags = 0;
+	logrotate_act.sa_mask = sigset;
+	sigaction(SIGUSR1, &logrotate_act, NULL);
 
 	/*
 	 * Initialize before turning off all the signals or any fatal
@@ -1509,31 +1558,9 @@ int main(int argc, char **argv)
 	if (config_path)
 		config_file_handling(config_path);
 
-	sigemptyset(&sigset);
-	sigaddset(&sigset, SIGUSR1);
-	cleanup_act.sa_handler = cleanup_daemon;
-	cleanup_act.sa_flags = 0;
-	cleanup_act.sa_mask = sigset;
-
-	sigaction(SIGHUP, &cleanup_act, NULL);
-	sigaction(SIGINT, &cleanup_act, NULL);
-	sigaction(SIGTERM, &cleanup_act, NULL);
-
-	sigaddset(&sigset, SIGHUP);
-	sigaddset(&sigset, SIGINT);
-	sigaddset(&sigset, SIGTERM);
-	logrotate_act.sa_handler = handle_logrotate;
-	logrotate_act.sa_flags = 0;
-	logrotate_act.sa_mask = sigset;
-	sigaction(SIGUSR1, &logrotate_act, NULL);
-
 	binfo("Baler is ready.");
-
-	/* wait indefinitely */
-	pthread_cond_wait(&cond, &mutex);
-
-	/* On exit, clean up the daemon. */
-	cleanup_daemon(0);
-	return 0;
+	pause(); /* The main thread is dedicated for signal handling */
+	assert(0 == "This should not be reached");
+	return -1;
 }
 /**\}*/
