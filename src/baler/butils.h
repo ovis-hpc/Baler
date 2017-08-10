@@ -577,5 +577,7 @@ int bmetricbin_getbinidx(struct bmetricbin *bin, double value);
 
 const char *brcstr(int rc);
 const char *berrnostr(int _errno);
+
+const char *bsignalstr(int sig);
 #endif // _BUTILS_H
 /**\}*/

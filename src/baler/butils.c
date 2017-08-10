@@ -71,6 +71,7 @@
 #include <stdarg.h>
 #include <ctype.h>
 #include <assert.h>
+#include <signal.h>
 
 FILE *blog_file;
 pthread_mutex_t __blog_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -1376,6 +1377,50 @@ time_t bparse_ts(const char *ts)
 			return -1;
 	}
 	return t;
+}
+
+const char *bsignalstr(int sig)
+{
+	static const char *_str[] = {
+		[SIGHUP] = "SIGHUP",
+		[SIGINT] = "SIGINT",
+		[SIGQUIT] = "SIGQUIT",
+		[SIGILL] = "SIGILL",
+		[SIGTRAP] = "SIGTRAP",
+		[SIGABRT] = "SIGABRT",
+		[SIGBUS] = "SIGBUS",
+		[SIGFPE] = "SIGFPE",
+		[SIGKILL] = "SIGKILL",
+		[SIGUSR1] = "SIGUSR1",
+		[SIGSEGV] = "SIGSEGV",
+		[SIGUSR2] = "SIGUSR2",
+		[SIGPIPE] = "SIGPIPE",
+		[SIGALRM] = "SIGALRM",
+		[SIGTERM] = "SIGTERM",
+		[SIGSTKFLT] = "SIGSTKFLT",
+		[SIGCHLD] = "SIGCHLD",
+		[SIGCONT] = "SIGCONT",
+		[SIGSTOP] = "SIGSTOP",
+		[SIGTSTP] = "SIGTSTP",
+		[SIGTTIN] = "SIGTTIN",
+		[SIGTTOU] = "SIGTTOU",
+		[SIGURG] = "SIGURG",
+		[SIGXCPU] = "SIGXCPU",
+		[SIGXFSZ] = "SIGXFSZ",
+		[SIGVTALRM] = "SIGVTALRM",
+		[SIGPROF] = "SIGPROF",
+		[SIGWINCH] = "SIGWINCH",
+		[SIGIO] = "SIGIO",
+		[SIGPWR] = "SIGPWR",
+		[SIGSYS] = "SIGSYS",
+	};
+	static char buff[64];
+	if (sig < 1 || sig > 31) {
+		/* not thread safe, but should be OK for our use case */
+		snprintf(buff, sizeof(buff), "UNKNOWN_SIGNAL(%d)", sig);
+		return buff;
+	}
+	return _str[sig];
 }
 
 /* END OF FILE */
