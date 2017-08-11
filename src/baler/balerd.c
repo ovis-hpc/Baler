@@ -1193,6 +1193,7 @@ next_arg:
 		printf("Version: %s\n", bversion());
 		printf("  GIT-SHA: %s\n", bgitsha());
 		printf("  GIT-TAG: %s\n", bgittag());
+		exit(0);
 		break;
 	case '?':
 		display_help_msg();
