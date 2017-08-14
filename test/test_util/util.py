@@ -110,9 +110,11 @@ def get_test_patterns():
         str(s.rstrip().decode('utf-8').replace(u"\u2022", "<dec>")) for s in sio
     ]
 
+PTN_TOKENIZER = re.compile("<hostname>|<dec>|\\w+|\\W")
+PTN_TKN_VAR = re.compile("^(:?<hostname>|<dec>)$")
 
 class TestPtnEntry(object):
-    __slots__ = ('count', 'ptn_tkn', 'text', 'regex', 'hist', 'comp_hist')
+    __slots__ = ('count', 'ptn_tkn', 'text', 'regex', 'hist', 'comp_hist', 'var_pos')
 
     def __init__(self, text, regex=None):
         self.count = 0
@@ -121,8 +123,17 @@ class TestPtnEntry(object):
         self.regex = re.compile(regex) if regex else None
         self.hist = {}
         self.comp_hist = {}
+        self.var_pos = set()
+        # variable positions
+        pos = 0
+        for s in PTN_TOKENIZER.findall(text):
+            if PTN_TKN_VAR.match(s):
+                self.var_pos.add(pos)
+            pos += 1
 
     def add_ptn_tkn(self, pos, tkn_text):
+        if pos not in self.var_pos:
+            return
         key = (pos, tkn_text)
         try:
             self.ptn_tkn[key] += 1
