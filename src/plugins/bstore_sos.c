@@ -22,7 +22,9 @@
 #define __be32
 #endif
 
-int bstore_lock = 1;
+#define OOM()	berr("Out of memory at %s:%d\n", __func__, __LINE__)
+
+int bstore_lock = 0;
 
 time_t clamp_time_to_bin(time_t time_, uint32_t bin_width)
 {
@@ -188,6 +190,7 @@ struct sos_schema_template pattern_schema = {
 		{
 			.name = "last_seen",
 			.type = SOS_TYPE_TIMESTAMP,
+			.indexed = 1,
 		},
 		{
 			.name = "count",
@@ -216,6 +219,7 @@ typedef struct ptn_s {
 	union sos_obj_ref_s tkn_type_ids;
 } *ptn_t;
 
+#define HIST_IDX_ARGS "ORDER=5 SIZE=11"
 const char *ptn_pos_tkn_key[] = { "ptn_id", "pos", "tkn_id" };
 struct sos_schema_template pattern_token_schema = {
 	.name = "PatternToken",
@@ -238,14 +242,12 @@ struct sos_schema_template pattern_token_schema = {
 			.size = 3,
 			.join_list = ptn_pos_tkn_key,
 			.indexed = 1,
+			.idx_type = "H2BXT",
+			.idx_args = HIST_IDX_ARGS
 		},
 		{ NULL }
 	}
 };
-
-// #define HIST_IDX "H2BXT"
-#define HIST_IDX "BXTREE"
-#define HIST_IDX_ARGS "ORDER=5 SIZE=19"
 
 const char *tkn_hist_key[] = { "bin_width", "epoch", "tkn_id" };
 struct sos_schema_template token_hist_schema = {
@@ -269,6 +271,8 @@ struct sos_schema_template token_hist_schema = {
 			.size = 3,
 			.join_list = tkn_hist_key,
 			.indexed = 1,
+			.idx_type = "H2BXT",
+			.idx_args = HIST_IDX_ARGS
 		},
 		{ NULL }
 	}
@@ -296,6 +300,8 @@ struct sos_schema_template pattern_hist_schema = {
 			.size = 3,
 			.join_list = ptn_hist_key,
 			.indexed = 1,
+			.idx_type = "H2BXT",
+			.idx_args = HIST_IDX_ARGS
 		},
 		{
 			.name = "count",
@@ -331,6 +337,8 @@ struct sos_schema_template component_hist_schema = {
 			.size = 4,
 			.join_list = comp_hist_key,
 			.indexed = 1,
+			.idx_type = "H2BXT",
+			.idx_args = HIST_IDX_ARGS
 		},
 		{
 			.name = "count",
@@ -595,6 +603,8 @@ static bstore_t bs_open(bstore_plugin_t plugin, const char *path, int flags, int
 		sos_schema_attr_by_name(bs->pattern_token_schema, "ptn_pos_tkn_key");
 	if (!bs->ptn_pos_tkn_key_attr)
 		goto err_7;
+	sos_index_rt_opt_set(sos_attr_index(bs->ptn_pos_tkn_key_attr), SOS_INDEX_RT_OPT_MP_UNSAFE);
+	sos_index_rt_opt_set(sos_attr_index(bs->ptn_pos_tkn_key_attr), SOS_INDEX_RT_OPT_VISIT_ASYNC);
 
 	sprintf(cpath, "%s/History", path);
 	bs->hist_sos = sos_container_open(cpath, SOS_PERM_RW);
@@ -607,6 +617,8 @@ static bstore_t bs_open(bstore_plugin_t plugin, const char *path, int flags, int
 		sos_schema_attr_by_name(bs->token_hist_schema, "tkn_hist_key");
 	if (!bs->tkn_hist_key_attr)
 		goto err_8;
+	sos_index_rt_opt_set(sos_attr_index(bs->tkn_hist_key_attr), SOS_INDEX_RT_OPT_MP_UNSAFE);
+	sos_index_rt_opt_set(sos_attr_index(bs->tkn_hist_key_attr), SOS_INDEX_RT_OPT_VISIT_ASYNC);
 
 	bs->pattern_hist_schema = sos_schema_by_name(bs->hist_sos, "PatternHist");
 	if (!bs->pattern_hist_schema)
@@ -615,6 +627,8 @@ static bstore_t bs_open(bstore_plugin_t plugin, const char *path, int flags, int
 		sos_schema_attr_by_name(bs->pattern_hist_schema, "ptn_hist_key");
 	if (!bs->ptn_hist_key_attr)
 		goto err_8;
+	sos_index_rt_opt_set(sos_attr_index(bs->ptn_hist_key_attr), SOS_INDEX_RT_OPT_MP_UNSAFE);
+	sos_index_rt_opt_set(sos_attr_index(bs->ptn_hist_key_attr), SOS_INDEX_RT_OPT_VISIT_ASYNC);
 
 	bs->component_hist_schema = sos_schema_by_name(bs->hist_sos, "ComponentHist");
 	if (!bs->component_hist_schema)
@@ -623,6 +637,8 @@ static bstore_t bs_open(bstore_plugin_t plugin, const char *path, int flags, int
 		sos_schema_attr_by_name(bs->component_hist_schema, "comp_hist_key");
 	if (!bs->comp_hist_key_attr)
 		goto err_8;
+	sos_index_rt_opt_set(sos_attr_index(bs->comp_hist_key_attr), SOS_INDEX_RT_OPT_MP_UNSAFE);
+	sos_index_rt_opt_set(sos_attr_index(bs->comp_hist_key_attr), SOS_INDEX_RT_OPT_VISIT_ASYNC);
 
 	/* Compute the next token and pattern ids */
 	sos_iter_t iter = sos_attr_iter_new(bs->tkn_id_attr);
@@ -660,20 +676,36 @@ static bstore_t bs_open(bstore_plugin_t plugin, const char *path, int flags, int
 	pthread_mutex_init(&bs->hist_lock, NULL);
 	if (!create)
 		goto out;
-	/*
-	 * We created the container, add the token-type tokens. For
-	 * these special tokens, the tkn_type_id == tkn_id.
-	 */
+
 	btkn_type_t type;
-	for (type = BTKN_TYPE_FIRST+1; type < BTKN_TYPE_LAST_BUILTIN; type++) {
+	for (type = BTKN_TYPE_FIRST; type <= BTKN_TYPE_LAST_BUILTIN; type++) {
 		char type_name[80];
 		btkn_t tkn;
 		btkn_id_t tkn_id;
+		switch (type) {
+		case BTKN_TYPE_WORD:
+		case BTKN_TYPE_SEPARATOR:
+		case BTKN_TYPE_WHITESPACE:
+			/* In patterns, these token-types are represented
+			 * by their tkn-id
+			 */
+			tkn_id = type;
+			break;
+		default:
+			/* In patterns, these token-types are represented
+			 * by their type-id
+			 */
+			tkn_id = type; //  | BTKN_TYPE_WILDCARD;
+			break;
+		}
 		sprintf(type_name, "_%s_", btkn_attr_type_str(type));
-		tkn = btkn_alloc(type, BTKN_TYPE_MASK(type), type_name, strlen(type_name));
+		tkn = btkn_alloc(tkn_id, BTKN_TYPE_MASK(type),
+				 type_name, strlen(type_name));
 		tkn->tkn_type_mask |= BTKN_TYPE_MASK(BTKN_TYPE_TYPE);
 		rc = bs_tkn_add_with_id(&bs->base, tkn);
-		assert(0 == rc);
+		if (rc)
+			goto err_8;
+		// bs->type2id[type] = tkn_id;
 		btkn_free(tkn);
 	}
  out:
@@ -833,6 +865,10 @@ static sos_visit_action_t tkn_add_cb(sos_index_t index,
 		assert(0 == "Shouldn't be adding this token");
 #endif
 		tkn_obj = sos_ref_as_obj(ctxt->bss->dict_sos, *ref);
+		if (!tkn_obj) {
+			OOM();
+			goto err_0;
+		}
 		/* Update the token value */
 		tkn_value = sos_obj_ptr(tkn_obj);
 		tkn_value->tkn_count++;
@@ -846,9 +882,10 @@ static sos_visit_action_t tkn_add_cb(sos_index_t index,
 
 	/* Allocate a new object */
 	tkn_obj = sos_obj_new(ctxt->bss->token_value_schema);
-	if (!tkn_obj)
+	if (!tkn_obj) {
+		OOM();
 		goto err_0;
-
+	}
 	tkn_value = sos_obj_ptr(tkn_obj);
 	tkn_value->tkn_count = ctxt->tkn->tkn_count;
 
@@ -956,6 +993,30 @@ static int bs_tkn_add_with_id(bstore_t bs, btkn_t tkn)
 	return rc;
 }
 
+static int bs_type_add_with_id(bstore_t bs, btkn_t tkn)
+{
+	int rc;
+	sos_obj_t tkn_obj;
+	bstore_sos_t bss = (bstore_sos_t)bs;
+	SOS_KEY(text_key);
+
+	if (bstore_lock)
+		pthread_mutex_lock(&bss->dict_lock);
+	encode_tkn_key(text_key, tkn->tkn_str->cstr, tkn->tkn_str->blen);
+	/* If the token is already added, return an error */
+	tkn_obj = sos_obj_find(bss->tkn_text_attr, text_key);
+	if (tkn_obj) {
+		sos_obj_put(tkn_obj);
+		rc = ENOENT;
+		goto err_0;
+	}
+	rc = __add_tkn_with_id(bss, tkn, 0);
+ err_0:
+	if (bstore_lock)
+		pthread_mutex_unlock(&bss->dict_lock);
+	return rc;
+}
+
 static btkn_t bs_tkn_find_by_id(bstore_t bs, btkn_id_t tkn_id)
 {
 	btkn_t token = NULL;
@@ -1046,7 +1107,7 @@ static btkn_type_t bs_tkn_type_get(bstore_t bs, const char *typ_name, size_t nam
 		type_id = 0;
 		goto out;
 	}
-	type_id = btkn->tkn_id;
+	type_id = btkn->tkn_id & ~BTKN_TYPE_WILDCARD;;
 	btkn_free(btkn);
  out:
 	if (bstore_lock)
@@ -1806,8 +1867,8 @@ static bmsg_t __make_msg(bstore_sos_t bss, bsos_iter_t i, sos_obj_t msg_obj)
 	/* fill from the back */
 	x = dmsg->argc - 1;
 	for (y = ptn->tkn_count - 1; y >= 0; y--) {
-		btkn_type_t tkn_type = ptn->str->u64str[y] & 0xFF;
-		if (btkn_type_is_wildcard(tkn_type)) {
+		btkn_id_t tkn_type_id = ptn->str->u64str[y] & BTKN_TYPE_ID_MASK;
+		if (btkn_id_is_wildcard(tkn_type_id)) {
 			dmsg->argv[y] = dmsg->argv[x];
 			x--;
 		} else {
@@ -2180,11 +2241,11 @@ static size_t decode_ptn(bstr_t ptn, const uint8_t *tkn_str, size_t tkn_count)
 	ptn->blen = 0;
 	for (tkn = 0; tkn < tkn_count; tkn++) {
 		tkn_id = decode_id(tkn_str);
-		assert((tkn_id >= 256)
+		assert((tkn_id >= BTKN_TYPE_WILDCARD)
 		       ||
-		       (tkn_id < BTKN_TYPE_LAST
+		       (tkn_id <= BTKN_TYPE_LAST
 			&&
-			tkn_id > BTKN_TYPE_FIRST));
+			tkn_id >= BTKN_TYPE_FIRST));
 		ptn->u64str[tkn] = tkn_id;
 		ptn->blen += sizeof(uint64_t);
 		tkn_sz = *tkn_str; /* Get the size */
@@ -2255,6 +2316,10 @@ static sos_visit_action_t ptn_add_cb(sos_index_t index,
 		struct timeval last_seen;
 		struct timeval first_seen;
 		ptn_obj = sos_ref_as_obj(ctxt->bss->ptn_sos, *ref);
+		if (!ptn_obj) {
+			OOM();
+			goto err_0;
+		}
 		ptn_value = sos_obj_ptr(ptn_obj);
 		last_seen.tv_sec = ptn_value->last_seen.secs;
 		last_seen.tv_usec = ptn_value->last_seen.usecs;
@@ -2416,29 +2481,23 @@ static int __bs_static_ptn_tkn_rc(bstore_t bs, bptn_id_t ptn_id,
 {
 	btkn_t tkn;
 	bptn_t ptn = NULL;
-	btkn_type_t tkn_type;
 	btkn_id_t _tkn_id;
 
 	ptn = bs_ptn_find(bs, ptn_id);
 	if (!ptn)
 		return EINVAL;
 
-	tkn_type = ptn->str->u64str[tkn_pos] & 0xFF;
 	_tkn_id = ptn->str->u64str[tkn_pos] >> 8;
 	bptn_free(ptn);
 
-	if (btkn_type_is_wildcard(tkn_type)) {
+	if (btkn_id_is_wildcard(_tkn_id))
 		return ENOKEY;
-	}
 
 	/* non-wildcard */
-
-	if (*tkn_id && _tkn_id != *tkn_id) {
+	if (*tkn_id && _tkn_id != *tkn_id)
 		return ENOENT;
-	}
 
 	*tkn_id = _tkn_id;
-
 	return 0;
 }
 
@@ -2453,7 +2512,6 @@ static btkn_t __bs_static_ptn_tkn(bstore_t bs, bptn_id_t ptn_id,
 {
 	btkn_t tkn;
 	bptn_t ptn = NULL;
-	btkn_type_t tkn_type;
 	btkn_id_t _tkn_id;
 	uint64_t count;
 
@@ -2461,12 +2519,11 @@ static btkn_t __bs_static_ptn_tkn(bstore_t bs, bptn_id_t ptn_id,
 	if (!ptn)
 		return NULL;
 
-	tkn_type = ptn->str->u64str[tkn_pos] & 0xFF;
 	_tkn_id = ptn->str->u64str[tkn_pos] >> 8;
 	count = ptn->count;
 	bptn_free(ptn);
 
-	if (btkn_type_is_wildcard(tkn_type)) {
+	if (btkn_id_is_wildcard(_tkn_id)) {
 		errno = ENOKEY;
 		return NULL;
 	}
@@ -2573,7 +2630,6 @@ static int bs_msg_add(bstore_t bs, struct timeval *tv, bmsg_t msg)
 	uint64_t pos;
 	btkn_type_t type_id;
 	int rc = ENOMEM;
-	btkn_type_t tkn_type;
 	int i, wc;
 
 	/* This code trashes the msg memory */
@@ -2600,8 +2656,8 @@ static int bs_msg_add(bstore_t bs, struct timeval *tv, bmsg_t msg)
 	 */
 	wc = 0;
 	for (i = 0; i < msg->argc; i++) {
-		tkn_type = msg->argv[i] & 0xFF;
-		if (btkn_type_is_wildcard(tkn_type)) {
+		type_id = msg->argv[i] & BTKN_TYPE_ID_MASK;
+		if (btkn_id_is_wildcard(type_id)) {
 			/* wc <= i */
 			msg->argv[wc] = msg->argv[i];
 			wc++;

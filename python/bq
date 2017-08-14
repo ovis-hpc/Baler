@@ -489,8 +489,7 @@ def plot_ptn_dist(bs, args):
 
     # Gather the components
     comp_count = ptn.tkn_count()
-    hit = Bq.Bptn_tkn_iter(bs)
-    hit.find(ptn.ptn_id(), 0)
+    hit = Bq.Bptn_tkn_iter(bs, ptn_id=args.ptn_id)
     comps = []
     for tkn in hit:
         comps.append(tkn)
@@ -697,7 +696,7 @@ def show_matching_ptns(bs, args):
         '-'.ljust(20, '-'), '-'.ljust(32, '-'))
     do_header(hf, args)
 
-    pi.find(start)
+    pi.set_filter(tv_begin=(start,0), tv_end=(end,0))
     ptn_count = 0
     matching_cols = {}
     for p in pi:

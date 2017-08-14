@@ -94,7 +94,7 @@ cdef class Bstore:
             tkn = Btkn()
             tkn.c_tkn = btkn
             return tkn
-        raise NameError("{0} is not a valid Token Id".format(id_))
+        return None
 
     cpdef tkn_by_name(self, tkn_name):
         cdef Bs.btkn_t btkn

@@ -93,7 +93,7 @@ const char *btkn_type_str[] = {
 	[BTKN_TYPE_PATH] = "PATH",
 	[BTKN_TYPE_URL] = "URL",
 	[BTKN_TYPE_WHITESPACE] = "WHITESPACE",
-	[BTKN_TYPE_TEXT] = "TEXT"
+	[BTKN_TYPE_TEXT] = "TEXT",
 };
 
 void btkn_dump()
@@ -106,7 +106,7 @@ void btkn_dump()
 	pthread_mutex_unlock(&tkn_lock);
 }
 
-btkn_type_t btkn_type(const char *str)
+btkn_type_t btkn_type_from_str(const char *str)
 {
 	return bget_str_idx(btkn_type_str, sizeof(btkn_type_str) / sizeof(btkn_type_str[0]), str);
 }
@@ -139,7 +139,7 @@ uint64_t btkn_type_mask_from_str(const char *str)
 			goto out;
 		}
 		s += n;
-		type = btkn_type(buff);
+		type = btkn_type_from_str(buff);
 		if (type == -1) {
 			errno = EINVAL;
 			goto out;

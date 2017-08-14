@@ -58,7 +58,7 @@
 #include "bcommon.h"
 
 enum btkn_type {
-	BTKN_TYPE_FIRST = 0,
+	BTKN_TYPE_FIRST = 1,
 	/**
 	 * This token is a type name
 	 */
@@ -135,7 +135,7 @@ enum btkn_type {
 	 * Text unrecognized as a particular token type
 	 */
 	BTKN_TYPE_TEXT,
-	BTKN_TYPE_LAST_BUILTIN,
+	BTKN_TYPE_LAST_BUILTIN = BTKN_TYPE_TEXT,
 	/**
 	 * First user-defined token. Range between BTKN_TYPE_TEXT and
 	 * BTKN_TYPE_FIRST_USER reserved for expanding built-in types
@@ -149,6 +149,10 @@ enum btkn_type {
 	 */
 	BTKN_TYPE_LAST = 64,
 };
+#define BTKN_TYPE_IDX_MASK	0x3F
+#define BTKN_TYPE_ID_MASK	0xFF
+#define BTKN_TYPE_WILDCARD	0x80
+
 typedef uint64_t btkn_type_t;
 
 extern
@@ -164,15 +168,27 @@ struct btkn_attr {
 static
 const char *btkn_attr_type_str(btkn_type_t t)
 {
-	if (t < BTKN_TYPE_LAST_BUILTIN)
+	if (t <= BTKN_TYPE_LAST_BUILTIN)
 		return btkn_type_str[t];
 	return NULL;
 }
 
 static inline
-int btkn_type_is_wildcard(btkn_type_t type)
+btkn_type_t btkn_type_from_id(uint64_t id)
 {
-	switch (type) {
+	return (id & BTKN_TYPE_IDX_MASK);
+}
+
+static inline
+int btkn_is_type(uint64_t id)
+{
+	return (id & BTKN_TYPE_ID_MASK);
+}
+
+static inline
+int btkn_id_is_wildcard(uint64_t id)
+{
+	switch (id) {
 	case BTKN_TYPE_WORD:
 	case BTKN_TYPE_SEPARATOR:
 	case BTKN_TYPE_WHITESPACE:
@@ -180,6 +196,7 @@ int btkn_type_is_wildcard(btkn_type_t type)
 	default:
 		return 1;
 	}
+	// return (id & BTKN_TYPE_WILDCARD);
 }
 
 #endif

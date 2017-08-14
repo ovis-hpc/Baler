@@ -53,21 +53,14 @@
 #include "baler/bplugin.h"
 #include "baler/boutput.h"
 #include "baler/bstore.h"
-#include "baler/mq.h"
 
 struct bout_store_hist_plugin {
 	struct boutplugin base;
 	pthread_mutex_t lock;
 	bstore_t bs;
-	int thread_count;
-	int q_depth;
 	int tkn_hist;
-	uint64_t tkn_type_mask; /* excluded token types for tkn_hist */
 	int ptn_hist;
 	int ptn_tkn_hist;
-	pthread_t *threads;
-	unsigned long curr_nq;
-	mq_t *mqs;	/* 1 queue per thread */
 };
 
 #endif

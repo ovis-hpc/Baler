@@ -84,7 +84,6 @@
 #include <sys/time.h>
 
 static const char *ptn_type_strs[] = {
-	[BTKN_TYPE_FIRST] = NULL,
 	[BTKN_TYPE_TYPE] = "<type>",
 	[BTKN_TYPE_PRIORITY] = "<prio>",
 	[BTKN_TYPE_VERSION] = "<vers>",
@@ -104,7 +103,6 @@ static const char *ptn_type_strs[] = {
 	[BTKN_TYPE_WORD] = "<word>",
 	[BTKN_TYPE_TEXT] = "*",
 	[BTKN_TYPE_WHITESPACE] = " ",
-	[BTKN_TYPE_LAST] = NULL,
 };
 
 /**

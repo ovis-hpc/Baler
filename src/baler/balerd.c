@@ -943,8 +943,8 @@ int process_cmd_tokens(struct bconfig_list *cfg)
 		return ENOMEM;
 	}
 	const char *path = bp_path->s1;
-        ctxt->tkn_type = btkn_type(bp_type->s1);
-	if (ctxt->tkn_type <= BTKN_TYPE_FIRST
+	ctxt->tkn_type = btkn_type_from_str(bp_type->s1);
+	if (ctxt->tkn_type < BTKN_TYPE_FIRST
 			|| BTKN_TYPE_LAST < ctxt->tkn_type) {
 		berr("Invalid token type '%s' specified in configuration file.\n", bp_type->s1);
 		exit(1);

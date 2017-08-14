@@ -228,8 +228,8 @@ int bptn_store_id2str(struct bptn_store *ptns, struct btkn_store *tkns,
 	const uint64_t *c;
 	for (i=0,c=ptn->u64str; i<ptn->blen; c++,i+=sizeof(*c)) {
 		btkn_id_t tkn_id = *c >> 8;
-		btkn_type_t tkn_type = *c >> 8;
-		if (tkn_id < BTKN_TYPE_LAST) {
+		btkn_id_t tkn_type = *c >> 8;
+		if (btkn_is_type(tkn_id)) {
 			strncpy(s, ptn_type_strs[tkn_type], slen);
 		} else {
 			rc = btkn_store_id2str(tkns, tkn_id, s, slen);

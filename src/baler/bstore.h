@@ -919,7 +919,7 @@ btkn_t bstore_tkn_find_by_id(bstore_t bs, btkn_id_t tkn_id);
 static inline const char *bstore_tkn_attr_type_str(bstore_t bs, btkn_type_t t)
 {
 	const char *str = btkn_attr_type_str(t);
-	if (!str && t < BTKN_TYPE_LAST) {
+	if (!str && t <= BTKN_TYPE_LAST) {
 		btkn_t tkn = bstore_tkn_find_by_id(bs, t);
 		if (tkn) {
 			str = tkn->tkn_str->cstr;
