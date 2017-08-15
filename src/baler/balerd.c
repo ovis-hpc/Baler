@@ -1555,6 +1555,10 @@ int main(int argc, char **argv)
 	logrotate_act.sa_mask = sigset;
 	sigaction(SIGUSR1, &logrotate_act, NULL);
 
+	/* disable buffering on stdout and stderr */
+	setbuf(stdout, NULL);
+	setbuf(stderr, NULL);
+
 	/*
 	 * Initialize before turning off all the signals or any fatal
 	 * errors encountered will fail to exit the process.
