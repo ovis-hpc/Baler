@@ -8,6 +8,10 @@ import numpy as np
 import textwrap
 from baler import Bq
 from baler import util
+import re
+import os
+import sys
+import shlex
 
 def xlate_bin_width(args):
     bw = args.bin_width
@@ -964,10 +968,55 @@ def valid_date(date_str):
         msg = "{0} is not a valid date".format(date_str)
         raise argparse.ArgumentTypeError(msg)
 
+DEFAULT_NAMED_QUERY_FILE_PATH = "/etc/bq.list"
+NAMED_QUERY_TABLE = dict()
+def load_named_query_table(path):
+    line_no = 0
+    cmt = re.compile("^\W*#")
+    fmt = re.compile("^\W*(\w+)\W*=(.*)") # name = options
+    f = open(path, "rt")
+    line = f.readline()
+    while line:
+        line_no += 1
+        line = line.rstrip() # strip the appending white spaces
+        if not line:
+            # empty line
+            line = f.readline()
+            continue
+        if cmt.match(line):
+            # This is a comment
+            line = f.readline()
+            continue
+        if line.endswith("\\"):
+            # get next line
+            line = line.rstrip("\\")
+            line += " " + f.readline()
+            continue
+        m = fmt.match(line)
+        if not m:
+            raise Exception("Named query parse error: line number: %d" % line_no)
+        (name, options) = m.groups()
+        if name in NAMED_QUERY_TABLE:
+            raise Exception("Named query error: name '%s' existed, line number: %d" % (name, line_no))
+        NAMED_QUERY_TABLE[name] = options
+        line = f.readline()
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Query Baler data")
     parser.add_argument("-p", "--path", required=True,
                         help="The path to the Baler store")
+    parser.add_argument("-q", "--named-query", type=str, required=False,
+                        metavar='NAME', default=None,
+                        help="Use the named query from `named-query-file`.")
+    parser.add_argument("-Q", "--named-query-file", type=str, required=False,
+                        default=DEFAULT_NAMED_QUERY_FILE_PATH,
+                        metavar='PATH',
+                        help="The path to the named query file. "
+                        "The format of the file is simply `name = options` "
+                        "for each line. If the line is too long `\` can be "
+                        "used at the end of the line to concatenate the next "
+                        "line. The leading `#` marks the line as a comment."
+                        )
     parser.add_argument("-m", "--msg", action="store_true",
                         help="Query messages")
     parser.add_argument("--limit", type=int,
@@ -1043,6 +1092,25 @@ if __name__ == "__main__":
     parser.set_defaults(header=True)
 
     args = parser.parse_args()
+
+    # named query file handling
+    if args.named_query_file != DEFAULT_NAMED_QUERY_FILE_PATH or \
+                            os.path.isfile(args.named_query_file):
+        # If named_query_file is the default, and the default file does not
+        # exist, don't load it.
+        load_named_query_table(args.named_query_file)
+
+    # named query handling
+    if args.named_query:
+        try:
+            nq = NAMED_QUERY_TABLE[args.named_query]
+        except:
+            print("Named query '%s' not found!" % args.named_query)
+            sys.exit(-1)
+        # append arguments and reparse
+        new_argv = sys.argv[1:] + shlex.split(nq)
+        args = parser.parse_args(new_argv)
+
     bs = Bq.Bstore()
     bs.open(args.path)
 
