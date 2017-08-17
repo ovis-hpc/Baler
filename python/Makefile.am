@@ -2,7 +2,8 @@ SUBDIRS = abhttp ptn_cmp_ext
 
 CFLAGS := $(filter-out -Werror, ${CFLAGS})
 
-pkgpython_PYTHON = __init__.py ptn_order.py util.py
+pkgpython_PYTHON = __init__.py ptn_order.py util.py \
+		   named2darray.py
 pkgpyexec_LTLIBRARIES = Bq.la
 Bq_la_SOURCES = Bq.pyx Bs.pxd
 nodist_Bq_la_SOURCES = Bq.c

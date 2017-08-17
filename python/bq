@@ -12,6 +12,7 @@ import re
 import os
 import sys
 import shlex
+import named2darray
 
 def xlate_bin_width(args):
     bw = args.bin_width
@@ -1001,6 +1002,54 @@ def load_named_query_table(path):
         NAMED_QUERY_TABLE[name] = options
         line = f.readline()
 
+def generate_named_2d_array(bs, args):
+    if os.path.exists(args.named_2d_array):
+        raise Exception("named-2d-array file existed")
+    n2da = named2darray.Named2DArray(args.named_2d_array, "w")
+    if args.name:
+        n2da.set_name(args.name)
+    else:
+        n2da.set_name(os.path.basename(args.named_2d_array))
+    start, end = get_times_from_args(args)
+    if not args.ptn_id:
+        ptn_id = 0
+    else:
+        ptn_id = args.ptn_id
+    comp_id = tkn_id_from_args(args)
+    if not comp_id:
+        comp_id = 0
+    if args.bin_width:
+        bin_width = xlate_bin_width(args)
+    else:
+        bin_width = 3600        # hours
+    n2da.set_time_bin_width(bin_width)
+
+    chi = Bq.Bcomp_hist_iter(bs)
+    chi.set_filter(comp_id=comp_id, ptn_id=ptn_id, bin_width=bin_width,
+                   tv_begin=(start, 0))
+    ts = 0
+    comp_id = 0
+    count = 0
+    for h in chi:
+        _ts = h.time()
+        _comp_id = h.comp_id()
+        _count = h.msg_count()
+        # data from the `chi` iterator is ordered by time-comp
+        if end > 0 and _ts > end:
+            break
+        if _ts != ts or _comp_id != comp_id:
+            if count:
+                # flush the collective count across ptn_ids
+                n2da.append(ts, comp_id, count)
+            # update new collective count
+            ts = _ts
+            comp_id = _comp_id
+            count = _count
+        else:
+            count += _count
+    # flush the last count
+    n2da.append(ts, comp_id, count)
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Query Baler data")
     parser.add_argument("-p", "--path", required=True,
@@ -1032,6 +1081,11 @@ if __name__ == "__main__":
     parser.add_argument("--ptn-order", type=str, help="Pattern order.")
     parser.add_argument("--comp", action="store_true",
                         help="Query component histories")
+    parser.add_argument("--named-2d-array", type=str,
+                        help="Generate a named-2d-array file from the " \
+                        "component histories", default=None)
+    parser.add_argument("--name", type=str, help="Name of the named-2d-array",
+                        default=None)
     parser.add_argument("--summary", action="store_true",
                         help="Show a summary of the database")
     parser.add_argument("--verbose", action="store_true",
@@ -1148,7 +1202,9 @@ if __name__ == "__main__":
             show_ptns(bs, args)
 
     if args.comp:
-        if not args.plot:
+        if args.named_2d_array:
+            generate_named_2d_array(bs, args)
+        elif not args.plot:
             show_comp_hist(bs, args)
         else:
             plot_comp_hist(bs, args)
