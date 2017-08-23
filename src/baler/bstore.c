@@ -20,12 +20,6 @@
 #  define STRLEN_ASSERT(str, len) /* noop */
 #endif
 
-struct pos_handle_entry {
-	struct rbn rbn;
-	bstore_iter_pos_handle_t handle;
-	bstore_iter_pos_t pos;
-};
-
 struct plugin_entry {
 	bstore_plugin_t plugin;
 	struct rbn rbn;
@@ -113,44 +107,24 @@ int __int_cmp(void *_a, void *_b)
 	return 0;
 }
 
-static int pos_handle_cmp(const void *a, const void *b)
-{
-	const bstore_iter_pos_handle_t *ha = a;
-	const bstore_iter_pos_handle_t *hb = b;
-	if (*ha < *hb)
-		return -1;
-	if (*ha > *hb)
-		return 1;
-	return 0;
-}
-
 bstore_t bstore_open(const char *name, const char *path, int flags, ...)
 {
 	bstore_t store = NULL;
 	va_list ap;
 	int o_mode;
-	struct rbt *pos_rbt;
 	bstore_plugin_t plugin = __get_plugin(name);
 	if (!plugin)
 		return NULL;
-	pos_rbt = calloc(1, sizeof(*pos_rbt));
-	if (!pos_rbt)
-		return NULL;
-	rbt_init(pos_rbt, pos_handle_cmp);
 	va_start(ap, flags);
 	o_mode = va_arg(ap, int);
 	store = plugin->open(plugin, path, flags, o_mode);
-	if (!store) {
-		free(pos_rbt);
+	if (!store)
 		return NULL;
-	}
-	store->pos_rbt = pos_rbt;
 	return store;
 }
 
 void bstore_close(bstore_t bs)
 {
-	free(bs->pos_rbt);
 	bs->plugin->close(bs);
 }
 
@@ -176,12 +150,12 @@ btkn_t bstore_tkn_find_by_name(bstore_t bs, const char *text, size_t text_len)
 	return bs->plugin->tkn_find_by_name(bs, text, text_len);
 }
 
-bstore_iter_pos_handle_t bstore_tkn_iter_pos_get(btkn_iter_t iter)
+bstore_iter_pos_t bstore_tkn_iter_pos_get(btkn_iter_t iter)
 {
 	return bstore_iter_pos_get(iter);
 }
 
-int bstore_tkn_iter_pos_set(btkn_iter_t iter, bstore_iter_pos_handle_t pos_h)
+int bstore_tkn_iter_pos_set(btkn_iter_t iter, bstore_iter_pos_t pos_h)
 {
 	return bstore_iter_pos_set(iter, pos_h);
 }
@@ -226,12 +200,12 @@ int bstore_tkn_iter_last(btkn_iter_t iter)
 	return iter->bs->plugin->tkn_iter_last(iter);
 }
 
-bstore_iter_pos_handle_t bstore_ptn_iter_pos_get(bptn_iter_t iter)
+bstore_iter_pos_t bstore_ptn_iter_pos_get(bptn_iter_t iter)
 {
 	return bstore_iter_pos_get(iter);
 }
 
-int bstore_ptn_iter_pos_set(bptn_iter_t iter, bstore_iter_pos_handle_t pos_h)
+int bstore_ptn_iter_pos_set(bptn_iter_t iter, bstore_iter_pos_t pos_h)
 {
 	return bstore_iter_pos_set(iter, pos_h);
 }
@@ -311,7 +285,7 @@ int bstore_msg_add(bstore_t bs, struct timeval *tv, bmsg_t msg)
 	return bs->plugin->msg_add(bs, tv, msg);
 }
 
-bstore_iter_pos_handle_t bstore_msg_iter_pos_get(bmsg_iter_t iter)
+bstore_iter_pos_t bstore_msg_iter_pos_get(bmsg_iter_t iter)
 {
 	return bstore_iter_pos_get(iter);
 }
@@ -366,7 +340,7 @@ int bstore_msg_iter_find_rev(bmsg_iter_t iter, const struct timeval *tv,
 	return iter->bs->plugin->msg_iter_find_rev(iter, tv, comp_id, ptn_id);
 }
 
-int bstore_msg_iter_pos_set(bmsg_iter_t iter, bstore_iter_pos_handle_t pos_h)
+int bstore_msg_iter_pos_set(bmsg_iter_t iter, bstore_iter_pos_t pos_h)
 {
 	return bstore_iter_pos_set(iter, pos_h);
 }
@@ -401,13 +375,13 @@ int bstore_msg_iter_filter_set(bmsg_iter_t iter, bstore_iter_filter_t filter)
 	return iter->bs->plugin->msg_iter_filter_set(iter, filter);
 }
 
-bstore_iter_pos_handle_t bstore_ptn_tkn_iter_pos_get(bptn_tkn_iter_t iter)
+bstore_iter_pos_t bstore_ptn_tkn_iter_pos_get(bptn_tkn_iter_t iter)
 {
 	return bstore_iter_pos_get(iter);
 }
 
 int bstore_ptn_tkn_iter_pos_set(bptn_tkn_iter_t iter,
-				bstore_iter_pos_handle_t pos_h)
+				bstore_iter_pos_t pos_h)
 {
 	return bstore_iter_pos_set(iter, pos_h);
 }
@@ -468,13 +442,13 @@ int bstore_tkn_hist_update(bstore_t bs, time_t sec, time_t bin_width, btkn_id_t 
 	return bs->plugin->tkn_hist_update(bs, sec, bin_width, tkn_id);
 }
 
-bstore_iter_pos_handle_t bstore_tkn_hist_iter_pos_get(btkn_hist_iter_t iter)
+bstore_iter_pos_t bstore_tkn_hist_iter_pos_get(btkn_hist_iter_t iter)
 {
 	return bstore_iter_pos_get(iter);
 }
 
 int bstore_tkn_hist_iter_pos_set(btkn_hist_iter_t iter,
-				 bstore_iter_pos_handle_t pos_h)
+				 bstore_iter_pos_t pos_h)
 {
 	return bstore_iter_pos_set(iter, pos_h);
 }
@@ -547,13 +521,13 @@ btkn_t bstore_ptn_tkn_find(bstore_t bs, bptn_id_t ptn_id,
 	return bs->plugin->ptn_tkn_find(bs, ptn_id, tkn_pos, tkn_id);
 }
 
-bstore_iter_pos_handle_t bstore_ptn_hist_iter_pos_get(bptn_hist_iter_t iter)
+bstore_iter_pos_t bstore_ptn_hist_iter_pos_get(bptn_hist_iter_t iter)
 {
 	return bstore_iter_pos_get(iter);
 }
 
 int bstore_ptn_hist_iter_pos_set(bptn_hist_iter_t iter,
-				 bstore_iter_pos_handle_t pos_h)
+				 bstore_iter_pos_t pos_h)
 {
 	return bstore_iter_pos_set(iter, pos_h);
 }
@@ -609,13 +583,13 @@ int bstore_ptn_hist_iter_last(bptn_hist_iter_t iter)
 	return iter->bs->plugin->ptn_hist_iter_last(iter);
 }
 
-bstore_iter_pos_handle_t bstore_comp_hist_iter_pos_get(bcomp_hist_iter_t iter)
+bstore_iter_pos_t bstore_comp_hist_iter_pos_get(bcomp_hist_iter_t iter)
 {
 	return bstore_iter_pos_get(iter);
 }
 
 int bstore_comp_hist_iter_pos_set(bcomp_hist_iter_t iter,
-				  bstore_iter_pos_handle_t pos_h)
+				  bstore_iter_pos_t pos_h)
 {
 	return bstore_iter_pos_set(iter, pos_h);
 }
@@ -671,221 +645,45 @@ int bstore_comp_hist_iter_last(bcomp_hist_iter_t iter)
 	return iter->bs->plugin->comp_hist_iter_last(iter);
 }
 
-rbt_visit_action_t __pos_get_cb(struct rbn *rbn, const void *key, void *cb_arg,
-				struct rbn **new_rbn)
+bstore_iter_pos_t bstore_iter_pos_get(bstore_iter_t iter)
 {
-	struct pos_handle_entry *ent = cb_arg;
-	bstore_iter_pos_handle_t handle = *(bstore_iter_pos_handle_t*)key;
-	if (rbn) {
-		/* pos_handle collides */
-		ent->handle = 0;
-		return RBT_VISIT_ACTION_NOOP;
-	}
-
-	ent->handle = *(bstore_iter_pos_handle_t*)key;
-	*new_rbn = &ent->rbn;
-	return RBT_VISIT_ACTION_INS;
+	return iter->bs->plugin->iter_pos_get(iter);
 }
 
-static
-void __bstore_iter_pos_free(bstore_iter_t iter, bstore_iter_pos_t pos)
+void bstore_iter_pos_free(bstore_iter_t iter, bstore_iter_pos_t pos)
 {
-	switch (pos->type) {
-	case BTKN_ITER:
-		iter->bs->plugin->tkn_iter_pos_free(iter, pos);
-		break;
-	case BMSG_ITER:
-		iter->bs->plugin->msg_iter_pos_free(iter, pos);
-		break;
-	case BPTN_ITER:
-		iter->bs->plugin->ptn_iter_pos_free(iter, pos);
-		break;
-	case BPTN_TKN_ITER:
-		iter->bs->plugin->ptn_tkn_iter_pos_free(iter, pos);
-		break;
-	case BTKN_HIST_ITER:
-		iter->bs->plugin->tkn_hist_iter_pos_free(iter, pos);
-		break;
-	case BPTN_HIST_ITER:
-		iter->bs->plugin->ptn_hist_iter_pos_free(iter, pos);
-		break;
-	case BCOMP_HIST_ITER:
-		iter->bs->plugin->comp_hist_iter_pos_free(iter, pos);
-		break;
-	default:
-		assert(0 == "Unknown iterator type");
-		return;
-	}
+	iter->bs->plugin->iter_pos_free(iter, pos);
 }
 
-bstore_iter_pos_handle_t bstore_iter_pos_get(bstore_iter_t iter)
+int bstore_iter_pos_set(bstore_iter_t iter, bstore_iter_pos_t pos)
 {
-	/* NOTE:
-	 *  - get an actual position object from the underlying iterator
-	 *  - add the object into the hash table
-	 *    - use hash key as position object handle for later use
-	 */
-	static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
-	struct timeval tv;
-	int rc;
-	bstore_iter_pos_handle_t handle = 0;
-	bstore_iter_pos_t pos;
-	struct pos_handle_entry *ent;
-	pthread_mutex_lock(&mutex);
-	switch (iter->type) {
-	case BTKN_ITER:
-		pos = iter->bs->plugin->tkn_iter_pos_get(iter);
-		break;
-	case BMSG_ITER:
-		pos = iter->bs->plugin->msg_iter_pos_get(iter);
-		break;
-	case BPTN_ITER:
-		pos = iter->bs->plugin->ptn_iter_pos_get(iter);
-		break;
-	case BPTN_TKN_ITER:
-		pos = iter->bs->plugin->ptn_tkn_iter_pos_get(iter);
-		break;
-	case BTKN_HIST_ITER:
-		pos = iter->bs->plugin->tkn_hist_iter_pos_get(iter);
-		break;
-	case BPTN_HIST_ITER:
-		pos = iter->bs->plugin->ptn_hist_iter_pos_get(iter);
-		break;
-	case BCOMP_HIST_ITER:
-		pos = iter->bs->plugin->comp_hist_iter_pos_get(iter);
-		break;
-	default:
-		assert(0 == "Bad iterator type!!!");
-		errno = EINVAL;
-		goto out;
-	}
-
-	if (!pos) {
-		goto out; /* errno is set by the plugin function call */
-	}
-	ent = calloc(1, sizeof(*ent));
-	if (!ent) {
-		__bstore_iter_pos_free(iter, pos);
-		goto out;
-	}
-	ent->pos = pos;
-	rbn_init(&ent->rbn, &ent->handle);
-again:
-	gettimeofday(&tv, 0);
-	ent->handle = (tv.tv_sec<<20) | (tv.tv_usec & 0xFFFFF);
-	rc = rbt_visit(iter->bs->pos_rbt, &ent->handle, __pos_get_cb, ent);
-	if (!ent->handle)
-		goto again;
-
-	if (rc) {
-		errno = rc;
-		__bstore_iter_pos_free(iter, pos);
-		free(ent);
-	}
-	handle = ent->handle;
-out:
-	pthread_mutex_unlock(&mutex);
-	return handle;
+	return iter->bs->plugin->iter_pos_set(iter, pos);
 }
 
-rbt_visit_action_t __pos_put_cb(struct rbn *rbn, const void *key, void *cb_arg,
-				struct rbn **new_rbn)
-{
-	struct pos_handle_entry **ent = cb_arg;
-	bstore_iter_pos_handle_t handle = *(bstore_iter_pos_handle_t*)key;
-	if (rbn) {
-		/* found, delete it */
-		*ent = container_of(rbn, struct pos_handle_entry, rbn);
-		return RBT_VISIT_ACTION_DEL;
-	}
-	*ent = NULL;
-	return RBT_VISIT_ACTION_NOOP;
-}
-
-void bstore_iter_pos_put(bstore_iter_t iter, bstore_iter_pos_handle_t pos_h)
-{
-	int rc;
-	struct pos_handle_entry *ent;
-	rc = rbt_visit(iter->bs->pos_rbt, &pos_h, __pos_put_cb, &ent);
-	if (rc || !ent) {
-		bwarn("Removing invalid position %ld", pos_h);
-		return;
-	}
-	if (iter->type != ent->pos->type) {
-		assert(0 == "Iterator - Position type mismatch");
-		return;
-	}
-	__bstore_iter_pos_free(iter, ent->pos);
-	free(ent);
-}
-
-int bstore_iter_pos_set(bstore_iter_t iter, bstore_iter_pos_handle_t pos_h)
-{
-	int rc;
-	struct pos_handle_entry *ent;
-	rc = rbt_visit(iter->bs->pos_rbt, &pos_h, __pos_put_cb, &ent);
-	if (rc)
-		return rc;
-	if (!ent)
-		return ENOENT;
-	if (iter->type != ent->pos->type) {
-		assert(0 == "Position-Iterator type mismatched");
-		return EINVAL; /* type mismatch */
-	}
-	switch (iter->type) {
-	case BTKN_ITER:
-		rc = iter->bs->plugin->tkn_iter_pos_set(iter, ent->pos);
-		break;
-	case BMSG_ITER:
-		rc = iter->bs->plugin->msg_iter_pos_set(iter, ent->pos);
-		break;
-	case BPTN_ITER:
-		rc = iter->bs->plugin->ptn_iter_pos_set(iter, ent->pos);
-		break;
-	case BPTN_TKN_ITER:
-		rc = iter->bs->plugin->ptn_tkn_iter_pos_set(iter, ent->pos);
-		break;
-	case BTKN_HIST_ITER:
-		rc = iter->bs->plugin->tkn_hist_iter_pos_set(iter, ent->pos);
-		break;
-	case BPTN_HIST_ITER:
-		rc = iter->bs->plugin->ptn_hist_iter_pos_set(iter, ent->pos);
-		break;
-	case BCOMP_HIST_ITER:
-		rc = iter->bs->plugin->comp_hist_iter_pos_set(iter, ent->pos);
-		break;
-	default:
-		assert(0 == "Bad iterator type!!!");
-		rc = EINVAL;
-	}
-	free(ent);
-	return rc;
-}
-
-char *bstore_pos_to_str(bstore_iter_pos_handle_t pos_h)
+char *bstore_pos_to_str(bstore_iter_pos_t pos)
 {
 	int i;
-	char *data = (void*)&pos_h;
+	char *data = (char*)&pos;
 	char *s;
-	char *str = malloc(sizeof(pos_h) + 1); /* data_len + data + \0 */
+	char *str = malloc(sizeof(pos) + 1); /* data_len + data + \0 */
 	if (!str)
 		return NULL;
 	s = str;
-	for (i = 0; i < sizeof(pos_h); i++) {
+	for (i = 0; i < sizeof(pos); i++) {
 		s += sprintf(s, "%02hhX", data[i]);
 	}
 	return str;
 }
 
-bstore_iter_pos_handle_t bstore_pos_from_str(const char *str)
+bstore_iter_pos_t bstore_pos_from_str(const char *str)
 {
 	int i;
-	bstore_iter_pos_handle_t pos_h;
-	char *data = (void*)&pos_h;
-	for (i = 0; i < sizeof(pos_h); i++) {
+	bstore_iter_pos_t pos;
+	char *data = (char*)&pos;
+	for (i = 0; i < sizeof(pos); i++) {
 		sscanf(str+2*i, "%02hhX", &data[i]);
 	}
-	return pos_h;
+	return pos;
 }
 
 static void __attribute__ ((destructor)) bstore_term(void)

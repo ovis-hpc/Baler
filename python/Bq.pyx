@@ -284,6 +284,23 @@ cdef class Biter:
             self.next()
 
     def set_filter(self, **kwargs):
+        """Specify filter conditions for the objects returned by the iterator
+
+        Keyword Parameters:
+        tv_begin -- A tuple of (secs, usecs). Matching objects will have a
+                    have a timestamp greater than or equal this value
+        tv_end   -- A tuple of (secs, usecs). Matching objects will have a
+                    timestamp less or equal this value.
+        time_attr-- The attribute to use for the time index.
+        ptn_id   -- An integer. A matching object will have a ptn_id equal
+                    this value.
+        comp_id  -- An integer. A matching object will have a comp_id equal
+                    this value.
+        tkn_pos  -- A string returned by the get_pos() method. Sets the
+                    position of the iterator where it was when get_pos()
+                    was called.
+        bin_width-- The width of the histogram bins in seconds.
+        """
         Bs.bzero(&self.c_filter, sizeof(self.c_filter))
         if 'tv_begin' in kwargs and kwargs['tv_begin']:
             (self.c_filter.tv_begin.tv_sec, self.c_filter.tv_begin.tv_usec) = \
@@ -364,16 +381,17 @@ cdef class Biter:
         iterator _after_ the last object previously returned.
         """
         cdef const char *pos_str
-        cdef Bs.bstore_iter_pos_handle_t c_pos_h = Bs.bstore_iter_pos_get(self.c_iter)
+        cdef Bs.bstore_iter_pos_t c_pos_h = Bs.bstore_iter_pos_get(self.c_iter)
         if not c_pos_h:
             return None
         pos_str = Bs.bstore_pos_to_str(c_pos_h)
         return pos_str
 
     def set_pos(self, pos):
+        """Set the iterator position to \c pos"""
         cdef int rc
         cdef const char *pos_str = <const char *>pos
-        cdef Bs.bstore_iter_pos_handle_t c_pos_h = Bs.bstore_pos_from_str(pos_str)
+        cdef Bs.bstore_iter_pos_t c_pos_h = Bs.bstore_pos_from_str(pos_str)
         if not c_pos_h:
             raise ValueError("The input position string is invalid for this iterator.")
         rc = Bs.bstore_iter_pos_set(self.c_iter, c_pos_h)
@@ -382,15 +400,16 @@ cdef class Biter:
         return 0
 
     def put_pos(self, pos):
+        """Releases any resources associated with pos"""
         cdef int rc
         cdef const char *pos_str = <const char *>pos
-        cdef Bs.bstore_iter_pos_handle_t c_pos_h = Bs.bstore_pos_from_str(pos_str)
+        cdef Bs.bstore_iter_pos_t c_pos_h = Bs.bstore_pos_from_str(pos_str)
         if not c_pos_h:
             raise ValueError("The input position string is invalid for this iterator.")
-        Bs.bstore_iter_pos_put(self.c_iter, c_pos_h)
+        Bs.bstore_iter_pos_free(self.c_iter, c_pos_h)
 
     def count(self):
-        """ Count the entries left in the iterator """
+        """ Count the entries remaining in the iterator """
         pos = self.get_pos() # to recover the position
         count = 0
         rc = True
@@ -429,12 +448,6 @@ cdef class Biter:
     cdef int iterLast(self):
         raise NotImplementedError
 
-    cdef Bs.bstore_iter_pos_handle_t iterPosGet(self):
-        raise NotImplementedError
-
-    cdef int iterPosSet(self, Bs.bstore_iter_pos_handle_t pos):
-        raise NotImplementedError
-
     cdef int iterFilterSet(self, Bs.bstore_iter_filter_t f):
         raise NotImplementedError
 
@@ -471,12 +484,6 @@ cdef class Btkn_iter(Biter):
 
     cdef int iterLast(self):
         return Bs.bstore_tkn_iter_last(self.c_iter)
-
-    cdef Bs.bstore_iter_pos_handle_t iterPosGet(self):
-        return Bs.bstore_tkn_iter_pos_get(self.c_iter)
-
-    cdef int iterPosSet(self, Bs.bstore_iter_pos_handle_t c_pos):
-        return Bs.bstore_tkn_iter_pos_set(self.c_iter, c_pos)
 
 cdef class Bptn:
     cpdef Bstore store
@@ -559,6 +566,17 @@ cdef class Bptn:
         return ptn_str
 
 cdef class Bptn_iter(Biter):
+    """Create an iterator for Patterns
+
+    By default the time attribute is "last_seen". To filter by the
+    last time a pattern was seen, use the time_attr postitional
+    argument to set_filter() and set it to "first_seen"
+
+    For example:
+    pi.set_filter(time_attr="first_seen",
+                  tv_begin=(begin_secs, 0),
+                  tv_end=(end_secs, 0))
+    """
     def __init__(self, Bstore store):
         Biter.__init__(self, store)
 
@@ -604,12 +622,6 @@ cdef class Bptn_iter(Biter):
     cdef int iterLast(self):
         return Bs.bstore_ptn_iter_last(self.c_iter)
 
-    cdef Bs.bstore_iter_pos_handle_t iterPosGet(self):
-        return Bs.bstore_ptn_iter_pos_get(self.c_iter)
-
-    cdef int iterPosSet(self, Bs.bstore_iter_pos_handle_t c_pos):
-        return Bs.bstore_ptn_iter_pos_set(self.c_iter, c_pos)
-
     cdef int iterFilterSet(self, Bs.bstore_iter_filter_t f):
         return Bs.bstore_ptn_iter_filter_set(self.c_iter, f)
 
@@ -651,11 +663,6 @@ cdef class Bptn_tkn_iter(Biter):
     cdef int iterFilterSet(self, Bs.bstore_iter_filter_t f):
         return Bs.bstore_ptn_tkn_iter_filter_set(self.c_iter, f)
 
-    cdef Bs.bstore_iter_pos_handle_t iterPosGet(self):
-        return Bs.bstore_ptn_tkn_iter_pos_get(self.c_iter)
-
-    cdef int iterPosSet(self, Bs.bstore_iter_pos_handle_t c_pos):
-        return Bs.bstore_ptn_tkn_iter_pos_set(self.c_iter, c_pos)
 
 cdef class Bmsg:
     cpdef Bstore store
@@ -742,12 +749,6 @@ cdef class Bmsg_iter(Biter):
 
     cdef int iterPrev(self):
         return Bs.bstore_msg_iter_prev(self.c_iter)
-
-    cdef Bs.bstore_iter_pos_handle_t iterPosGet(self):
-        return Bs.bstore_msg_iter_pos_get(self.c_iter)
-
-    cdef int iterPosSet(self, Bs.bstore_iter_pos_handle_t c_pos):
-        return Bs.bstore_msg_iter_pos_set(self.c_iter, c_pos)
 
     cdef int iterFilterSet(self, Bs.bstore_iter_filter_t f):
         return Bs.bstore_msg_iter_filter_set(self.c_iter, f)
@@ -930,12 +931,6 @@ cdef class Bptn_hist_iter(Biter):
     cdef int iterLast(self):
         return Bs.bstore_ptn_hist_iter_last(self.c_iter)
 
-    cdef Bs.bstore_iter_pos_handle_t iterPosGet(self):
-        return Bs.bstore_ptn_hist_iter_pos_get(self.c_iter)
-
-    cdef int iterPosSet(self, Bs.bstore_iter_pos_handle_t c_pos):
-        return Bs.bstore_ptn_hist_iter_pos_set(self.c_iter, c_pos)
-
     cdef int iterFilterSet(self, Bs.bstore_iter_filter_t f):
         return Bs.bstore_ptn_hist_iter_filter_set(self.c_iter, f)
 
@@ -1030,12 +1025,6 @@ cdef class Bcomp_hist_iter(Biter):
 
     cdef int iterLast(self):
         return Bs.bstore_comp_hist_iter_last(self.c_iter)
-
-    cdef Bs.bstore_iter_pos_handle_t iterPosGet(self):
-        return Bs.bstore_comp_hist_iter_pos_get(self.c_iter)
-
-    cdef int iterPosSet(self, Bs.bstore_iter_pos_handle_t c_pos):
-        return Bs.bstore_comp_hist_iter_pos_set(self.c_iter, c_pos)
 
     cdef int iterFilterSet(self, Bs.bstore_iter_filter_t f):
         return Bs.bstore_comp_hist_iter_filter_set(self.c_iter, f)
@@ -1194,12 +1183,6 @@ cdef class Btkn_hist_iter(Biter):
 
     def iterFindRev(self, **kwargs):
         return self._iterFind(self, 0, **kwargs)
-
-    cdef Bs.bstore_iter_pos_handle_t iterPosGet(self):
-        return Bs.bstore_tkn_hist_iter_pos_get(self.c_iter)
-
-    cdef int iterPosSet(self, Bs.bstore_iter_pos_handle_t c_pos):
-        return Bs.bstore_tkn_hist_iter_pos_set(self.c_iter, c_pos)
 
     cdef int iterFilterSet(self, Bs.bstore_iter_filter_t f):
         return Bs.bstore_tkn_hist_iter_filter_set(self.c_iter, f)

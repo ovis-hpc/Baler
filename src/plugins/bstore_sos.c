@@ -57,6 +57,7 @@ typedef struct bstore_sos_s {
 	sos_attr_t tkn_ids_attr;  /* Message.tkn_ids */
 	sos_attr_t ptn_id_attr;	  /* Pattern.ptn_id */
 	sos_attr_t first_seen_attr;	  /* Pattern.first_seen */
+	sos_attr_t last_seen_attr;	  /* Pattern.last_seen */
 	sos_attr_t tkn_type_ids_attr; /* Pattern.tkn_type_ids */
 	sos_attr_t ptn_pos_tkn_key_attr;  /* PatternToken.ptn_pos_tkn_key */
 
@@ -219,7 +220,7 @@ typedef struct ptn_s {
 	union sos_obj_ref_s tkn_type_ids;
 } *ptn_t;
 
-#define HIST_IDX_ARGS "ORDER=5 SIZE=11"
+#define HIST_IDX_ARGS "ORDER=5 SIZE=5"
 const char *ptn_pos_tkn_key[] = { "ptn_id", "pos", "tkn_id" };
 struct sos_schema_template pattern_token_schema = {
 	.name = "PatternToken",
@@ -586,6 +587,9 @@ static bstore_t bs_open(bstore_plugin_t plugin, const char *path, int flags, int
 		goto err_6;
 	bs->first_seen_attr = sos_schema_attr_by_name(bs->pattern_schema, "first_seen");
 	if (!bs->first_seen_attr)
+		goto err_6;
+	bs->last_seen_attr = sos_schema_attr_by_name(bs->pattern_schema, "last_seen");
+	if (!bs->last_seen_attr)
 		goto err_6;
 	bs->tkn_type_ids_attr =
 		sos_schema_attr_by_name(bs->pattern_schema, "tkn_type_ids");
@@ -1123,6 +1127,7 @@ static btkn_type_t bs_tkn_type_get(bstore_t bs, const char *typ_name, size_t nam
 
 #define PTN_ITER_ID		0x21
 #define PTN_ITER_FIRST_SEEN	0x22
+#define PTN_ITER_LAST_SEEN	0x23
 
 #define PTN_TKN_ITER		0x31
 #define TKN_HIST_ITER		0x41
@@ -1141,95 +1146,39 @@ typedef struct bsos_iter_s {
 	void *cmp_ctxt;
 } *bsos_iter_t;
 
-typedef struct bsos_iter_pos_s {
-	struct bstore_iter_pos_s base;
-	int iter_type;
-	struct bstore_iter_filter_s filter;
-	btkn_id_t ptn_tkn_id;
-	sos_pos_t sos_pos;
-} *bsos_iter_pos_t;
-
 static bstore_iter_pos_t __iter_pos_get(bsos_iter_t iter)
 {
 	int rc;
-	size_t sz;
 	sos_pos_t sos_pos;
-	struct bsos_iter_pos_s *pos;
-	if (!iter->iter)
-		goto err_0;
 	rc = sos_iter_pos_get(iter->iter, &sos_pos);
 	if (rc)
-		goto err_0;
-	sz = sizeof(*pos) + sizeof(sos_pos);
-	pos = malloc(sz);
-	if (!pos)
-		goto err_1;
-	pos->base.type = iter->biter_type;
-	pos->iter_type = iter->iter_type;
-	pos->filter = iter->filter;
-	switch (iter->iter_type) {
-	case TKN_ITER:
-	case PTN_ITER_ID:
-	case PTN_ITER_FIRST_SEEN:
-	case MSG_ITER_PTN_TIME:
-	case MSG_ITER_COMP_TIME:
-	case MSG_ITER_TIME_COMP:
-	case PTN_TKN_ITER:
-	case TKN_HIST_ITER:
-	case PTN_HIST_ITER:
-	case COMP_HIST_ITER:
-		break;
-	default:
-		assert(0 == "Unknown iterator type");
-		errno = EINVAL;
-		goto err_2;
-	}
-	pos->base.data_len = sz - sizeof(pos->base);
-	memcpy(&pos->sos_pos, &sos_pos, sizeof(sos_pos));
-	return &pos->base;
-
- err_2:
-	free(pos);
- err_1:
-	sos_iter_pos_put(iter->iter, sos_pos);
- err_0:
-	return NULL;
+		return 0;
+	return sos_pos;
 }
 
-static int __iter_pos_set(bsos_iter_t iter, bsos_iter_pos_t pos)
-{
-	sos_pos_t sos_pos = pos->sos_pos;
-	/* recovering the filter parameters first */
-	iter->filter = pos->filter;
-	free(pos); /* pos is a 1-time use */
-	return sos_iter_pos_set(iter->iter, sos_pos);
-}
-
-static bstore_iter_pos_t bs_tkn_iter_pos_get(btkn_iter_t iter)
+static bstore_iter_pos_t bs_iter_pos_get(bstore_iter_t iter)
 {
 	return __iter_pos_get((bsos_iter_t)iter);
 }
 
-static int bs_tkn_iter_pos_set(btkn_iter_t iter, bstore_iter_pos_t _pos)
+static int __iter_pos_set(bsos_iter_t iter, sos_pos_t pos)
 {
-	bsos_iter_t i = (bsos_iter_t)iter;
-	struct bsos_iter_pos_s *pos = (typeof(pos))_pos;
-	/* If the sos_iter already exists and is the correct type, use it */
-	if (!i->iter || (i->iter_type != pos->iter_type))
-		return ENOENT;
-	return __iter_pos_set(i, pos);
+	return sos_iter_pos_set(iter->iter, pos);
 }
 
-static void bs_tkn_iter_pos_free(btkn_iter_t iter, bstore_iter_pos_t _pos)
+static int bs_iter_pos_set(bstore_iter_t iter, bstore_iter_pos_t pos)
 {
-	bsos_iter_t i = (bsos_iter_t)iter;
-	struct bsos_iter_pos_s *pos = (typeof(pos))_pos;
-	if ((iter->type != _pos->type) || (i->iter_type != pos->iter_type)) {
-		assert(0 == "Iterator - Position type mismatch");
-		return;
-	}
-	sos_iter_pos_put(i->iter, pos->sos_pos);
-	free(pos);
+	return __iter_pos_set((bsos_iter_t)iter, (sos_pos_t)pos);
+}
+
+static void __iter_pos_free(bsos_iter_t iter, sos_pos_t pos)
+{
+	sos_iter_pos_put(iter->iter, pos);
+}
+
+static void bs_iter_pos_free(bstore_iter_t iter, bstore_iter_pos_t pos)
+{
+	__iter_pos_free((bsos_iter_t)iter, (sos_pos_t)pos);
 }
 
 static btkn_iter_t bs_tkn_iter_new(bstore_t bs)
@@ -1331,76 +1280,6 @@ static int bs_tkn_iter_last(btkn_iter_t iter)
 	bsos_iter_t i = (bsos_iter_t)iter;
 	bstore_sos_t bss = (bstore_sos_t)i->bs;
 	return sos_iter_end(i->iter);
-}
-
-static bstore_iter_pos_t bs_ptn_iter_pos_get(bptn_iter_t iter)
-{
-	return __iter_pos_get((bsos_iter_t)iter);
-}
-
-static int bs_ptn_iter_pos_set(bptn_iter_t iter, bstore_iter_pos_t _pos)
-{
-	bsos_iter_t i = (bsos_iter_t)iter;
-	struct bsos_iter_pos_s *pos = (typeof(pos))_pos;
-	bstore_sos_t bss = (bstore_sos_t)i->bs;
-
-	/* If the sos_iter already exists and is the correct type, use it */
-	if (i->iter && i->iter_type == pos->iter_type)
-		goto set_pos;
-	/* Free the existing iterator if present */
-	if (i->iter) {
-		sos_iter_free(i->iter);
-		i->iter = NULL;
-	}
-	/* Allocate a new iterator of the correct type */
-	switch (pos->iter_type) {
-	case PTN_ITER_ID:
-		i->iter_type = PTN_ITER_ID;
-		i->iter = sos_attr_iter_new(bss->ptn_id_attr);
-		break;
-	case PTN_ITER_FIRST_SEEN:
-		i->iter_type = PTN_ITER_FIRST_SEEN;
-		i->iter = sos_attr_iter_new(bss->first_seen_attr);
-		break;
-	default:
-		return ENOENT;
-	}
-	if (!i->iter)
-		return ENOENT;
-	sos_iter_flags_set(i->iter, SOS_ITER_F_INF_LAST_DUP);
- set_pos:
-	return __iter_pos_set(i, pos);
-}
-
-static void bs_ptn_iter_pos_free(btkn_iter_t iter, bstore_iter_pos_t _pos)
-{
-	bstore_sos_t bss = (bstore_sos_t)iter->bs;
-	sos_iter_t sos_iter;
-	struct bsos_iter_pos_s *pos = (typeof(pos))_pos;
-
-	if (iter->type != _pos->type) {
-		assert(0 == "Iterator - Position type mismatch");
-		return;
-	}
-
-	switch (pos->iter_type) {
-	case PTN_ITER_ID:
-		sos_iter = sos_attr_iter_new(bss->ptn_id_attr);
-		break;
-	case PTN_ITER_FIRST_SEEN:
-		sos_iter = sos_attr_iter_new(bss->first_seen_attr);
-		break;
-	default:
-		assert(0 == "Unknown bstore_sos ptn_iter type");
-		return;
-	}
-	if (!sos_iter) {
-		assert(0 == "Cannot allocate sos_iter");
-		return;
-	}
-	sos_iter_pos_put(sos_iter, pos->sos_pos);
-	free(pos);
-	sos_iter_free(sos_iter);
 }
 
 static bptn_iter_t bs_ptn_iter_new(bstore_t bs)
@@ -1666,35 +1545,6 @@ static int bs_ptn_iter_prev(bptn_iter_t iter)
 	return __matching_ptn(iter, 0);
 }
 
-static bstore_iter_pos_t bs_ptn_tkn_iter_pos_get(bptn_tkn_iter_t iter)
-{
-	return __iter_pos_get((bsos_iter_t)iter);
-}
-
-static int bs_ptn_tkn_iter_pos_set(bptn_tkn_iter_t iter, bstore_iter_pos_t _pos)
-{
-	bsos_iter_t i = (bsos_iter_t)iter;
-	struct bsos_iter_pos_s *pos = (typeof(pos))_pos;
-
-	/* If the sos_iter already exists and is the correct type, use it */
-	if (!i->iter || (i->iter_type != pos->iter_type))
-		return ENOENT;
-
-	return __iter_pos_set(i, pos);
-}
-
-static void bs_ptn_tkn_iter_pos_free(bptn_tkn_iter_t iter, bstore_iter_pos_t _pos)
-{
-	bsos_iter_t i = (bsos_iter_t)iter;
-	struct bsos_iter_pos_s *pos = (typeof(pos))_pos;
-	if ((iter->type != _pos->type) || (i->iter_type != pos->iter_type)) {
-		assert(0 == "Iterator - Position type mismatch");
-		return;
-	}
-	sos_iter_pos_put(i->iter, pos->sos_pos);
-	free(pos);
-}
-
 static bptn_tkn_iter_t bs_ptn_tkn_iter_new(bstore_t bs)
 {
 	bstore_sos_t bss = (bstore_sos_t)bs;
@@ -1726,81 +1576,6 @@ static uint64_t bs_ptn_tkn_iter_card(bptn_tkn_iter_t i)
 {
 	bsos_iter_t pti = malloc(sizeof(*pti));
 	return sos_iter_card(((bsos_iter_t)i)->iter);
-}
-
-static bstore_iter_pos_t bs_msg_iter_pos_get(bmsg_iter_t iter)
-{
-	return __iter_pos_get((bsos_iter_t)iter);
-}
-
-static int bs_msg_iter_pos_set(bmsg_iter_t iter, bstore_iter_pos_t _pos)
-{
-	bsos_iter_t i = (bsos_iter_t)iter;
-	struct bsos_iter_pos_s *pos = (typeof(pos))_pos;
-	bstore_sos_t bss = (bstore_sos_t)i->bs;
-
-	/* If the sos_iter already exists and is the correct type, use it */
-	if (i->iter && i->iter_type == pos->iter_type)
-		goto set_pos;
-	/* Free the existing iterator if present */
-	if (i->iter) {
-		sos_iter_free(i->iter);
-		i->iter = NULL;
-	}
-	/* Allocate a new iterator of the correct type */
-	switch (pos->iter_type) {
-	case MSG_ITER_PTN_TIME:
-		i->iter_type = MSG_ITER_PTN_TIME;
-		i->iter = sos_attr_iter_new(bss->pt_key_attr);
-		break;
-	case MSG_ITER_COMP_TIME:
-		i->iter_type = MSG_ITER_COMP_TIME;
-		i->iter = sos_attr_iter_new(bss->ct_key_attr);
-		break;
-	case MSG_ITER_TIME_COMP:
-		i->iter_type = MSG_ITER_TIME_COMP;
-		i->iter = sos_attr_iter_new(bss->tc_key_attr);
-		break;
-	default:
-		return ENOENT;
-	}
-	if (!i->iter)
-		return ENOENT;
-	sos_iter_flags_set(i->iter, SOS_ITER_F_INF_LAST_DUP);
- set_pos:
-	return __iter_pos_set((bsos_iter_t)iter, pos);
-}
-
-static void bs_msg_iter_pos_free(btkn_iter_t iter, bstore_iter_pos_t _pos)
-{
-	bstore_sos_t bss = (bstore_sos_t)iter->bs;
-	sos_iter_t sos_iter;
-	struct bsos_iter_pos_s *pos = (typeof(pos))_pos;
-	if (iter->type != _pos->type) {
-		assert(0 == "Iterator - Position type mismatch");
-		return;
-	}
-	switch (pos->iter_type) {
-	case MSG_ITER_PTN_TIME:
-		sos_iter = sos_attr_iter_new(bss->pt_key_attr);
-		break;
-	case MSG_ITER_COMP_TIME:
-		sos_iter = sos_attr_iter_new(bss->ct_key_attr);
-		break;
-	case MSG_ITER_TIME_COMP:
-		sos_iter = sos_attr_iter_new(bss->tc_key_attr);
-		break;
-	default:
-		assert(0 == "Unknown bstore_sos message iterator type");
-		return;
-	}
-	if (!sos_iter) {
-		assert(0 == "Cannot allocate sos iterator");
-		return;
-	}
-	sos_iter_pos_put(sos_iter, pos->sos_pos);
-	sos_iter_free(sos_iter);
-	free(pos);
 }
 
 static bmsg_iter_t bs_msg_iter_new(bstore_t bs)
@@ -2311,6 +2086,7 @@ static sos_visit_action_t ptn_add_cb(sos_index_t index,
 	SOS_KEY(ts_key);
 	sos_index_t ptn_id_idx = sos_attr_index(ctxt->bss->ptn_id_attr);
 	sos_index_t first_seen_idx = sos_attr_index(ctxt->bss->first_seen_attr);
+	sos_index_t last_seen_idx = sos_attr_index(ctxt->bss->last_seen_attr);
 
 	if (found) {
 		struct timeval last_seen;
@@ -2339,8 +2115,17 @@ static sos_visit_action_t ptn_add_cb(sos_index_t index,
 			sos_index_insert(first_seen_idx, ts_key, ptn_obj);
 		}
 		if (timercmp(&last_seen, ctxt->tv, <)) {
+			/* new time is after the db last seen */
+			/* remove existing key */
+			sos_key_set(ts_key, &ptn_value->last_seen,
+						sizeof(&ptn_value->last_seen));
+			sos_index_remove(last_seen_idx, ts_key, ptn_obj);
+			/* add new key */
 			ptn_value->last_seen.secs = ctxt->tv->tv_sec;
 			ptn_value->last_seen.usecs = ctxt->tv->tv_usec;
+			sos_key_set(ts_key, &ptn_value->last_seen,
+						sizeof(&ptn_value->last_seen));
+			sos_index_insert(last_seen_idx, ts_key, ptn_obj);
 		}
 		ptn_value->count ++;
 		ctxt->ptn_id = ptn_value->ptn_id;
@@ -2820,33 +2605,6 @@ static int bs_ptn_tkn_iter_prev(bptn_tkn_iter_t iter)
 	return __ptn_tkn_iter_check(i);
 }
 
-static bstore_iter_pos_t bs_tkn_hist_iter_pos_get(btkn_hist_iter_t iter)
-{
-	return __iter_pos_get((bsos_iter_t)iter);
-}
-
-static int bs_tkn_hist_iter_pos_set(btkn_hist_iter_t iter, bstore_iter_pos_t _pos)
-{
-	bsos_iter_t i = (bsos_iter_t)iter;
-	struct bsos_iter_pos_s *pos = (typeof(pos))_pos;
-	/* If the sos_iter already exists and is the correct type, use it */
-	if (!i->iter || (i->iter_type != pos->iter_type))
-		return ENOENT;
-	return __iter_pos_set(i, pos);
-}
-
-static void bs_tkn_hist_iter_pos_free(btkn_hist_iter_t iter, bstore_iter_pos_t _pos)
-{
-	bsos_iter_t i = (bsos_iter_t)iter;
-	struct bsos_iter_pos_s *pos = (typeof(pos))_pos;
-	if ((iter->type != _pos->type) || (i->iter_type != pos->iter_type)) {
-		assert(0 == "Iterator - Position type mismatch");
-		return;
-	}
-	sos_iter_pos_put(i->iter, pos->sos_pos);
-	free(pos);
-}
-
 btkn_hist_iter_t bs_tkn_hist_iter_new(bstore_t bs)
 {
 	bstore_sos_t bss = (bstore_sos_t)bs;
@@ -3065,33 +2823,6 @@ static int bs_tkn_hist_iter_prev(btkn_hist_iter_t iter)
 	return __tkn_hist_prev(i);
 }
 
-static bstore_iter_pos_t bs_ptn_hist_iter_pos_get(bptn_hist_iter_t iter)
-{
-	return __iter_pos_get((bsos_iter_t)iter);
-}
-
-static int bs_ptn_hist_iter_pos_set(bptn_hist_iter_t iter, bstore_iter_pos_t _pos)
-{
-	bsos_iter_t i = (bsos_iter_t)iter;
-	struct bsos_iter_pos_s *pos = (typeof(pos))_pos;
-	/* If the sos_iter already exists and is the correct type, use it */
-	if (!i->iter || (i->iter_type != pos->iter_type))
-		return ENOENT;
-	return __iter_pos_set(i, pos);
-}
-
-static void bs_ptn_hist_iter_pos_free(bptn_hist_iter_t iter, bstore_iter_pos_t _pos)
-{
-	bsos_iter_t i = (bsos_iter_t)iter;
-	struct bsos_iter_pos_s *pos = (typeof(pos))_pos;
-	if ((iter->type != _pos->type) || (i->iter_type != pos->iter_type)) {
-		assert(0 == "Iterator - Position type mismatch");
-		return;
-	}
-	sos_iter_pos_put(i->iter, pos->sos_pos);
-	free(pos);
-}
-
 bptn_hist_iter_t bs_ptn_hist_iter_new(bstore_t bs)
 {
 	bstore_sos_t bss = (bstore_sos_t)bs;
@@ -3304,33 +3035,6 @@ static int bs_ptn_hist_iter_prev(bptn_hist_iter_t iter)
 		return rc;
 
 	return __ptn_hist_prev(i);
-}
-
-static bstore_iter_pos_t bs_comp_hist_iter_pos_get(bcomp_hist_iter_t iter)
-{
-	return __iter_pos_get((bsos_iter_t)iter);
-}
-
-static int bs_comp_hist_iter_pos_set(bcomp_hist_iter_t iter, bstore_iter_pos_t _pos)
-{
-	bsos_iter_t i = (bsos_iter_t)iter;
-	struct bsos_iter_pos_s *pos = (typeof(pos))_pos;
-	/* If the sos_iter already exists and is the correct type, use it */
-	if (!i->iter || (i->iter_type != pos->iter_type))
-		return ENOENT;
-	return __iter_pos_set(i, pos);
-}
-
-static void bs_comp_hist_iter_pos_free(bcomp_hist_iter_t iter, bstore_iter_pos_t _pos)
-{
-	bsos_iter_t i = (bsos_iter_t)iter;
-	struct bsos_iter_pos_s *pos = (typeof(pos))_pos;
-	if ((iter->type != _pos->type) || (i->iter_type != pos->iter_type)) {
-		assert(0 == "Iterator - Position type mismatch");
-		return;
-	}
-	sos_iter_pos_put(i->iter, pos->sos_pos);
-	free(pos);
 }
 
 bcomp_hist_iter_t bs_comp_hist_iter_new(bstore_t bs)
@@ -3583,9 +3287,6 @@ static struct bstore_plugin_s plugin = {
 	.tkn_find_by_id = bs_tkn_find_by_id,
 	.tkn_find_by_name = bs_tkn_find_by_name,
 
-	.tkn_iter_pos_get = bs_tkn_iter_pos_get,
-	.tkn_iter_pos_set = bs_tkn_iter_pos_set,
-	.tkn_iter_pos_free = bs_tkn_iter_pos_free,
 	.tkn_iter_new = bs_tkn_iter_new,
 	.tkn_iter_free = bs_tkn_iter_free,
 	.tkn_iter_card = bs_tkn_iter_card,
@@ -3596,9 +3297,6 @@ static struct bstore_plugin_s plugin = {
 	.tkn_iter_last = bs_tkn_iter_last,
 
 	.msg_add = bs_msg_add,
-	.msg_iter_pos_get = bs_msg_iter_pos_get,
-	.msg_iter_pos_set = bs_msg_iter_pos_set,
-	.msg_iter_pos_free = bs_msg_iter_pos_free,
 	.msg_iter_new = bs_msg_iter_new,
 	.msg_iter_free = bs_msg_iter_free,
 	.msg_iter_card = bs_msg_iter_card,
@@ -3614,9 +3312,6 @@ static struct bstore_plugin_s plugin = {
 	.ptn_add = bs_ptn_add,
 	.ptn_find = bs_ptn_find,
 	.ptn_find_by_ptnstr = bs_ptn_find_by_ptnstr,
-	.ptn_iter_pos_get = bs_ptn_iter_pos_get,
-	.ptn_iter_pos_set = bs_ptn_iter_pos_set,
-	.ptn_iter_pos_free = bs_ptn_iter_pos_free,
 	.ptn_iter_new = bs_ptn_iter_new,
 	.ptn_iter_free = bs_ptn_iter_free,
 	.ptn_iter_filter_set = bs_ptn_iter_filter_set,
@@ -3629,9 +3324,6 @@ static struct bstore_plugin_s plugin = {
 	.ptn_iter_next = bs_ptn_iter_next,
 	.ptn_iter_prev = bs_ptn_iter_prev,
 
-	.ptn_tkn_iter_pos_get = bs_ptn_tkn_iter_pos_get,
-	.ptn_tkn_iter_pos_set = bs_ptn_tkn_iter_pos_set,
-	.ptn_tkn_iter_pos_free = bs_ptn_tkn_iter_pos_free,
 	.ptn_tkn_iter_new = bs_ptn_tkn_iter_new,
 	.ptn_tkn_iter_free = bs_ptn_tkn_iter_free,
 	.ptn_tkn_iter_card = bs_ptn_tkn_iter_card,
@@ -3643,9 +3335,6 @@ static struct bstore_plugin_s plugin = {
 	.ptn_tkn_iter_filter_set = bs_iter_filter_set,
 
 	.tkn_hist_update = bs_tkn_hist_update,
-	.tkn_hist_iter_pos_get = bs_tkn_hist_iter_pos_get,
-	.tkn_hist_iter_pos_set = bs_tkn_hist_iter_pos_set,
-	.tkn_hist_iter_pos_free = bs_tkn_hist_iter_pos_free,
 	.tkn_hist_iter_new = bs_tkn_hist_iter_new,
 	.tkn_hist_iter_free = bs_tkn_hist_iter_free,
 	.tkn_hist_iter_find_fwd = bs_tkn_hist_iter_find_fwd,
@@ -3661,9 +3350,6 @@ static struct bstore_plugin_s plugin = {
 	.ptn_tkn_add = bs_ptn_tkn_add,
 	.ptn_tkn_find = bs_ptn_tkn_find,
 
-	.ptn_hist_iter_pos_get = bs_ptn_hist_iter_pos_get,
-	.ptn_hist_iter_pos_set = bs_ptn_hist_iter_pos_set,
-	.ptn_hist_iter_pos_free = bs_ptn_hist_iter_pos_free,
 	.ptn_hist_iter_new = bs_ptn_hist_iter_new,
 	.ptn_hist_iter_free = bs_ptn_hist_iter_free,
 	.ptn_hist_iter_find_fwd = bs_ptn_hist_iter_find_fwd,
@@ -3675,9 +3361,6 @@ static struct bstore_plugin_s plugin = {
 	.ptn_hist_iter_prev = bs_ptn_hist_iter_prev,
 	.ptn_hist_iter_last = bs_ptn_hist_iter_last,
 
-	.comp_hist_iter_pos_get = bs_comp_hist_iter_pos_get,
-	.comp_hist_iter_pos_set = bs_comp_hist_iter_pos_set,
-	.comp_hist_iter_pos_free = bs_comp_hist_iter_pos_free,
 	.comp_hist_iter_new = bs_comp_hist_iter_new,
 	.comp_hist_iter_free = bs_comp_hist_iter_free,
 	.comp_hist_iter_find_fwd = bs_comp_hist_iter_find_fwd,
@@ -3689,6 +3372,9 @@ static struct bstore_plugin_s plugin = {
 	.comp_hist_iter_prev = bs_comp_hist_iter_prev,
 	.comp_hist_iter_last = bs_comp_hist_iter_last,
 
+	.iter_pos_set = bs_iter_pos_set,
+	.iter_pos_get = bs_iter_pos_get,
+	.iter_pos_free = bs_iter_pos_free,
 };
 
 bstore_plugin_t get_plugin(void)

@@ -8,11 +8,11 @@ import numpy as np
 import textwrap
 from baler import Bq
 from baler import util
+from baler import named2darray
 import re
 import os
 import sys
 import shlex
-import named2darray
 
 def xlate_bin_width(args):
     bw = args.bin_width
