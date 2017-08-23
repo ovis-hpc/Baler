@@ -71,7 +71,7 @@
 #include <ctype.h>
 #include <unistd.h>
 #include <stdarg.h>
-#include "sos/sos.h"
+#include <sos/sos.h>
 #include "../baler/rbt.h"
 
 #include "../baler/butils.h"
@@ -154,6 +154,7 @@ struct bsa_s {
 	struct bstore_s base;
 	/* extend the structure here */
 	uint32_t ref_count; /* reference count */
+	sos_t iter_pos_sos; /* sos for iter pos */
 	sos_t tkn_sos; /* sos for tokens */
 	sos_t ptn_sos; /* sos for patterns */
 	sos_t ptn_pos_tkn_sos; /* sos for patterns */
@@ -164,9 +165,13 @@ struct bsa_s {
 	int shmem_fd; /* file descriptor for the shared memory */
 	bsa_shmem_t shmem; /* shared memory region */
 
+	sos_schema_t iter_pos_schema;
 	sos_schema_t token_value_schema;
 	sos_schema_t pattern_schema;
 	sos_schema_t pattern_token_schema;
+
+	sos_attr_t iter_pos_key_attr;
+	sos_attr_t iter_pos_data_attr;
 
 	sos_attr_t tkn_id_attr; /* Token.tkn_id */
 	sos_attr_t tkn_type_mask_attr; /* Token.tkn_type_mask */
@@ -225,12 +230,6 @@ typedef struct bsa_tkn_iter_s {
 	sos_iter_t sitr;
 } *bsa_tkn_iter_t;
 
-typedef struct bsa_msg_iter_s {
-	struct bstore_iter_s base;
-	struct bstore_iter_filter_s filter;
-	struct bheap *heap; /* heap of bsa_msg_iter_heap_ent_t */
-} *bsa_msg_iter_t;
-
 static inline
 bsa_tkn_iter_t BSA_TKN_ITER(void *p)
 {
@@ -258,15 +257,9 @@ bcomp_hist_t BCOMP_HIST(void *p)
 }
 
 typedef struct bsa_iter_pos_s {
-	struct bstore_iter_pos_s bs_pos;
 	bsa_iter_type_t type;
+	sos_pos_t sos_pos;
 } *bsa_iter_pos_t;
-
-static inline
-bstore_iter_pos_t BS_POS(void *x)
-{
-	return x;
-}
 
 static inline
 bsa_iter_pos_t BSA_POS(void *x)
@@ -274,30 +267,15 @@ bsa_iter_pos_t BSA_POS(void *x)
 	return x;
 }
 
-typedef struct bsa_tkn_iter_pos_s {
-	struct bsa_iter_pos_s bsa_pos;
-	sos_pos_t sos_pos;
-} *bsa_tkn_iter_pos_t;
-
-typedef struct bsa_ptn_iter_pos_s {
-	struct bsa_iter_pos_s bsa_pos;
-	union {
-		bptn_id_t ptn_id; /* ptn_id is the position */
-		sos_pos_t sos_pos; /* sos position */
-	};
-} *bsa_ptn_iter_pos_t;
-
-typedef struct bsa_ptn_tkn_iter_pos_s {
-	struct bsa_iter_pos_s bs_pos;
-	sos_pos_t sos_pos;
-} *bsa_ptn_tkn_iter_pos_t;
-
 struct __visit_ctxt {
 	bsa_t bsa;
 	int add;
 	btkn_t tkn;
 	bptn_t ptn;
 	ptn_pos_tkn_t ptn_pos_tkn;
+	int rc;
+	bstore_iter_t itr;
+	sos_obj_t pos_obj;
 };
 
 typedef struct bsa_heap_iter_entry_s {
@@ -352,10 +330,6 @@ struct bsa_heap_iter_s {
 		void *(*iter_obj_r)(void *itr, void *arg);
 	};
 
-	bstore_iter_pos_t (*iter_pos)(bstore_iter_t itr);
-	int (*iter_pos_set)(bstore_iter_t itr, bstore_iter_pos_t pos);
-	void (*iter_pos_free)(bstore_iter_t itr, bstore_iter_pos_t pos);
-
 	void *(*obj_dup)(void *obj);
 	void *(*obj_copy)(void*, void*);
 	uint32_t (*obj_time)(void*);
@@ -370,6 +344,8 @@ struct bsa_heap_iter_s {
 	/* xlate from bsa -> bs namespace */
 	int (*hent_rev_xlate)(bsa_heap_iter_t, bsa_heap_iter_entry_t);
 };
+
+typedef bsa_heap_iter_t bsa_msg_iter_t; /* msg_iter is just a heap iter */
 
 typedef struct bsa_heap_iter_pos_s {
 	struct bsa_iter_pos_s bsa_pos;
@@ -516,6 +492,29 @@ struct sos_schema_template pattern_token_schema = {
 	}
 };
 
+struct sos_schema_template iter_pos_schema = {
+	.name = "IterPos",
+	.attrs = {
+		{
+			.name = "key",
+			.type = SOS_TYPE_UINT64,
+			.indexed = 1,
+			.idx_type = "BXTREE",
+		},
+		{
+			.name = "data",
+			.type = SOS_TYPE_BYTE_ARRAY,
+			.indexed = 0,
+		},
+		{ NULL }
+	}
+};
+
+typedef struct iter_pos_value_s {
+	uint64_t key;
+	union sos_obj_ref_s data;
+} *iter_pos_value_t;
+
 /*========================================*/
 /*===== internal function prototypes =====*/
 /*========================================*/
@@ -615,6 +614,24 @@ struct __attr_entry_s {
 	sos_attr_t *_attr_out;
 	const char *name;
 };
+
+/*
+ * allocate an iterator position object of size `sz`.
+ * `v` needs to be a pointer to the valid struct sos_value_s.
+ */
+static
+sos_obj_t __bsa_iter_pos_alloc(bsa_t bsa, sos_value_t v, size_t sz)
+{
+	sos_obj_t pos_obj = sos_obj_new(bsa->iter_pos_schema);
+	if (!pos_obj)
+		return NULL;
+	v = sos_array_new(v, bsa->iter_pos_data_attr, pos_obj, sz);
+	if (!v) {
+		sos_obj_delete(pos_obj);
+		pos_obj = NULL;
+	}
+	return pos_obj;
+}
 
 int bsa_heap_iter_hent_msg_xlate(bsa_heap_iter_t itr, bsa_heap_iter_entry_t hent)
 {
@@ -770,125 +787,6 @@ btkn_hist_t __hist_iter_inval_op(btkn_hist_iter_t iter, btkn_hist_t tkn_h)
 }
 
 static
-bstore_iter_pos_t __msg_iter_pos_get(bmsg_iter_t iter)
-{
-	return iter->bs->plugin->msg_iter_pos_get(iter);
-}
-
-static
-int __msg_iter_pos_set(bmsg_iter_t iter, bstore_iter_pos_t pos)
-{
-	return iter->bs->plugin->msg_iter_pos_set(iter, pos);
-}
-
-void __msg_iter_pos_free(bmsg_iter_t iter, bstore_iter_pos_t pos)
-{
-	iter->bs->plugin->msg_iter_pos_free(iter, pos);
-}
-
-static
-bstore_iter_pos_t __tkn_iter_pos_get(btkn_iter_t iter)
-{
-	return iter->bs->plugin->tkn_iter_pos_get(iter);
-}
-
-static
-int __tkn_iter_pos_set(btkn_iter_t iter, bstore_iter_pos_t pos)
-{
-	return iter->bs->plugin->tkn_iter_pos_set(iter, pos);
-}
-
-void __tkn_iter_pos_free(btkn_iter_t iter, bstore_iter_pos_t pos)
-{
-	iter->bs->plugin->tkn_iter_pos_free(iter, pos);
-}
-
-static
-bstore_iter_pos_t __ptn_iter_pos_get(bptn_iter_t iter)
-{
-	return iter->bs->plugin->ptn_iter_pos_get(iter);
-}
-
-static
-int __ptn_iter_pos_set(bptn_iter_t iter, bstore_iter_pos_t pos)
-{
-	return iter->bs->plugin->ptn_iter_pos_set(iter, pos);
-}
-
-void __ptn_iter_pos_free(bptn_iter_t iter, bstore_iter_pos_t pos)
-{
-	iter->bs->plugin->ptn_iter_pos_free(iter, pos);
-}
-
-static
-bstore_iter_pos_t __ptn_tkn_iter_pos_get(bptn_tkn_iter_t iter)
-{
-	return iter->bs->plugin->ptn_tkn_iter_pos_get(iter);
-}
-
-static
-int __ptn_tkn_iter_pos_set(bptn_tkn_iter_t iter, bstore_iter_pos_t pos)
-{
-	return iter->bs->plugin->ptn_tkn_iter_pos_set(iter, pos);
-}
-
-void __ptn_tkn_iter_pos_free(bptn_tkn_iter_t iter, bstore_iter_pos_t pos)
-{
-	iter->bs->plugin->ptn_tkn_iter_pos_free(iter, pos);
-}
-
-static
-bstore_iter_pos_t __tkn_hist_iter_pos_get(btkn_hist_iter_t iter)
-{
-	return iter->bs->plugin->tkn_hist_iter_pos_get(iter);
-}
-
-static
-int __tkn_hist_iter_pos_set(btkn_hist_iter_t iter, bstore_iter_pos_t pos)
-{
-	return iter->bs->plugin->tkn_hist_iter_pos_set(iter, pos);
-}
-
-void __tkn_hist_iter_pos_free(btkn_hist_iter_t iter, bstore_iter_pos_t pos)
-{
-	iter->bs->plugin->tkn_hist_iter_pos_free(iter, pos);
-}
-
-static
-bstore_iter_pos_t __ptn_hist_iter_pos_get(bptn_hist_iter_t iter)
-{
-	return iter->bs->plugin->ptn_hist_iter_pos_get(iter);
-}
-
-static
-int __ptn_hist_iter_pos_set(bptn_hist_iter_t iter, bstore_iter_pos_t pos)
-{
-	return iter->bs->plugin->ptn_hist_iter_pos_set(iter, pos);
-}
-
-void __ptn_hist_iter_pos_free(bptn_hist_iter_t iter, bstore_iter_pos_t pos)
-{
-	iter->bs->plugin->ptn_hist_iter_pos_free(iter, pos);
-}
-
-static
-bstore_iter_pos_t __comp_hist_iter_pos_get(bcomp_hist_iter_t iter)
-{
-	return iter->bs->plugin->comp_hist_iter_pos_get(iter);
-}
-
-static
-int __comp_hist_iter_pos_set(bcomp_hist_iter_t iter, bstore_iter_pos_t pos)
-{
-	return iter->bs->plugin->comp_hist_iter_pos_set(iter, pos);
-}
-
-void __comp_hist_iter_pos_free(bcomp_hist_iter_t iter, bstore_iter_pos_t pos)
-{
-	iter->bs->plugin->comp_hist_iter_pos_free(iter, pos);
-}
-
-static
 bsa_heap_iter_t bsa_heap_iter_new(bsa_t bsa, bsa_iter_type_t type)
 {
 	bsa_heap_iter_entry_t hent;
@@ -919,9 +817,6 @@ bsa_heap_iter_t bsa_heap_iter_new(bsa_t bsa, bsa_iter_type_t type)
 		itr->obj_free = free;
 		itr->obj_dup = (void*)bmsg_dup;
 		itr->hent_xlate = bsa_heap_iter_hent_msg_xlate;
-		itr->iter_pos = __msg_iter_pos_get;
-		itr->iter_pos_set = __msg_iter_pos_set;
-		itr->iter_pos_free = __msg_iter_pos_free;
 		itr->hent_fwd_cmp = bsa_heap_iter_entry_msg_fwd_cmp;
 		itr->hent_rev_cmp = bsa_heap_iter_entry_msg_rev_cmp;
 		hent_sz = sizeof(*hent); /* no need for buffer */
@@ -942,9 +837,6 @@ bsa_heap_iter_t bsa_heap_iter_new(bsa_t bsa, bsa_iter_type_t type)
 		itr->obj_time = (void*)bsa_tkn_hist_time;
 		itr->hent_xlate = bsa_heap_iter_hent_tkn_hist_xlate;
 		itr->hent_rev_xlate = bsa_heap_iter_hent_tkn_hist_rev_xlate;
-		itr->iter_pos = __tkn_hist_iter_pos_get;
-		itr->iter_pos_set = __tkn_hist_iter_pos_set;
-		itr->iter_pos_free = __tkn_hist_iter_pos_free;
 		itr->hent_fwd_cmp = bsa_heap_iter_entry_tkn_hist_fwd_cmp;
 		itr->hent_rev_cmp = bsa_heap_iter_entry_tkn_hist_rev_cmp;
 		hent_sz = sizeof(*hent) + sizeof(struct btkn_hist_s);
@@ -965,9 +857,6 @@ bsa_heap_iter_t bsa_heap_iter_new(bsa_t bsa, bsa_iter_type_t type)
 		itr->obj_time = (void*)bsa_ptn_hist_time;
 		itr->hent_xlate = bsa_heap_iter_hent_ptn_hist_xlate;
 		itr->hent_rev_xlate = bsa_heap_iter_hent_ptn_hist_rev_xlate;
-		itr->iter_pos = __ptn_hist_iter_pos_get;
-		itr->iter_pos_set = __ptn_hist_iter_pos_set;
-		itr->iter_pos_free = __ptn_hist_iter_pos_free;
 		itr->hent_fwd_cmp = bsa_heap_iter_entry_ptn_hist_fwd_cmp;
 		itr->hent_rev_cmp = bsa_heap_iter_entry_ptn_hist_rev_cmp;
 		hent_sz = sizeof(*hent) + sizeof(struct bptn_hist_s);
@@ -988,9 +877,6 @@ bsa_heap_iter_t bsa_heap_iter_new(bsa_t bsa, bsa_iter_type_t type)
 		itr->obj_time = (void*)bsa_comp_hist_time;
 		itr->hent_xlate = bsa_heap_iter_hent_comp_hist_xlate;
 		itr->hent_rev_xlate = bsa_heap_iter_hent_comp_hist_rev_xlate;
-		itr->iter_pos = __comp_hist_iter_pos_get;
-		itr->iter_pos_set = __comp_hist_iter_pos_set;
-		itr->iter_pos_free = __comp_hist_iter_pos_free;
 		itr->hent_fwd_cmp = bsa_heap_iter_entry_comp_hist_fwd_cmp;
 		itr->hent_rev_cmp = bsa_heap_iter_entry_comp_hist_rev_cmp;
 		hent_sz = sizeof(*hent) + sizeof(struct bcomp_hist_s);
@@ -1507,60 +1393,75 @@ void bsa_heap_iter_entry_reset(bsa_heap_iter_t itr, bsa_heap_iter_entry_t hent)
 	hent->obj = NULL;
 }
 
-bsa_heap_iter_pos_t bsa_heap_iter_pos(bsa_heap_iter_t itr)
+sos_obj_t bsa_heap_iter_pos(bsa_heap_iter_t itr)
 {
 	int i, rc;
 	struct bsa_heap_iter_pos_s hdr = {0};
-	struct bstore_iter_pos_s empty_pos = {0};
 	bsa_heap_iter_entry_t hent;
 	bsa_heap_iter_pos_t pos;
 	bstore_iter_pos_t bs_pos;
+	sos_obj_t pos_obj;
+	struct sos_value_s _v;
 	size_t sz = sizeof(*pos) + itr->heap->len*sizeof(pos->bs_pos[0]);
 
-	pos = calloc(1, sz);
+	pos_obj = __bsa_iter_pos_alloc(BSA(itr->base.bs), &_v, sz);
+	if (!pos_obj)
+		goto err0;
+	pos = (void*)_v.data->array.data.byte_;
 
 	i = 0;
 	TAILQ_FOREACH(hent, &itr->hent_tq, link) {
 		if (hent->obj) {
-			pos->bs_pos[i] = itr->iter_pos(hent->itr);
+			pos->bs_pos[i] = bstore_iter_pos_get(hent->itr);
 			if (!pos->bs_pos[i])
 				goto err1;
 		}
 		i++;
 	}
-	BS_POS(pos)->type = itr->base.type;
 	pos->bsa_pos.type = itr->type;
 	pos->n = itr->heap->len;
 	pos->dir = itr->dir;
-	return pos;
+	sos_value_put(&_v);
+	return pos_obj;
 
 err1:
 	i = 0;
 	TAILQ_FOREACH(hent, &itr->hent_tq, link) {
 		if (pos->bs_pos[i]) {
-			itr->iter_pos_free(hent->itr, pos->bs_pos[i]);
+			bstore_iter_pos_free(hent->itr, pos->bs_pos[i]);
 		}
 		i++;
 	}
+	sos_value_put(&_v);
+	sos_obj_delete(pos_obj);
 err0:
 	return NULL;
 }
 
-int bsa_heap_iter_pos_set(bsa_heap_iter_t itr, bsa_heap_iter_pos_t pos)
+int bsa_heap_iter_pos_set(bsa_heap_iter_t itr, sos_obj_t pos_obj)
 {
 	int rc = 0;
 	int i;
+	SOS_VALUE(v);
 	bsa_heap_iter_entry_t hent;
+	bsa_heap_iter_pos_t pos;
+
+	v = sos_value_init(v, pos_obj, BSA(itr->base.bs)->iter_pos_data_attr);
+	if (!v) {
+		rc = ENOENT;
+		goto err0;
+	}
+	pos = (void*)v->data->array.data.byte_;
 
 	if (itr->heap->len != pos->n) {
 		assert(0 == "iterator-position sub-iterator length mismatch.");
 		rc = EINVAL;
-		goto out;
+		goto err1;
 	}
 	if (itr->type != pos->bsa_pos.type) {
 		assert(0 == "iterator-position type mismatch.");
 		rc = EINVAL;
-		goto out;
+		goto err1;
 	}
 	itr->dir = pos->dir;
 	i = 0;
@@ -1569,10 +1470,10 @@ int bsa_heap_iter_pos_set(bsa_heap_iter_t itr, bsa_heap_iter_pos_t pos)
 		if (!pos->bs_pos[i]) {
 			goto skip;
 		}
-		rc = itr->iter_pos_set(hent->itr, pos->bs_pos[i]);
-		pos->bs_pos[i] = NULL; /* pos is invalid after `set()` */
+		rc = bstore_iter_pos_set(hent->itr, pos->bs_pos[i]);
+		pos->bs_pos[i] = 0; /* pos is invalid after `set()` */
 		if (rc)
-			goto out;
+			goto err2;
 		if (itr->obj_free) {
 			/* use non-reentrant */
 			hent->obj = itr->iter_obj(hent->itr);
@@ -1587,31 +1488,39 @@ int bsa_heap_iter_pos_set(bsa_heap_iter_t itr, bsa_heap_iter_pos_t pos)
 	}
 	bheap_heapify(itr->heap);
 	rc = 0; /* good */
-out:
+	/* let-through */
+err2:
 	/* clean-up pos */
 	i = 0;
 	TAILQ_FOREACH(hent, &itr->hent_tq, link) {
 		if (pos->bs_pos[i])
-			itr->iter_pos_free(hent->itr, pos->bs_pos[i]);
+			bstore_iter_pos_free(hent->itr, pos->bs_pos[i]);
 		i++;
 	}
-	free(pos);
+err1:
+	sos_value_put(v);
+err0:
 	return rc;
 }
 
-void bsa_heap_iter_pos_free(bsa_heap_iter_t itr, bstore_iter_pos_t _pos)
+void bsa_heap_iter_pos_free(bsa_heap_iter_t itr, sos_obj_t pos_obj)
 {
-	/* TODO IMPLEMENT ME */
 	int i;
-	bsa_heap_iter_pos_t pos = (void*)_pos;
+	sos_value_t v;
+	struct sos_value_s _v;
 	bsa_heap_iter_entry_t hent;
+	bsa_heap_iter_pos_t pos;
+	v = sos_value_init(&_v, pos_obj, BSA(itr->base.bs)->iter_pos_data_attr);
+	if (!v)
+		return;
+	pos = (void*)_v.data->array.data.byte_;
 	i = 0;
 	TAILQ_FOREACH(hent, &itr->hent_tq, link) {
 		if (pos->bs_pos[i])
-			itr->iter_pos_free(hent->itr, pos->bs_pos[i]);
+			bstore_iter_pos_free(hent->itr, pos->bs_pos[i]);
 		i++;
 	}
-	free(pos);
+	sos_value_put(&_v);
 }
 
 int bsa_tkn_hist_fwd_key_cmp(const struct btkn_hist_s *a,
@@ -2081,38 +1990,53 @@ void *bsa_hist_iter_obj(bsa_hist_iter_t itr, void *buff)
 	return NULL;
 }
 
-bstore_iter_pos_t bsa_hist_iter_pos(bsa_hist_iter_t itr)
+static
+sos_obj_t __bsa_hist_iter_pos(bsa_hist_iter_t itr)
 {
+	sos_obj_t pos_obj;
+	struct sos_value_s _v;
 	bsa_hist_iter_pos_t hist_pos;
 	size_t sz = sizeof(*hist_pos);
 	if (!itr->curr) {
 		errno = ENOENT;
 		return NULL;
 	}
-	hist_pos = calloc(1, sz);
-	if (!hist_pos)
+	pos_obj = __bsa_iter_pos_alloc(BSA(itr->base.bs), &_v, sz);
+	if (!pos_obj) {
 		return NULL;
-	BS_POS(hist_pos)->data_len = sz - sizeof(struct bstore_iter_pos_s);
-	BS_POS(hist_pos)->type = itr->base.type;
+	}
+	hist_pos = (void*)_v.data->array.data.byte_;
 	hist_pos->dir = itr->hitr->dir;
 	hist_pos->base.type = itr->hitr->type;
 	hist_pos->filter = itr->hitr->filter;
 	hist_pos->curr = itr->curr->u;
-	return BS_POS(hist_pos);
+	sos_value_put(&_v);
+	return pos_obj;
 }
 
-int bsa_hist_iter_pos_set(bsa_hist_iter_t itr, bsa_hist_iter_pos_t pos)
+static
+int __bsa_hist_iter_pos_set(bsa_hist_iter_t itr, sos_obj_t pos_obj)
 {
 	int rc = 0;
 	union bsa_hist_u key = {0};
 	bsa_hist_t hist;
 	struct rbn *rbn;
+	bsa_hist_iter_pos_t pos;
+	SOS_VALUE(v);
+
+	v = sos_value_init(v, pos_obj, BSA(itr->base.bs)->iter_pos_data_attr);
+	if (!v) {
+		rc = ENOENT;
+		goto out;
+	}
+	pos = (void*)v->data->array.data.byte_;
 
 	if (itr->hitr->type != pos->base.type) {
 		assert(0 == "Wrong position type");
 		rc = EINVAL;
-		goto out;
+		goto cleanup;
 	}
+
 	bsa_hist_iter_filter_set(itr, &pos->filter);
 	/* use only bin_width and time for entry finding before replenish */
 	switch (pos->base.type) {
@@ -2143,24 +2067,32 @@ int bsa_hist_iter_pos_set(bsa_hist_iter_t itr, bsa_hist_iter_pos_t pos)
 		assert(0 == "Bad direction");
 		return EINVAL;
 	}
-	if (rc) {
-		return rc;
-	}
+	if (rc)
+		goto cleanup;
 	itr->hobj = bsa_heap_iter_obj(itr->hitr, itr->bsa_hist.u.data);
 	hist = bsa_hist_iter_buff_replenish(itr, pos->dir);
 	if (!hist) {
 		rc = errno;
-		goto out;
+		goto cleanup;
 	}
 	key = pos->curr;
 	rbn = rbt_find(&itr->rbt, &key);
 	if (!rbn) {
 		rc = ENOENT;
-		goto out;
+		goto cleanup;
 	}
 	itr->curr = container_of(rbn, struct bsa_hist_s, rbn);
+	rc = 0;
+cleanup:
+	sos_value_put(v);
 out:
 	return rc;
+}
+
+static
+void __bsa_hist_iter_pos_free(bsa_hist_iter_t itr, sos_obj_t pos_obj)
+{
+	/* do nothing */
 }
 
 static inline int __bsa_tkn_xlate(bsa_t bsa, bstore_t bs, btkn_t tkn)
@@ -2425,6 +2357,17 @@ static int __config_handle_store(bsa_t bsa, const char *attr,
 	}
 
 	rc = __bsa_shmem_open(bsa);
+	if (rc)
+		goto err;
+
+	struct __attr_entry_s iter_pos_ent[] = {
+		{&bsa->iter_pos_key_attr, "key"},
+		{&bsa->iter_pos_data_attr, "data"},
+		{0, 0}
+	};
+
+	rc = __bsa_sos_open(bsa, &bsa->iter_pos_sos, &bsa->iter_pos_schema,
+			    &iter_pos_schema, iter_pos_ent);
 	if (rc)
 		goto err;
 
@@ -3099,12 +3042,16 @@ static void __bstore_agg_destroy(bsa_t bsa)
 		free(ent);
 	}
 
+	if (bsa->iter_pos_schema)
+		sos_schema_free(bsa->iter_pos_schema);
 	if (bsa->pattern_schema)
 		sos_schema_free(bsa->pattern_schema);
 	if (bsa->token_value_schema)
 		sos_schema_free(bsa->token_value_schema);
 	if (bsa->pattern_token_schema)
 		sos_schema_free(bsa->pattern_token_schema);
+	if (bsa->iter_pos_sos)
+		sos_container_close(bsa->iter_pos_sos, SOS_COMMIT_ASYNC);
 	if (bsa->tkn_sos)
 		sos_container_close(bsa->tkn_sos, SOS_COMMIT_ASYNC);
 	if (bsa->ptn_sos)
@@ -3357,46 +3304,66 @@ err0:
 }
 
 static
-bstore_iter_pos_t bsa_tkn_iter_pos(btkn_iter_t itr)
+sos_obj_t __bsa_tkn_iter_pos(bsa_tkn_iter_t itr)
 {
 	int rc;
+	struct sos_value_s _v;
+	sos_obj_t pos_obj;
 	sos_pos_t sos_pos;
-	bsa_tkn_iter_pos_t pos;
+	bsa_iter_pos_t pos;
 	size_t sz;
 
-	rc = sos_iter_pos_get(BSA_TKN_ITER(itr)->sitr, &sos_pos);
+	rc = sos_iter_pos_get(itr->sitr, &sos_pos);
 	if (rc) {
 		return NULL;
 	}
-	sz = sizeof(*pos) + sizeof(sos_pos);
-	pos = calloc(1, sz);
-	if (!pos) {
-		sos_iter_pos_put(BSA_TKN_ITER(itr)->sitr, sos_pos);
+	pos_obj = __bsa_iter_pos_alloc(BSA(itr->base.bs), &_v, sizeof(*pos));
+	if (!pos_obj) {
+		sos_iter_pos_put(itr->sitr, sos_pos);
 		return NULL;
 	}
-	BS_POS(pos)->data_len = sz - sizeof(struct bstore_iter_pos_s);
-	BS_POS(pos)->type = itr->type;
-	BSA_POS(pos)->type = BSA_ITER_TYPE_TKN;
+	pos = (void*)_v.data->array.data.byte_;
+	pos->type = BSA_ITER_TYPE_TKN;
 	pos->sos_pos = sos_pos;
-	return &pos->bsa_pos.bs_pos;
+	sos_value_put(&_v);
+	return pos_obj;
 }
 
 static
-int bsa_tkn_iter_pos_set(btkn_iter_t itr, bstore_iter_pos_t _pos)
+int __bsa_tkn_iter_pos_set(bsa_tkn_iter_t itr, sos_obj_t pos_obj)
 {
 	int rc;
-	bsa_tkn_iter_pos_t pos = (void*)_pos;
-	rc = sos_iter_pos_set(BSA_TKN_ITER(itr)->sitr, pos->sos_pos);
-	free(pos);
+	bsa_iter_pos_t pos;
+	SOS_VALUE(v);
+	v = sos_value_init(v, pos_obj, BSA(itr->base.bs)->iter_pos_data_attr);
+	if (!v) {
+		rc = ENOENT;
+		goto out;
+	}
+	pos = (void*)v->data->array.data.byte_;
+	if (pos->type != BSA_ITER_TYPE_TKN) {
+		rc = EINVAL;
+		goto cleanup;
+	}
+	rc = sos_iter_pos_set(itr->sitr, pos->sos_pos);
+cleanup:
+	sos_value_put(v);
+out:
 	return rc;
 }
 
 static
-void bsa_tkn_iter_pos_free(btkn_iter_t itr, bstore_iter_pos_t _pos)
+void __bsa_tkn_iter_pos_free(bsa_tkn_iter_t itr, sos_obj_t pos_obj)
 {
-	bsa_tkn_iter_pos_t pos = (void*)_pos;
-	sos_iter_pos_put(BSA_TKN_ITER(itr)->sitr, pos->sos_pos);
-	free(pos);
+	bsa_iter_pos_t pos;
+	sos_value_t v;
+	struct sos_value_s _v;
+	v = sos_value_init(&_v, pos_obj, BSA(itr->base.bs)->iter_pos_data_attr);
+	if (!v)
+		return;
+	pos = (void*)_v.data->array.data.byte_;
+	sos_iter_pos_put(itr->sitr, pos->sos_pos);
+	sos_value_put(&_v);
 }
 
 static
@@ -3494,21 +3461,21 @@ int bsa_msg_add(bstore_t bs, struct timeval *tv, bmsg_t msg)
 }
 
 static
-bstore_iter_pos_t bsa_msg_iter_pos(bmsg_iter_t _itr)
+sos_obj_t __bsa_msg_iter_pos(bsa_msg_iter_t itr)
 {
-	return (bstore_iter_pos_t)bsa_heap_iter_pos((void*)_itr);
+	return bsa_heap_iter_pos(itr);
 }
 
 static
-int bsa_msg_iter_pos_set(bmsg_iter_t itr, bstore_iter_pos_t pos)
+int __bsa_msg_iter_pos_set(bsa_msg_iter_t itr, sos_obj_t pos_obj)
 {
-	return bsa_heap_iter_pos_set((void*)itr, (bsa_heap_iter_pos_t)pos);
+	return bsa_heap_iter_pos_set(itr, pos_obj);
 }
 
 static
-void bsa_msg_iter_pos_free(bmsg_iter_t itr, bstore_iter_pos_t pos)
+void __bsa_msg_iter_pos_free(bsa_msg_iter_t itr, sos_obj_t pos_obj)
 {
-	/* TODO: COME BACK HERE */
+	bsa_heap_iter_pos_free(itr, pos_obj);
 }
 
 static
@@ -4036,11 +4003,12 @@ int bsa_ptn_iter_reinit(bsa_ptn_iter_t itr, bsa_iter_type_t type)
 }
 
 static
-bstore_iter_pos_t bsa_ptn_iter_pos(bptn_iter_t _itr)
+sos_obj_t __bsa_ptn_iter_pos(bsa_ptn_iter_t itr)
 {
-	bsa_ptn_iter_t itr = (void*)_itr;
+	sos_obj_t pos_obj;
+	struct sos_value_s _v;
 	sos_pos_t sos_pos = 0;
-	bsa_ptn_iter_pos_t pos = NULL;
+	bsa_iter_pos_t pos = NULL;
 	int rc;
 
 	switch (itr->type) {
@@ -4055,43 +4023,69 @@ bstore_iter_pos_t bsa_ptn_iter_pos(bptn_iter_t _itr)
 	rc = sos_iter_pos_get(itr->sitr, &sos_pos);
 	if (rc)
 		goto err;
-	/* init */
-	pos = calloc(1, sizeof(*pos));
-	if (!pos)
+	pos_obj = __bsa_iter_pos_alloc(BSA(itr->base.bs), &_v, sizeof(*pos));
+	if (!pos_obj)
 		goto err;
+	pos = (void*)_v.data->array.data.byte_;
 	BSA_POS(pos)->type = itr->type;
-	BS_POS(pos)->data_len = sizeof(*pos) - sizeof(struct bstore_iter_pos_s);
-	BS_POS(pos)->type = itr->base.type;
 	/* position setting */
 	pos->sos_pos = sos_pos;
-	return BS_POS(pos);
+	sos_value_put(&_v);
+	return pos_obj;
 
 err:
-	if (pos)
-		free(pos);
+	if (pos_obj)
+		sos_value_put(&_v);
 	if (sos_pos)
 		sos_iter_pos_put(itr->sitr, sos_pos);
 	return NULL;
 }
 
 static
-int bsa_ptn_iter_pos_set(bptn_iter_t _itr, bstore_iter_pos_t _pos)
+int __bsa_ptn_iter_pos_set(bsa_ptn_iter_t itr, sos_obj_t pos_obj)
 {
 	int rc;
-	bsa_ptn_iter_pos_t pos = (void*)_pos;
+	bsa_iter_pos_t pos;
 	SOS_KEY(id_key);
-	bsa_ptn_iter_t itr = (void*)_itr;
 	bsa_t bsa = (void*)itr->base.bs;
-
-	rc = bsa_ptn_iter_reinit(itr, BSA_POS(pos)->type);
+	SOS_VALUE(v);
+	v = sos_value_init(v, pos_obj, bsa->iter_pos_data_attr);
+	if (!v) {
+		rc = ENOENT;
+		goto out;
+	}
+	pos = (void*)v->data->array.data.byte_;
+	switch (pos->type) {
+	case BSA_ITER_TYPE_PTN_ID:
+	case BSA_ITER_TYPE_PTN_FIRST_SEEN:
+		break;
+	default:
+		assert(0 == "Position type mismatch.");
+		rc = EINVAL;
+		goto cleanup;
+	}
+	rc = bsa_ptn_iter_reinit(itr, pos->type);
 	if (rc)
 		goto out;
 	rc = sos_iter_pos_set(itr->sitr, pos->sos_pos);
-	if (rc)
-		goto out;
+cleanup:
+	sos_value_put(v);
 out:
-	free(_pos);
 	return rc;
+}
+
+static
+void __bsa_ptn_iter_pos_free(bsa_ptn_iter_t itr, sos_obj_t pos_obj)
+{
+	bsa_iter_pos_t pos;
+	struct sos_value_s _v;
+	sos_value_t v;
+	v = sos_value_init(&_v, pos_obj, BSA(itr->base.bs)->iter_pos_data_attr);
+	if (!v)
+		return;
+	pos = (void*)_v.data->array.data.byte_;
+	sos_iter_pos_put(itr->sitr, pos->sos_pos);
+	sos_value_put(&_v);
 }
 
 static
@@ -4266,52 +4260,82 @@ int bsa_ptn_iter_last(bptn_iter_t _itr)
 }
 
 static
-bstore_iter_pos_t bsa_ptn_tkn_iter_pos(bptn_tkn_iter_t _itr)
+sos_obj_t __bsa_ptn_tkn_iter_pos(bsa_ptn_tkn_iter_t itr)
 {
-	bsa_ptn_tkn_iter_t itr = (void*)_itr;
 	sos_pos_t sos_pos;
-	bsa_ptn_tkn_iter_pos_t pos;
+	bsa_iter_pos_t pos;
 	int rc;
 	size_t sz;
+	sos_obj_t pos_obj;
+	struct sos_value_s _v;
 
 	rc = sos_iter_pos_get(itr->sitr, &sos_pos);
 	if (rc)
 		return NULL;
-	sz = sizeof(*pos) + sizeof(sos_pos);
-	pos = calloc(1, sz);
-	if (!pos) {
+	sz = sizeof(*pos);
+	pos_obj = __bsa_iter_pos_alloc(BSA(itr->base.bs), &_v, sz);
+	if (!pos_obj) {
 		sos_iter_pos_put(itr->sitr, sos_pos);
 		return NULL;
 	}
-	BSA_POS(pos)->type = BSA_ITER_TYPE_PTN_TKN;
-	BS_POS(pos)->data_len = sz - sizeof(struct bstore_iter_pos_s);
-	BS_POS(pos)->type = itr->base.type;
+	pos = (void*)_v.data->array.data.byte_;
+	pos->type = BSA_ITER_TYPE_PTN_TKN;
 	pos->sos_pos = sos_pos;
-	return BS_POS(pos);
+	sos_value_put(&_v);
+	return pos_obj;
 }
 
 static
-int bsa_ptn_tkn_iter_pos_set(bptn_tkn_iter_t _itr, bstore_iter_pos_t _pos)
+int __bsa_ptn_tkn_iter_pos_set(bsa_ptn_tkn_iter_t itr, sos_obj_t pos_obj)
 {
 	int rc;
 	sos_key_t key;
 	ptn_pos_tkn_t kv;
-	bsa_ptn_tkn_iter_t itr = (void*)_itr;
-	bsa_ptn_tkn_iter_pos_t pos = (void*)_pos;
-	if (BSA_POS(pos)->type != BSA_ITER_TYPE_PTN_TKN) {
+	bsa_iter_pos_t pos;
+	SOS_VALUE(v);
+	v = sos_value_init(v, pos_obj, BSA(itr->base.bs)->iter_pos_data_attr);
+	if (!v) {
+		rc = EINVAL;
+		goto out;
+	}
+	pos = (void*)v->data->array.data.byte_;
+	if (pos->type != BSA_ITER_TYPE_PTN_TKN) {
 		assert(0 == "position - iterator type mismatch");
-		return EINVAL;
+		rc = EINVAL;
+		goto cleanup;
 	}
 	rc = sos_iter_pos_set(itr->sitr, pos->sos_pos);
-	if (rc)
-		return rc;
+	if (rc) {
+		goto cleanup;
+	}
+	pos->sos_pos = 0;
 	key = sos_iter_key(itr->sitr);
-	if (!key)
-		return errno;
+	if (!key) {
+		rc = errno;
+		goto cleanup;
+	}
 	kv = (void*)sos_key_value(key);
 	itr->kv = *kv;
 	sos_key_put(key);
-	return 0;
+	rc = 0;
+cleanup:
+	sos_value_put(v);
+out:
+	return rc;
+}
+
+static
+void __bsa_ptn_tkn_iter_pos_free(bsa_ptn_tkn_iter_t itr, sos_obj_t pos_obj)
+{
+	bsa_iter_pos_t pos;
+	struct sos_value_s _v;
+	sos_value_t v;
+	v = sos_value_init(&_v, pos_obj, BSA(itr->base.bs)->iter_pos_data_attr);
+	if (!v)
+		return;
+	pos = (void*)_v.data->array.data.byte_;
+	sos_iter_pos_put(itr->sitr, pos->sos_pos);
+	sos_value_put(&_v);
 }
 
 static
@@ -4672,6 +4696,168 @@ bstore_t bsa_find_bstore(bsa_t bsa, const char *path)
 	return NULL;
 }
 
+static sos_visit_action_t __bsa_iter_pos_get_visit(sos_index_t index,
+				     sos_key_t key, sos_idx_data_t *idx_data,
+				     int found, void *arg)
+{
+	struct __visit_ctxt *ctxt = arg;
+	sos_obj_ref_t *ref = (sos_obj_ref_t *)idx_data;
+	if (found) {
+		ctxt->rc = EAGAIN;
+		return SOS_VISIT_NOP;
+	}
+	*ref = sos_obj_ref(ctxt->pos_obj);
+	ctxt->rc = 0;
+	return SOS_VISIT_ADD;
+}
+
+static
+bstore_iter_pos_t bsa_iter_pos_get(bstore_iter_t _itr)
+{
+	struct __visit_ctxt ctxt = {0};
+	SOS_KEY(sos_key);
+	iter_pos_value_t pos_ptr;
+	bstore_iter_pos_t pos;
+	struct timeval tv;
+	sos_obj_t pos_obj;
+	sos_index_t index;
+	bsa_t bsa = BSA(_itr->bs);
+	int rc;
+
+	switch (_itr->type) {
+	case BTKN_ITER:
+		pos_obj = __bsa_tkn_iter_pos((void*)_itr);
+		break;
+	case BMSG_ITER:
+		pos_obj = __bsa_msg_iter_pos((void*)_itr);
+		break;
+	case BPTN_ITER:
+		pos_obj = __bsa_ptn_iter_pos((void*)_itr);
+		break;
+	case BPTN_TKN_ITER:
+		pos_obj = __bsa_ptn_tkn_iter_pos((void*)_itr);
+		break;
+	case BTKN_HIST_ITER:
+	case BPTN_HIST_ITER:
+	case BCOMP_HIST_ITER:
+		pos_obj = __bsa_hist_iter_pos((void*)_itr);
+		break;
+	default:
+		assert(0 == "Bad iterator type");
+	}
+	/* now, insert into the index */
+	index = sos_attr_index(bsa->iter_pos_key_attr);
+	pos_ptr = sos_obj_ptr(pos_obj);
+	ctxt.pos_obj = pos_obj;
+again:
+	gettimeofday(&tv, NULL);
+	pos = (tv.tv_sec<<20)|(tv.tv_usec&0xFFFFF);
+	pos_ptr->key = pos;
+	sos_key_set(sos_key, &pos, sizeof(pos));
+	rc = sos_index_visit(index, sos_key, __bsa_iter_pos_get_visit, &ctxt);
+	sos_key_put(sos_key);
+	if (rc) {
+		errno = rc;
+		goto error;
+	}
+	if (ctxt.rc == EAGAIN) /* duplicated key */
+		goto again;
+	assert(ctxt.rc == 0);
+	/* insertion OK */
+	sos_obj_put(pos_obj);
+	return pos;
+error:
+	sos_obj_delete(pos_obj);
+	sos_obj_put(pos_obj);
+	return 0;
+}
+
+static sos_visit_action_t __bsa_iter_pos_set_visit(sos_index_t index,
+				     sos_key_t key, sos_idx_data_t *idx_data,
+				     int found, void *arg)
+{
+	struct __visit_ctxt *ctxt = arg;
+	sos_obj_ref_t *ref = (sos_obj_ref_t *)idx_data;
+	if (found) {
+		ctxt->pos_obj = sos_ref_as_obj(ctxt->bsa->iter_pos_sos, *ref);
+		ctxt->rc = 0;
+		return SOS_VISIT_DEL;
+	}
+	ctxt->pos_obj = 0;
+	ctxt->rc = ENOENT;
+	return SOS_VISIT_NOP;
+}
+
+static
+int bsa_iter_pos_set(bstore_iter_t _itr, bstore_iter_pos_t pos)
+{
+	struct __visit_ctxt ctxt = {0};
+	SOS_KEY(sos_key);
+	sos_obj_t pos_obj;
+	sos_index_t index;
+	int rc;
+
+	ctxt.bsa = BSA(_itr->bs);
+	ctxt.itr = _itr;
+	index = sos_attr_index(ctxt.bsa->iter_pos_key_attr);
+	sos_key_set(sos_key, &pos, sizeof(pos));
+	rc = sos_index_visit(index, sos_key, __bsa_iter_pos_set_visit, &ctxt);
+	sos_key_put(sos_key);
+	if (rc)
+		goto cleanup;
+	if (ctxt.rc) {
+		rc = ctxt.rc;
+		goto cleanup;
+	}
+	switch (_itr->type) {
+	case BTKN_ITER:
+		rc = __bsa_tkn_iter_pos_set((void*)_itr, ctxt.pos_obj);
+		break;
+	case BMSG_ITER:
+		rc = __bsa_msg_iter_pos_set((void*)_itr, ctxt.pos_obj);
+		break;
+	case BPTN_ITER:
+		rc = __bsa_ptn_iter_pos_set((void*)_itr, ctxt.pos_obj);
+		break;
+	case BPTN_TKN_ITER:
+		rc = __bsa_ptn_tkn_iter_pos_set((void*)_itr, ctxt.pos_obj);
+		break;
+	case BTKN_HIST_ITER:
+	case BPTN_HIST_ITER:
+	case BCOMP_HIST_ITER:
+		rc = __bsa_hist_iter_pos_set((void*)_itr, ctxt.pos_obj);
+		break;
+	default:
+		assert(0 == "Bad iterator type");
+	}
+cleanup:
+	if (ctxt.pos_obj) {
+		sos_obj_delete(ctxt.pos_obj);
+		sos_obj_put(ctxt.pos_obj);
+	}
+	return rc;
+}
+
+static
+void bsa_iter_pos_free(bstore_iter_t _itr, bstore_iter_pos_t pos)
+{
+	struct __visit_ctxt ctxt = {0};
+	SOS_KEY(sos_key);
+	sos_obj_t pos_obj;
+	sos_index_t index;
+
+	ctxt.bsa = BSA(_itr->bs);
+	ctxt.itr = _itr;
+	index = sos_attr_index(ctxt.bsa->iter_pos_key_attr);
+	sos_key_set(sos_key, &pos, sizeof(pos));
+	sos_index_visit(index, sos_key, __bsa_iter_pos_set_visit, &ctxt);
+	sos_key_put(sos_key);
+	if (ctxt.pos_obj) {
+		sos_obj_delete(ctxt.pos_obj);
+		sos_obj_put(ctxt.pos_obj);
+	}
+}
+
 static struct bstore_plugin_s plugin = {
 	.open = bsa_open,
 	.close = bsa_close,
@@ -4683,9 +4869,6 @@ static struct bstore_plugin_s plugin = {
 	.tkn_find_by_id = bsa_tkn_find_by_id,
 	.tkn_find_by_name = bsa_tkn_find_by_name,
 
-	.tkn_iter_pos_get = bsa_tkn_iter_pos,
-	.tkn_iter_pos_set = bsa_tkn_iter_pos_set,
-	.tkn_iter_pos_free = bsa_tkn_iter_pos_free,
 	.tkn_iter_new = bsa_tkn_iter_new,
 	.tkn_iter_free = bsa_tkn_iter_free,
 	.tkn_iter_card = bsa_tkn_iter_card,
@@ -4696,9 +4879,6 @@ static struct bstore_plugin_s plugin = {
 	.tkn_iter_last = bsa_tkn_iter_last,
 
 	.msg_add = bsa_msg_add,
-	.msg_iter_pos_get = bsa_msg_iter_pos,
-	.msg_iter_pos_set = bsa_msg_iter_pos_set,
-	.msg_iter_pos_free = bsa_msg_iter_pos_free,
 	.msg_iter_new = bsa_msg_iter_new,
 	.msg_iter_free = bsa_msg_iter_free,
 	.msg_iter_card = bsa_msg_iter_card,
@@ -4714,8 +4894,6 @@ static struct bstore_plugin_s plugin = {
 	.ptn_add = bsa_ptn_add,
 	.ptn_find = bsa_ptn_find,
 	.ptn_find_by_ptnstr = bsa_ptn_find_by_ptnstr,
-	.ptn_iter_pos_get = bsa_ptn_iter_pos,
-	.ptn_iter_pos_set = bsa_ptn_iter_pos_set,
 	.ptn_iter_new = bsa_ptn_iter_new,
 	.ptn_iter_free = bsa_ptn_iter_free,
 	.ptn_iter_filter_set = bsa_ptn_iter_filter_set,
@@ -4731,8 +4909,6 @@ static struct bstore_plugin_s plugin = {
 	.ptn_tkn_add = bsa_ptn_tkn_add,
 	.ptn_tkn_find = bsa_ptn_tkn_find,
 
-	.ptn_tkn_iter_pos_get = bsa_ptn_tkn_iter_pos,
-	.ptn_tkn_iter_pos_set = bsa_ptn_tkn_iter_pos_set,
 	.ptn_tkn_iter_new = bsa_ptn_tkn_iter_new,
 	.ptn_tkn_iter_free = bsa_ptn_tkn_iter_free,
 	.ptn_tkn_iter_card = bsa_ptn_tkn_iter_card,
@@ -4744,8 +4920,6 @@ static struct bstore_plugin_s plugin = {
 	.ptn_tkn_iter_filter_set = bsa_ptn_tkn_iter_filter_set,
 
 	.tkn_hist_update = bsa_tkn_hist_update,
-	.tkn_hist_iter_pos_get = (void*)bsa_hist_iter_pos,
-	.tkn_hist_iter_pos_set = (void*)bsa_hist_iter_pos_set,
 	.tkn_hist_iter_new = bsa_tkn_hist_iter_new,
 	.tkn_hist_iter_free = (void*)bsa_hist_iter_free,
 
@@ -4759,8 +4933,6 @@ static struct bstore_plugin_s plugin = {
 	.tkn_hist_iter_filter_set = (void*)bsa_hist_iter_filter_set,
 
 	.ptn_hist_update = bsa_ptn_hist_update,
-	.ptn_hist_iter_pos_get = (void*)bsa_hist_iter_pos,
-	.ptn_hist_iter_pos_set = (void*)bsa_hist_iter_pos_set,
 	.ptn_hist_iter_new = bsa_ptn_hist_iter_new,
 	.ptn_hist_iter_free = (void*)bsa_hist_iter_free,
 
@@ -4773,8 +4945,6 @@ static struct bstore_plugin_s plugin = {
 	.ptn_hist_iter_last = (void*)bsa_hist_iter_last,
 	.ptn_hist_iter_filter_set = (void*)bsa_hist_iter_filter_set,
 
-	.comp_hist_iter_pos_get = (void*)bsa_hist_iter_pos,
-	.comp_hist_iter_pos_set = (void*)bsa_hist_iter_pos_set,
 	.comp_hist_iter_new = bsa_comp_hist_iter_new,
 	.comp_hist_iter_free = (void*)bsa_hist_iter_free,
 
@@ -4786,6 +4956,11 @@ static struct bstore_plugin_s plugin = {
 	.comp_hist_iter_find_rev = (void*)bsa_hist_iter_find_rev,
 	.comp_hist_iter_last = (void*)bsa_hist_iter_last,
 	.comp_hist_iter_filter_set = (void*)bsa_hist_iter_filter_set,
+
+	.iter_pos_get = bsa_iter_pos_get,
+	.iter_pos_set = bsa_iter_pos_set,
+	.iter_pos_free = bsa_iter_pos_free,
+
 };
 
 bstore_plugin_t get_plugin(void)
