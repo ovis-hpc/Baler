@@ -1153,7 +1153,7 @@ static bstore_iter_pos_t __iter_pos_get(bsos_iter_t iter)
 	rc = sos_iter_pos_get(iter->iter, &sos_pos);
 	if (rc)
 		return 0;
-	return sos_pos;
+	return ((uint64_t)iter->iter_type << 32) | sos_pos;
 }
 
 static bstore_iter_pos_t bs_iter_pos_get(bstore_iter_t iter)
@@ -1161,24 +1161,113 @@ static bstore_iter_pos_t bs_iter_pos_get(bstore_iter_t iter)
 	return __iter_pos_get((bsos_iter_t)iter);
 }
 
-static int __iter_pos_set(bsos_iter_t iter, sos_pos_t pos)
+static int __iter_init(bsos_iter_t iter, int type)
 {
-	return sos_iter_pos_set(iter->iter, pos);
+	if (iter->iter)
+		return EEXIST;
+	/* Brand-new iterator, need to initialize the sos iterator
+	 * according to the iterator type */
+	bstore_sos_t bss = (void*)iter->bs;
+	sos_attr_t attr;
+	switch (iter->biter_type) {
+	case BTKN_ITER:
+		if (type != TKN_ITER)
+			return EINVAL;
+		attr = bss->tkn_id_attr;
+		break;
+	case BMSG_ITER:
+		switch (type) {
+		case MSG_ITER_PTN_TIME:
+			attr = bss->pt_key_attr;
+			break;
+		case MSG_ITER_COMP_TIME:
+			attr = bss->ct_key_attr;
+			break;
+		case MSG_ITER_TIME_COMP:
+			attr = bss->tc_key_attr;
+			break;
+		default:
+			return EINVAL;
+		}
+		break;
+	case BPTN_ITER:
+		switch (type) {
+		case PTN_ITER_ID:
+			attr = bss->ptn_id_attr;
+			break;
+		case PTN_ITER_FIRST_SEEN:
+			attr = bss->first_seen_attr;
+			break;
+		case PTN_ITER_LAST_SEEN:
+			attr = bss->last_seen_attr;
+			break;
+		default:
+			return EINVAL;
+		}
+		break;
+	case BPTN_TKN_ITER:
+		if (type != PTN_TKN_ITER)
+			return EINVAL;
+		attr = bss->ptn_pos_tkn_key_attr;
+		break;
+	case BTKN_HIST_ITER:
+		if (type != TKN_HIST_ITER)
+			return EINVAL;
+		attr = bss->tkn_hist_key_attr;
+		break;
+	case BPTN_HIST_ITER:
+		if (type != PTN_HIST_ITER)
+			return EINVAL;
+		attr = bss->ptn_hist_key_attr;
+		break;
+	case BCOMP_HIST_ITER:
+		if (type != COMP_HIST_ITER)
+			return EINVAL;
+		attr = bss->comp_hist_key_attr;
+		break;
+	default:
+		return EINVAL;
+	}
+	iter->iter = sos_attr_iter_new(attr);
+	if (!iter->iter)
+		return errno;
+	return 0;
+}
+
+static int __iter_pos_set(bsos_iter_t iter, bstore_iter_pos_t pos)
+{
+	int rc;
+	int type = pos >> 32;
+	sos_pos_t sos_pos = pos & 0xFFFFFFFF;
+	if (!iter->iter) {
+		rc = __iter_init(iter, type);
+		if (rc)
+			return rc;
+	}
+	return sos_iter_pos_set(iter->iter, sos_pos);
 }
 
 static int bs_iter_pos_set(bstore_iter_t iter, bstore_iter_pos_t pos)
 {
-	return __iter_pos_set((bsos_iter_t)iter, (sos_pos_t)pos);
+	return __iter_pos_set((bsos_iter_t)iter, pos);
 }
 
-static void __iter_pos_free(bsos_iter_t iter, sos_pos_t pos)
+static void __iter_pos_free(bsos_iter_t iter, bstore_iter_pos_t pos)
 {
+	int rc;
+	int type = pos >> 32;
+	sos_pos_t sos_pos = pos & 0xFFFFFFFF;
+	if (!iter->iter) {
+		rc = __iter_init(iter, type);
+		if (rc)
+			return;
+	}
 	sos_iter_pos_put(iter->iter, pos);
 }
 
 static void bs_iter_pos_free(bstore_iter_t iter, bstore_iter_pos_t pos)
 {
-	__iter_pos_free((bsos_iter_t)iter, (sos_pos_t)pos);
+	__iter_pos_free((bsos_iter_t)iter, pos);
 }
 
 static btkn_iter_t bs_tkn_iter_new(bstore_t bs)
