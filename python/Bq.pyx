@@ -6,6 +6,7 @@ import numpy as np
 cimport numpy as np
 from libc.stdint cimport *
 from libc.stdlib cimport *
+from libc.errno cimport *
 from sosdb import Array
 import os
 cimport Bs
@@ -72,7 +73,7 @@ cdef class Bstore:
         self.c_store = Bs.bstore_open(self.plugin, self.path, flags, mode)
         if self.c_store is NULL:
             raise ValueError("Error {0} opening the baler database at '{1}'."
-                             .format(os.errno, self.path))
+                             .format(errno, self.path))
         return self
 
     def close(self):
