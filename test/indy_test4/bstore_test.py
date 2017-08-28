@@ -14,8 +14,6 @@ class Debug(object): pass
 
 DEBUG = Debug() # DEBUG object
 
-BTEST_N_DAEMONS = 4
-
 FWD = 1
 REV = 2
 
@@ -35,7 +33,7 @@ class TestBSA(unittest.TestCase):
         cls.bsa = BStore.open("bstore_agg", "bstore_agg.cfg",
                                         os.O_RDWR|os.O_CREAT, 0755)
         bss = [];
-        for i in range(0, 4):
+        for i in range(0, BTEST_N_DAEMONS):
             _b = BStore.open("bstore_sos", "store.%d" % i, os.O_RDWR, 0)
             bss.append(_b)
         cls.bss = bss
@@ -473,7 +471,7 @@ class TestBSA(unittest.TestCase):
 
     def test_msg_iter_filter_ptn_comp_time(self):
         bsa_ptn_id = 263
-        name = "node00063"
+        name = "node%05d" % (BTEST_N_DAEMONS-1)
         bsa_time = 1435363200
         bsa_tv = (bsa_time, 0)
         msgs0 = []

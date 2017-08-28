@@ -71,6 +71,8 @@ BTEST_PTN_TKN = get_btest_int("BTEST_PTN_TKN")
 BTEST_TKN_TYPE_MASK = get_btest_var_map("BTEST_TKN_TYPE_MASK",
                                         Bq.btkn_type_mask_from_str, 0)
 
+BTEST_N_DAEMONS = get_btest_int("BTEST_N_DAEMONS")
+
 
 syslog_time_regex = re.compile("(\\d{4})-(\\d{2})-(\\d{2})T\
 (\\d{2}):(\\d{2}):(\\d{2})\\.(\\d{6})")
