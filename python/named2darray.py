@@ -70,6 +70,7 @@ class Named2DArray(object):
         self._hdr = None
         self._hdr_map = None
         self._packed_hdr = None
+        self._path = path
         self._file = open(path, self._fmode, 0) # no buffering
         try:
             self._load_hdr()
@@ -188,12 +189,18 @@ class Named2DArray(object):
         print >>f, "Name:", self.get_name()
         print >>f, "  Time Bin Width:", self.get_time_bin_width()
         print >>f, "  Total Count:", self.get_total_count()
-        self._file.seek(HDR_SZ)
-        s = self._file.read(CELL_SZ)
+        for p in self:
+            print p
+
+    def __iter__(self):
+        f = open(self._path, "rb", 0) # so that the main fd is not messed with
+        f.seek(HDR_SZ)
+        s = f.read(CELL_SZ)
         while len(s) == CELL_SZ:
             p = struct.unpack(CELL_FMT, s)
-            print p
-            s = self._file.read(CELL_SZ)
+            yield(p)
+            s = f.read(CELL_SZ)
+        f.close()
 
 
 if __name__ == "__main__":
