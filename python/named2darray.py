@@ -27,8 +27,8 @@ struct header {
 };
 
 struct cell {
-    uint64_t    time_stamp;
-    uint64_t    comp_id;
+    uint64_t    x;
+    uint64_t    y;
     uint64_t    count;
 };
 
@@ -38,7 +38,7 @@ class Debug(object): pass
 
 DEBUG = Debug()
 
-HDR_FMT = "<256sqq"
+HDR_FMT = "<256sqqq"
 # calculate padding
 tmp_sz = struct.calcsize(HDR_FMT)
 HDR_FMT = "%s%dx" % (HDR_FMT, 4096 - tmp_sz)
@@ -83,6 +83,12 @@ class Named2DArray(object):
             else:
                 raise
         self._read_last_cell()
+
+    def __del__(self):
+        if self._file:
+            self._file.close()
+        if self._hdr_map:
+            self._hdr_map.close()
 
     def _load_hdr(self):
         """Load header information"""
@@ -182,13 +188,13 @@ class Named2DArray(object):
         self._hdr_map.seek(256 + 3*8)
         self._hdr_map.write(struct.pack("<q", val))
 
-    def append(self, ts, comp_id, count):
-        if self._last_cell and self._last_cell[0:2] >= (ts, comp_id):
+    def append(self, x, y, count):
+        if self._last_cell and self._last_cell[0:2] >= (x, y):
             # Data out of order
             raise DataOrderException("Trying to append %s after %s" %
-                                     (str((ts, comp_id, count)),
+                                     (str((x, y, count)),
                                      str(self._last_cell)))
-        data = struct.pack(CELL_FMT, ts, comp_id, count)
+        data = struct.pack(CELL_FMT, x, y, count)
         # NOTE: Other methods guarantee that self._file is always at EOF.
         self._file.write(data)
         self._set_total_count(self._total_count + count)

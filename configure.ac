@@ -117,6 +117,8 @@ AM_COND_IF([ENABLE_ZAP], [
 dnl ^^^^^^^^^^^^^^^^ (zap) ^^^^^^^^^^^^^^^^^^^
 
 
+OPTION_DEFAULT_DISABLE([n2da-test], [ENABLE_N2DA_TEST])
+
 dnl output plugin to model evaluator
 OPTION_DEFAULT_DISABLE([bout-me], [ENABLE_BOUT_ME])
 AM_COND_IF([ENABLE_BOUT_ME],[
@@ -145,6 +147,7 @@ AC_CONFIG_FILES([Makefile docs/Makefile src/Makefile
 	src/baler/Makefile src/plugins/Makefile
 	src/test/Makefile
 	src/bassoc/Makefile
+	src/n2dassoc/Makefile
 	src/tools/Makefile
 	src/plugins/test/Makefile
 	etc/Makefile

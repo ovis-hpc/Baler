@@ -1,3 +1,3 @@
-SUBDIRS = baler plugins bassoc test tools
+SUBDIRS = baler plugins bassoc n2dassoc test tools
 
 nobase_pkginclude_HEADERS = bassoc/bassoc.h
