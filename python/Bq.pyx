@@ -824,15 +824,17 @@ cdef class Bmsg_iter(Biter):
         cdef Bmsg m
 
         if not start_time:
-            m = self.first()
-            if not m:
+            if not self.first():
                 return 0
+            m = self.obj()
             start = m.tv_sec()
         else:
             start = start_time
 
         if not end_time:
-            m = self.last()
+            if not self.last():
+                return 0
+            m = self.obj()
             end = m.tv_sec()
         else:
             end = end_time
