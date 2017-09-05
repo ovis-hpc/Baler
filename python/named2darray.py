@@ -20,7 +20,8 @@ struct Named2DArray {
 
 struct header {
     char name[256]; /* null-terminated */
-    uint64_t time_bin_width;
+    uint64_t x_bin_width;
+    uint64_t y_bin_width;
     uint64_t total_count;
 };
 
@@ -112,7 +113,7 @@ class Named2DArray(object):
 
     def _hdr_init(self):
         """Private method, don't call directly"""
-        self._hdr = ("", 3600, 0)
+        self._hdr = ("", 3600, 1, 0)
         self._write_hdr()
 
     def _write_hdr(self):
@@ -122,10 +123,11 @@ class Named2DArray(object):
         self._file.write(self._packed_hdr)
         self._file.seek(0, 2) # to the end of file
 
-    def reset(self, time_bin_width = 3600):
+    def reset(self, x_bin_width = 3600, y_bin_width = 1):
         """Reset the file"""
         self._file.truncate(HDR_SZ)
-        self.set_time_bin_width(time_bin_width)
+        self.set_x_bin_width(x_bin_width)
+        self.set_y_bin_width(y_bin_width)
         self._set_total_count(0)
         self._last_cell = None
 
@@ -138,24 +140,33 @@ class Named2DArray(object):
         self._hdr_map.seek(0)
         self._hdr_map.write(struct.pack("256s", name))
 
-    def get_time_bin_width(self):
+    def get_x_bin_width(self):
         self._hdr_map.seek(256)
         s = self._hdr_map.read(8)
         return struct.unpack("<q", s)[0]
 
-    def set_time_bin_width(self, val):
+    def set_x_bin_width(self, val):
         self._hdr_map.seek(256)
         self._hdr_map.write(struct.pack("<q", val))
 
-    def get_total_count(self):
+    def get_y_bin_width(self):
         self._hdr_map.seek(256 + 8)
+        s = self._hdr_map.read(8)
+        return struct.unpack("<q", s)[0]
+
+    def set_y_bin_width(self, val):
+        self._hdr_map.seek(256 + 8)
+        self._hdr_map.write(struct.pack("<q", val))
+
+    def get_total_count(self):
+        self._hdr_map.seek(256 + 2*8)
         s = self._hdr_map.read(8)
         return struct.unpack("<q", s)[0]
 
     def _set_total_count(self, val):
         """ This is private."""
         self._total_count = val
-        self._hdr_map.seek(256 + 8)
+        self._hdr_map.seek(256 + 2*8)
         self._hdr_map.write(struct.pack("<q", val))
 
     def append(self, ts, comp_id, count):
@@ -187,7 +198,8 @@ class Named2DArray(object):
     def dump(self, f=sys.stdout):
         """Dump Named2DArray information to the given file `f`"""
         print >>f, "Name:", self.get_name()
-        print >>f, "  Time Bin Width:", self.get_time_bin_width()
+        print >>f, "  X-Bin Width:", self.get_x_bin_width()
+        print >>f, "  Y-Bin Width:", self.get_y_bin_width()
         print >>f, "  Total Count:", self.get_total_count()
         for p in self:
             print p
