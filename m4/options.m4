@@ -147,4 +147,13 @@ AC_DEFUN([OPTION_DOC],[
 	OPTION_DOC_GENERATE(LATEX)
 	OPTION_DOC_GENERATE(MAN)
 	OPTION_DOC_GENERATE(GRAPH)
+
+# For Doxygen
+if test -z "$ENABLE_DOC_TRUE"; then
+	AC_CHECK_PROGS([DOXYGEN], [doxygen])
+	if test -z "$DOXYGEN"; then
+		AC_MSG_ERROR([Doxygen not found])
+	fi
+fi
+
 ])

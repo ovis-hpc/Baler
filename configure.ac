@@ -130,12 +130,6 @@ OPTION_DEFAULT_DISABLE([ocm], [ENABLE_OCM])
 
 OPTION_DOC
 
-# For Doxygen
-AC_CHECK_PROGS([DOXYGEN], [doxygen])
-if test -z "$DOXYGEN"; then
-	AC_MSG_WARN([Doxygen not found])
-fi
-
 distdir=${PACKAGE_NAME}-${PACKAGE_VERSION}
 AC_SUBST(ac_configure_args)
 AC_SUBST(prefix)
