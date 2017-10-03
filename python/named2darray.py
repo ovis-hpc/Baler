@@ -5,7 +5,7 @@ import mmap
 import os
 import sys
 
-"""A 2D array is a 2-dimensional array of count[time, comp_id].
+"""A 2D array is an array of (x, y, count) tuples.
 """
 
 """Named2DArray file format described in C structure:
@@ -23,6 +23,7 @@ struct header {
     uint64_t x_bin_width;
     uint64_t y_bin_width;
     uint64_t total_count;
+    uint64_t cell_count;
 };
 
 struct cell {
@@ -99,6 +100,7 @@ class Named2DArray(object):
             f.seek(0, 2) # always seek to the end-of-file
         self._hdr_map = mmap.mmap(f.fileno(), HDR_SZ)
         self._total_count = self.get_total_count()
+        self._cell_count = self.get_cell_count()
 
     def _read_last_cell(self):
         """Get the last cell"""
@@ -129,6 +131,7 @@ class Named2DArray(object):
         self.set_x_bin_width(x_bin_width)
         self.set_y_bin_width(y_bin_width)
         self._set_total_count(0)
+        self._set_cell_count(0)
         self._last_cell = None
 
     def get_name(self):
@@ -169,6 +172,16 @@ class Named2DArray(object):
         self._hdr_map.seek(256 + 2*8)
         self._hdr_map.write(struct.pack("<q", val))
 
+    def get_cell_count(self):
+        self._hdr_map.seek(256 + 3*8)
+        s = self._hdr_map.read(8)
+        return struct.unpack("<q", s)[0]
+
+    def _set_cell_count(self, val):
+        self._cell_count = val
+        self._hdr_map.seek(256 + 3*8)
+        self._hdr_map.write(struct.pack("<q", val))
+
     def append(self, ts, comp_id, count):
         if self._last_cell and self._last_cell[0:2] >= (ts, comp_id):
             # Data out of order
@@ -177,9 +190,9 @@ class Named2DArray(object):
                                      str(self._last_cell)))
         data = struct.pack(CELL_FMT, ts, comp_id, count)
         # NOTE: Other methods guarantee that self._file is always at EOF.
-        self._total_count += count
         self._file.write(data)
-        self._set_total_count(self._total_count)
+        self._set_total_count(self._total_count + count)
+        self._set_cell_count(self._cell_count + 1)
 
     def verify(self):
         count = 0
@@ -207,11 +220,10 @@ class Named2DArray(object):
     def __iter__(self):
         f = open(self._path, "rb", 0) # so that the main fd is not messed with
         f.seek(HDR_SZ)
-        s = f.read(CELL_SZ)
-        while len(s) == CELL_SZ:
+        for i in range(0, self._cell_count):
+            s = f.read(CELL_SZ)
             p = struct.unpack(CELL_FMT, s)
             yield(p)
-            s = f.read(CELL_SZ)
         f.close()
 
 
