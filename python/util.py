@@ -244,6 +244,10 @@ class ListIter(object):
         assert(type(pos) == int)
         self.idx = pos
 
+    def put_pos(self, pos):
+        # do nothing
+        pass
+
     def first(self):
         self.idx = 0
         return self.obj()
@@ -253,7 +257,7 @@ class ListIter(object):
         return self.obj()
 
     def prev(self):
-        self.idx += 1
+        self.idx -= 1
         return self.obj()
 
     def last(self):
