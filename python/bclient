@@ -589,12 +589,13 @@ class ServiceCmd(cmd.Cmd):
                 raise CmdException("Comparator not found: \"%s\"" % order)
             result.sort(_cmp)
         color = True if self.cmdout.isatty() else False
-        formatter = PtnFormatter(fmt, True)
         if self.cmdout.isatty():
             # use paging
+            formatter = PtnFormatter(fmt, True)
             pager = PageDisplay(util.ListIter(result), formatter)
             pager.loop()
         else:
+            formatter = PtnFormatter(fmt, False)
             for ptn in result:
                 print >>self.cmdout, formatter(ptn)
 
