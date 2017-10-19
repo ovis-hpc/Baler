@@ -20,9 +20,12 @@ my @PTNS = <$fin>;
 my @TSTA = ();
 my @NODES = ();
 
+my $tz = strftime("%z", localtime());
+$tz =~ s/([+-]\d\d)(\d\d)/$1:$2/;
+
 for ($TS=0; $TS<$BTEST_TS_LEN; $TS+=$BTEST_TS_INC) {
 	my @tm = localtime($BTEST_TS_BEGIN + $TS);
-	my $TS_TEXT = strftime "%FT%T.000000-05:00", @tm;
+	my $TS_TEXT = strftime "%FT%T.000000$tz", @tm;
 	push @TSTA, $TS_TEXT;
 }
 
