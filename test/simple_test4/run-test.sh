@@ -27,6 +27,8 @@ BTEST_PTN_TKN=1
 BTEST_CHECK='X'
 BTEST_OPERF='X'
 
+E_CODE=1
+
 source ./common.sh
 
 __check_config "$0"
@@ -120,18 +122,13 @@ if [[ -d $BSTORE ]]; then
 fi
 
 exit_hook() {
-	pkill -s 0
-	return
-	#JOBS=$(jobs -prl)
-	#echo "Running jobs: $JOBS"
-	#JOBS=$(jobs -pr)
-	#CMD="kill $JOBS"
-	#echo "Kill CMD: $CMD"
-	#$CMD
+	pkill -P $$
+	return $E_CODE
 }
 
 # Hook to kill all jobs at exit
 trap 'exit_hook' EXIT
+# trap ':' SIGTERM
 
 ./clean.sh
 
@@ -178,10 +175,19 @@ if [[ -n "$BTEST_CHECK" ]]; then
 	__info "NOTE: To disable checking, set BTEST_CHECK to '' (or unset it)"
 	__info "Checking ..."
 	./check.sh
+	E_CODE=$?
 else
 	__info "BTEST_CHECK not set. To enable checking, set BTEST_CHECK to a non-empty string"
+	E_CODE=0
 fi
 
 sleep 1
 
 echo -e "${BLD}${GRN}FINISHED!!!${NC}"
+
+if [[ -t 1 ]]; then
+__info "Press ENTER to exit ..."
+read
+fi
+
+exit $E_CODE
