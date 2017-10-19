@@ -1,0 +1,20 @@
+<189>1 2015-04-24T00:01:38.000641-06:00 c0-0c1s2n1 apsys 3415 p0-20150423t143637 [llm_status@34] craylog: message type: alps, connected to port: 514
+<189>1 2015-04-24T00:01:38.000668-06:00 c0-0c1s2n1 apsys 3415 p0-20150423t143637 [llm_connection_test@34] craylog: testing connectivity
+<189>1 2015-04-24T00:01:38.317564-06:00 c0-0c1s2n1 python 3415 p0-20150423t143637 [llm_status@34] craylog: message type: RUR-trace, connected to port: 514
+<189>1 2015-04-24T00:01:38.317601-06:00 c0-0c1s2n1 python 3415 p0-20150423t143637 [llm_connection_test@34] craylog: testing connectivity
+<189>1 2015-04-24T00:01:39.032182-06:00 c0-0c1s2n1 python 3427 p0-20150423t143637 [llm_status@34] craylog: message type: RUR, connected to port: 514
+<189>1 2015-04-24T00:01:39.032220-06:00 c0-0c1s2n1 python 3427 p0-20150423t143637 [llm_connection_test@34] craylog: testing connectivity
+<189>1 2015-04-24T00:01:39.327975-06:00 c0-0c1s2n1 xtcheckhealth 3456 p0-20150423t143637 [llm_status@34] craylog: message type: nhc, connected to port: 514
+<189>1 2015-04-24T00:01:39.328147-06:00 c0-0c1s2n1 xtcheckhealth 3456 p0-20150423t143637 [llm_connection_test@34] craylog: testing connectivity
+<189>1 2015-04-24T00:01:39.925891-06:00 c0-0c1s2n1 xtcheckhealth 3485 p0-20150423t143637 [llm_status@34] craylog: message type: nhc, connected to port: 514
+<189>1 2015-04-24T00:01:39.926062-06:00 c0-0c1s2n1 xtcheckhealth 3485 p0-20150423t143637 [llm_connection_test@34] craylog: testing connectivity
+<189>1 2015-04-24T00:02:38.759072-06:00 c0-0c1s2n1 aprun 3494 p0-20150423t143637 [llm_status@34] craylog: message type: alps_msgs, connected to port: 514
+<189>1 2015-04-24T00:02:38.759252-06:00 c0-0c1s2n1 aprun 3494 p0-20150423t143637 [llm_connection_test@34] craylog: testing connectivity
+<189>1 2015-04-24T00:02:39.072295-06:00 c0-0c1s2n1 apsys 3498 p0-20150423t143637 [llm_status@34] craylog: message type: alps, connected to port: 514
+<189>1 2015-04-24T00:02:39.072310-06:00 c0-0c1s2n1 apsys 3498 p0-20150423t143637 [llm_connection_test@34] craylog: testing connectivity
+<189>1 2015-04-24T00:02:39.337821-06:00 c0-0c1s2n1 apsys 3502 p0-20150423t143637 [llm_status@34] craylog: message type: alps, connected to port: 514
+<189>1 2015-04-24T00:02:39.337835-06:00 c0-0c1s2n1 apsys 3502 p0-20150423t143637 [llm_connection_test@34] craylog: testing connectivity
+<189>1 2015-04-24T00:02:39.646403-06:00 c0-0c1s2n1 python 3502 p0-20150423t143637 [llm_status@34] craylog: message type: RUR-trace, connected to port: 514
+<189>1 2015-04-24T00:02:39.646430-06:00 c0-0c1s2n1 python 3502 p0-20150423t143637 [llm_connection_test@34] craylog: testing connectivity
+<189>1 2015-04-24T00:05:02.740135-06:00 c0-0c1s2n1 apsys 3516 p0-20150423t143637 [llm_status@34] craylog: message type: alps, connected to port: 514
+<189>1 2015-04-24T00:05:02.740156-06:00 c0-0c1s2n1 apsys 3516 p0-20150423t143637 [llm_connection_test@34] craylog: testing connectivity

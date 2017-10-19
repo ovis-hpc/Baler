@@ -1,0 +1,20 @@
+2015-04-24 08:15:33 | HWERR[c0-0c1s8a0n0][5970]:0x5b03:Denali Core Correctable Error
+2015-04-24 08:15:43 | HWERR[c0-0c1s8a0n0][5971]:0x5b03:Denali Core Correctable Error
+2015-04-24 08:15:53 | HWERR[c0-0c1s8a0n0][5972]:0x5b03:Denali Core Correctable Error
+2015-04-24 08:16:03 | HWERR[c0-0c1s8a0n0][5973]:0x5b03:Denali Core Correctable Error
+2015-04-24 08:16:06 | HWERR[c0-0c1s8a0n0][1346]:0x6718:Current state of the LTSSM:Info1=0x202020000d001e29:Info2=0x24900ee000e0238:Info3=0x8
+2015-04-24 08:16:13 | HWERR[c0-0c1s8a0n0][5974]:0x5b03:Denali Core Correctable Error
+2015-04-24 08:16:23 | HWERR[c0-0c1s8a0n0][5975]:0x5b03:Denali Core Correctable Error
+2015-04-24 08:16:33 | HWERR[c0-0c1s8a0n0][5976]:0x5b03:Denali Core Correctable Error
+2015-04-24 08:16:36 | HWERR[c0-0c1s8a0n0][1347]:0x6718:Current state of the LTSSM:Info1=0x202020000b001e29:Info2=0x24900ee000d0238:Info3=0x8
+2015-04-24 08:16:43 | HWERR[c0-0c1s8a0n0][5977]:0x5b03:Denali Core Correctable Error
+2015-04-24 08:16:53 | HWERR[c0-0c1s8a0n0][5978]:0x5b03:Denali Core Correctable Error
+2015-04-24 08:17:03 | HWERR[c0-0c1s8a0n0][5979]:0x5b03:Denali Core Correctable Error
+2015-04-24 08:17:06 | HWERR[c0-0c1s8a0n0][1348]:0x6718:Current state of the LTSSM:Info1=0x202020000e001e29:Info2=0x24900ee000e0238:Info3=0x8
+2015-04-24 08:17:13 | HWERR[c0-0c1s8a0n0][5980]:0x5b03:Denali Core Correctable Error
+2015-04-24 08:17:23 | HWERR[c0-0c1s8a0n0][5981]:0x5b03:Denali Core Correctable Error
+2015-04-24 08:17:33 | HWERR[c0-0c1s8a0n0][5982]:0x5b03:Denali Core Correctable Error
+2015-04-24 08:17:43 | HWERR[c0-0c1s8a0n0][5983]:0x5b03:Denali Core Correctable Error
+2015-04-24 08:17:53 | HWERR[c0-0c1s8a0n0][5984]:0x5b03:Denali Core Correctable Error
+2015-04-24 08:18:03 | HWERR[c0-0c1s8a0n0][5985]:0x5b03:Denali Core Correctable Error
+2015-04-24 08:18:06 | HWERR[c0-0c1s8a0n0][1349]:0x6718:Current state of the LTSSM:Info1=0x202020000d001e29:Info2=0x24900ee000e0238:Info3=0x8

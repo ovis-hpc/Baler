@@ -1,0 +1,20 @@
+2015-04-24T07:57:20.215064-06:00 mutrino-smw craylog: message type: console, connected to port: 5150
+2015-04-24T07:57:20.215133-06:00 mutrino-smw craylog: testing connectivity
+2015-04-24T07:57:20.464573-06:00 mutrino-smw starting
+2015-04-24T07:57:34.844171-06:00 c0-0c0s2n1 ERROR: Type:2; Severity:80; Class:3; Subclass:D; Operation: 2
+2015-04-24T07:57:35.336524-06:00 c0-0c1s1n1 ERROR: Type:2; Severity:80; Class:3; Subclass:D; Operation: 2
+2015-04-24T07:57:35.336547-06:00 c0-0c0s0n1 ERROR: Type:2; Severity:80; Class:3; Subclass:D; Operation: 2
+2015-04-24T07:57:35.336573-06:00 c0-0c1s0n1 ERROR: Type:2; Severity:80; Class:3; Subclass:D; Operation: 2
+2015-04-24T07:57:35.336584-06:00 c0-0c0s1n1 ERROR: Type:2; Severity:80; Class:3; Subclass:D; Operation: 2
+2015-04-24T07:57:35.336604-06:00 c0-0c2s1n1 ERROR: Type:2; Severity:80; Class:3; Subclass:D; Operation: 2
+2015-04-24T07:57:35.336633-06:00 c0-0c2s0n1 ERROR: Type:2; Severity:80; Class:3; Subclass:D; Operation: 2
+2015-04-24T07:57:35.361855-06:00 c0-0c1s2n1 ERROR: Type:2; Severity:80; Class:3; Subclass:D; Operation: 2
+2015-04-24T07:57:35.361882-06:00 c0-0c2s2n1 ERROR: Type:2; Severity:80; Class:3; Subclass:D; Operation: 2
+2015-04-24T07:57:35.841444-06:00 c0-0c0s4n0 ERROR: Type:2; Severity:80; Class:3; Subclass:D; Operation: 2
+2015-04-24T07:57:35.841459-06:00 c0-0c0s8n0 ERROR: Type:2; Severity:80; Class:3; Subclass:D; Operation: 2
+2015-04-24T07:57:35.841481-06:00 c0-0c0s10n0 ERROR: Type:2; Severity:80; Class:3; Subclass:D; Operation: 2
+2015-04-24T07:57:35.841502-06:00 c0-0c2s8n0 ERROR: Type:2; Severity:80; Class:3; Subclass:D; Operation: 2
+2015-04-24T07:57:35.841528-06:00 c0-0c0s3n0 ERROR: Type:2; Severity:80; Class:3; Subclass:D; Operation: 2
+2015-04-24T07:57:35.841538-06:00 c0-0c0s7n0 ERROR: Type:2; Severity:80; Class:3; Subclass:D; Operation: 2
+2015-04-24T07:57:35.841547-06:00 c0-0c1s9n0 ERROR: Type:2; Severity:80; Class:3; Subclass:D; Operation: 2
+2015-04-24T07:57:35.841572-06:00 c0-0c2s10n0 ERROR: Type:2; Severity:80; Class:3; Subclass:D; Operation: 2
