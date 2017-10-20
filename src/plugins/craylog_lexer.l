@@ -32,7 +32,7 @@ MAC_ADDR		[[:xdigit:]]{2}:[[:xdigit:]]{2}:[[:xdigit:]]{2}:[[:xdigit:]]{2}:[[:xdi
 HEX_INT			(0[xX])?[[:xdigit:]]+
 DEC_INT			[[:digit:]]+
 FLOAT			[[:digit:]]+"."[[:digit:]]*([eE][[:digit:]]+"."[[:digit:]]*)?
-TIMESTAMP		[[:digit:]]{4}"-"[[:digit:]]{2}"-"[[:digit:]]{2}"T"[[:digit:]]{2}":"[[:digit:]]{2}":"[[:digit:]]{2}("."[[:digit:]]+)?"-"(([[:digit:]]{2}":"[[:digit:]]{2})|([[:digit:]]+[tT][[:digit:]]+))
+TIMESTAMP		[[:digit:]]{4}"-"[[:digit:]]{2}"-"[[:digit:]]{2}"T"[[:digit:]]{2}":"[[:digit:]]{2}":"[[:digit:]]{2}("."[[:digit:]]+)?(([+-][[:digit:]]{2}":"[[:digit:]]{2})|"Z")
 TIMESTAMP2		(("Jan"|"Feb"|"Mar"|"Apr"|"May"|"Jun"|"Jul"|"Aug"|"Sep"|"Oct"|"Nov"|"Dec")(" ")+[[:digit:]]{1,2}(",")?(" ")+([[:digit:]]{4}(" ")+)?[[:digit:]]{2}":"[[:digit:]]{2}":"[[:digit:]]{2})
 TIMESTAMP3		[[:digit:]]{4}"-"[[:digit:]]{2}"-"[[:digit:]]{2}" "[[:digit:]]{2}":"[[:digit:]]{2}":"[[:digit:]]{2}
 HTTP			[hH][tT]{2}[pP]([sS])?:\/\/
