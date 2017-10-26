@@ -387,7 +387,6 @@ static sos_t create_container(const char *path, int o_mode)
 
 static int create_store(const char *path, int o_mode)
 {
-	sos_part_t part;
 	sos_t dict, msgs, ptns, ptn_tkns, hist;
 	sos_schema_t schema;
 	int rc = ENOMEM;
@@ -812,15 +811,19 @@ static int __add_tkn_with_id(bstore_sos_t bss, btkn_t tkn, uint64_t count)
 
 	/* Allocate a new object */
 	tkn_obj = sos_obj_new(bss->token_value_schema);
-	if (!tkn_obj)
+	if (!tkn_obj) {
+		rc = errno;
 		goto err_0;
+	}
 	tkn_value = sos_obj_ptr(tkn_obj);
 	tkn_value->tkn_count = count;
 
 	sz = tkn->tkn_str->blen + 1;
 	v = sos_array_new(&v_, bss->tkn_text_attr, tkn_obj, sz);
-	if (!v)
+	if (!v) {
+		rc = errno;
 		goto err_1;
+	}
 	memcpy(v->data->array.data.byte_, tkn->tkn_str->cstr, sz);
 	sos_value_put(v);
 	tkn_value->tkn_id = tkn->tkn_id;
@@ -833,7 +836,6 @@ static int __add_tkn_with_id(bstore_sos_t bss, btkn_t tkn, uint64_t count)
 	rc = sos_obj_index(tkn_obj);
 	if (rc)
 		goto err_1;
- out:
 	sos_obj_put(tkn_obj);
 	return 0;
  err_1:
@@ -854,7 +856,6 @@ static sos_visit_action_t tkn_add_cb(sos_index_t index,
 				     sos_key_t key, sos_idx_data_t *idx_data,
 				     int found, void *arg)
 {
-	int rc;
 	tkn_value_t tkn_value;
 	struct sos_value_s v_, *v;
 	size_t sz;
@@ -915,7 +916,6 @@ static sos_visit_action_t tkn_add_cb(sos_index_t index,
 	sos_key_set(id_key, &tkn_id, sizeof(tkn_id));
 	sos_index_insert(sos_attr_index(ctxt->bss->tkn_id_attr), id_key, tkn_obj);
 
- out:
 	ctxt->obj = sos_obj_get(tkn_obj);
 	*ref = sos_obj_ref(tkn_obj);
 	sos_obj_put(tkn_obj);
@@ -1024,7 +1024,6 @@ static int bs_type_add_with_id(bstore_t bs, btkn_t tkn)
 static btkn_t bs_tkn_find_by_id(bstore_t bs, btkn_id_t tkn_id)
 {
 	btkn_t token = NULL;
-	int rc;
 	tkn_value_t tkn_value;
 	bstore_sos_t bss = (bstore_sos_t)bs;
 	sos_obj_t tkn_obj;
@@ -1060,11 +1059,9 @@ static btkn_t bs_tkn_find_by_name(bstore_t bs,
 				     const char *text, size_t text_len)
 {
 	btkn_t token = NULL;
-	btkn_id_t tkn_id = 0;
 	tkn_value_t tkn_value;
 	bstore_sos_t bss = (bstore_sos_t)bs;
 	sos_obj_t tkn_obj;
-	sos_value_t tkn_str;
 	SOS_KEY(text_key);
 
 	encode_tkn_key(text_key, text, text_len);
@@ -1081,7 +1078,6 @@ static btkn_t bs_tkn_find_by_name(bstore_t bs,
 		token->tkn_count = tkn_value->tkn_count;
 	else
 		errno = ENOMEM;
- out_1:
 	sos_obj_put(tkn_obj);
  out_0:
 	if (bstore_lock)
@@ -1256,7 +1252,6 @@ static void __iter_pos_free(bsos_iter_t iter, bstore_iter_pos_t pos)
 {
 	int rc;
 	int type = pos >> 32;
-	sos_pos_t sos_pos = pos & 0xFFFFFFFF;
 	if (!iter->iter) {
 		rc = __iter_init(iter, type);
 		if (rc)
@@ -1311,7 +1306,6 @@ static btkn_t __make_tkn(bstore_sos_t bss, sos_obj_t tkn_obj)
 	tkn_value_t tv;
 	btkn_t tkn;
 	size_t txt_len;
-	size_t skip_len;
 
 	if (!tkn_obj)
 		return NULL;
@@ -1339,7 +1333,6 @@ static btkn_t __make_tkn(bstore_sos_t bss, sos_obj_t tkn_obj)
 static int bs_tkn_iter_first(btkn_iter_t iter)
 {
 	bsos_iter_t i = (bsos_iter_t)iter;
-	bstore_sos_t bss = (bstore_sos_t)i->bs;
 	return sos_iter_begin(i->iter);
 }
 
@@ -1353,21 +1346,18 @@ static btkn_t bs_tkn_iter_obj(btkn_iter_t iter)
 static int bs_tkn_iter_next(btkn_iter_t iter)
 {
 	bsos_iter_t i = (bsos_iter_t)iter;
-	bstore_sos_t bss = (bstore_sos_t)i->bs;
 	return sos_iter_next(i->iter);
 }
 
 static int bs_tkn_iter_prev(btkn_iter_t iter)
 {
 	bsos_iter_t i = (bsos_iter_t)iter;
-	bstore_sos_t bss = (bstore_sos_t)i->bs;
 	return sos_iter_prev(i->iter);
 }
 
 static int bs_tkn_iter_last(btkn_iter_t iter)
 {
 	bsos_iter_t i = (bsos_iter_t)iter;
-	bstore_sos_t bss = (bstore_sos_t)i->bs;
 	return sos_iter_end(i->iter);
 }
 
@@ -1414,11 +1404,8 @@ static uint64_t bs_ptn_iter_card(bptn_iter_t i)
 static bptn_t __make_ptn(bstore_sos_t bss, bsos_iter_t i, sos_obj_t ptn_obj)
 {
 	struct sos_value_s v_, *tkn_str;
-	int rc;
-	tkn_value_t tv;
 	bptn_t ptn;
 	ptn_t sptn;
-	size_t txt_len;
 
 	if (!ptn_obj)
 		return NULL;
@@ -1473,7 +1460,6 @@ static bptn_t bs_ptn_find(bstore_t bs, bptn_id_t ptn_id)
 
 static int bs_ptn_find_by_ptnstr(bstore_t bs, bptn_t ptn)
 {
-	bptn_id_t ptn_id;
 	ptn_t ptn_value;
 	bstore_sos_t bss = (bstore_sos_t)bs;
 	sos_obj_t ptn_obj;
@@ -1569,10 +1555,8 @@ static int __bs_ptn_iter_find(bptn_iter_t iter, int fwd, bptn_id_t ptn_id)
 {
 	SOS_KEY(key);
 	ods_key_value_t kv = key->as.ptr;
-	struct sos_timestamp_s *first_seen;
 	bptn_id_t *_ptn_id;
 	bsos_iter_t i = (bsos_iter_t)iter;
-	bstore_sos_t bss = (bstore_sos_t)i->bs;
 	int rc;
 
 	_ptn_id = (void*)kv->value;
@@ -1617,7 +1601,6 @@ static bptn_t bs_ptn_iter_obj(bptn_iter_t iter)
 static int bs_ptn_iter_next(bptn_iter_t iter)
 {
 	bsos_iter_t i = (bsos_iter_t)iter;
-	bstore_sos_t bss = (bstore_sos_t)i->bs;
 	int rc = sos_iter_next(i->iter);
 	if (rc)
 		return rc;
@@ -1627,7 +1610,6 @@ static int bs_ptn_iter_next(bptn_iter_t iter)
 static int bs_ptn_iter_prev(bptn_iter_t iter)
 {
 	bsos_iter_t i = (bsos_iter_t)iter;
-	bstore_sos_t bss = (bstore_sos_t)i->bs;
 	int rc = sos_iter_prev(i->iter);
 	if (rc)
 		return rc;
@@ -1669,7 +1651,6 @@ static uint64_t bs_ptn_tkn_iter_card(bptn_tkn_iter_t i)
 
 static bmsg_iter_t bs_msg_iter_new(bstore_t bs)
 {
-	bstore_sos_t bss = (bstore_sos_t)bs;
 	bsos_iter_t mi = calloc(1, sizeof(*mi));
 	if (mi)
 		mi->bs = bs;
@@ -1696,10 +1677,8 @@ static uint64_t bs_msg_iter_card(bmsg_iter_t i)
 static bmsg_t __make_msg(bstore_sos_t bss, bsos_iter_t i, sos_obj_t msg_obj)
 {
 	struct sos_value_s v_, *tkn_ids;
-	int rc;
 	bmsg_t dmsg;
 	msg_t smsg;
-	size_t txt_len;
 	bptn_id_t ptn_id;
 	bptn_t ptn = NULL;
 	int x, y;
@@ -1917,7 +1896,6 @@ static int bs_msg_iter_next(bmsg_iter_t iter)
 {
 	sos_obj_t obj;
 	bsos_iter_t i = (bsos_iter_t)iter;
-	bstore_sos_t bss = (bstore_sos_t)i->bs;
 	int rc;
 	rc = sos_iter_next(i->iter);
 	if (rc)
@@ -1934,7 +1912,6 @@ static int bs_msg_iter_prev(bmsg_iter_t iter)
 {
 	sos_obj_t obj;
 	bsos_iter_t i = (bsos_iter_t)iter;
-	bstore_sos_t bss = (bstore_sos_t)i->bs;
 	int rc;
 	rc = sos_iter_prev(i->iter);
 	if (rc)
@@ -1954,7 +1931,6 @@ static int bs_msg_iter_last(bmsg_iter_t iter)
 
 int bs_msg_iter_filter_set(bmsg_iter_t iter, bstore_iter_filter_t filter)
 {
-	int rc;
 	bsos_iter_t i = (bsos_iter_t)iter;
 	bstore_sos_t bss = (bstore_sos_t)i->bs;
 	int new_type;
@@ -2166,7 +2142,6 @@ static sos_visit_action_t ptn_add_cb(sos_index_t index,
 				     int found, void *arg)
 {
 	int rc;
-	size_t sz;
 	sos_obj_t ptn_obj;
 	ptn_t ptn_value;
 	sos_obj_ref_t *ref = (sos_obj_ref_t *)idx_data;
@@ -2275,10 +2250,7 @@ static sos_visit_action_t ptn_add_cb(sos_index_t index,
 
 static bptn_id_t bs_ptn_add(bstore_t bs, struct timeval *tv, bstr_t ptn)
 {
-	bptn_id_t ptn_id;
-	ptn_t ptn_value;
 	bstore_sos_t bss = (bstore_sos_t)bs;
-	sos_obj_t ptn_obj;
 	SOS_KEY_SZ(stack_key, 2048);
 	sos_key_t ptn_key;
 	int rc;
@@ -2353,7 +2325,6 @@ static int bs_ptn_tkn_add(bstore_t bs, bptn_id_t ptn_id, uint64_t tkn_pos,
 static int __bs_static_ptn_tkn_rc(bstore_t bs, bptn_id_t ptn_id,
 				  uint64_t tkn_pos, btkn_id_t *tkn_id)
 {
-	btkn_t tkn;
 	bptn_t ptn = NULL;
 	btkn_id_t _tkn_id;
 
@@ -2461,29 +2432,35 @@ static int bs_ptn_hist_update(bstore_t bs,
 	SOS_KEY(ph_key);
 	SOS_KEY(ch_key);
 	sos_index_t idx;
-	int bin, rc;
+	int rc;
 
 	/* Pattern Histogram */
 	sos_key_join(ph_key, bss->ptn_hist_key_attr, bin_width, secs, ptn_id);
 	idx = sos_attr_index(bss->ptn_hist_key_attr);
 	rc = sos_index_visit(idx, ph_key, hist_cb, NULL);
+	if (rc)
+		goto err_0;
 
 	/* Date Histogram */
 	sos_key_join(ph_key, bss->ptn_hist_key_attr,
 		     bin_width, secs, BPTN_ID_SUM_ALL);
 	idx = sos_attr_index(bss->ptn_hist_key_attr);
 	rc = sos_index_visit(idx, ph_key, hist_cb, NULL);
+	if (rc)
+		goto err_0;
 
 	/* Component Histogram */
 	sos_key_join(ch_key, bss->comp_hist_key_attr,
 		     bin_width, secs, comp_id, ptn_id);
 	idx = sos_attr_index(bss->comp_hist_key_attr);
 	rc = sos_index_visit(idx, ch_key, hist_cb, NULL);
+	if (rc)
+		goto err_0;
 
 	return 0;
  err_0:
 	// pthread_mutex_unlock(&bss->hist_lock);
-	return ENOMEM;
+	return rc;
 }
 
 static int bs_tkn_hist_update(bstore_t bs, time_t secs, time_t bin_width, btkn_id_t tkn_id)
@@ -2501,7 +2478,6 @@ static int bs_msg_add(bstore_t bs, struct timeval *tv, bmsg_t msg)
 	msg_t msg_value;
 	bstore_sos_t bss = (bstore_sos_t)bs;
 	sos_obj_t msg_obj;
-	uint64_t pos;
 	btkn_type_t type_id;
 	int rc = ENOMEM;
 	int i, wc;
@@ -2585,8 +2561,6 @@ static int bs_msg_add(bstore_t bs, struct timeval *tv, bmsg_t msg)
 
 static btkn_t make_ptn_tkn(bsos_iter_t i)
 {
-	bstore_sos_t bss = (bstore_sos_t)i->bs;
-	int rc;
 	btkn_t tkn;
 	uint64_t ptn_id, tkn_pos, tkn_id;
 	sos_key_t key;
@@ -2623,7 +2597,6 @@ static btkn_t bs_ptn_tkn_iter_obj(bptn_tkn_iter_t iter)
 static int bs_ptn_tkn_iter_first(bptn_tkn_iter_t iter)
 {
 	bsos_iter_t i = (bsos_iter_t)iter;
-	bstore_sos_t bss = (bstore_sos_t)i->bs;
 	SOS_KEY(key);
 	int rc;
 
@@ -2648,7 +2621,6 @@ static int bs_ptn_tkn_iter_first(bptn_tkn_iter_t iter)
 static int bs_ptn_tkn_iter_last(bptn_tkn_iter_t iter)
 {
 	bsos_iter_t i = (bsos_iter_t)iter;
-	bstore_sos_t bss = (bstore_sos_t)i->bs;
 	SOS_KEY(key);
 	int rc;
 
@@ -2735,7 +2707,6 @@ static int __tkn_hist_next(bsos_iter_t i)
 	sos_key_t key_o = sos_iter_key(i->iter);
 	time_t start_time = i->filter.tv_begin.tv_sec;
 	time_t end_time = i->filter.tv_end.tv_sec;
-	sos_obj_ref_t ref;
 	for ( ; 0 == rc;
 	      key_o = (0 == (rc = sos_iter_next(i->iter))?sos_iter_key(i->iter):NULL)) {
 		sos_key_split(key_o, sos_iter_attr(i->iter),
@@ -2769,7 +2740,6 @@ static int __tkn_hist_prev(bsos_iter_t i)
 	sos_key_t key_o = sos_iter_key(i->iter);
 	time_t start_time = i->filter.tv_begin.tv_sec;
 	time_t end_time = i->filter.tv_end.tv_sec;
-	sos_obj_ref_t ref;
 	for ( ; 0 == rc;
 	      key_o = (0 == (rc = sos_iter_prev(i->iter))?sos_iter_key(i->iter):NULL)) {
 		sos_key_split(key_o, sos_iter_attr(i->iter),
@@ -3014,7 +2984,6 @@ static int __ptn_hist_prev(bsos_iter_t i)
 static int
 __bs_ptn_hist_iter_find(bptn_hist_iter_t iter, int fwd, bptn_hist_t ptn_h)
 {
-	bstore_sos_t bss = (bstore_sos_t)iter->bs;
 	bsos_iter_t i = (bsos_iter_t)iter;
 	SOS_KEY(key);
 	int rc;
@@ -3235,7 +3204,6 @@ static int __comp_hist_prev(bsos_iter_t i)
 static int
 __bs_comp_hist_iter_find(bcomp_hist_iter_t iter, int fwd, bcomp_hist_t comp_h)
 {
-	bstore_sos_t bss = (bstore_sos_t)iter->bs;
 	bsos_iter_t i = (bsos_iter_t)iter;
 	SOS_KEY(key);
 	int rc;
@@ -3287,7 +3255,6 @@ bs_comp_hist_iter_find_rev(bcomp_hist_iter_t iter, bcomp_hist_t comp_h)
 
 static int bs_comp_hist_iter_first(bcomp_hist_iter_t iter)
 {
-	bstore_sos_t bss = (bstore_sos_t)iter->bs;
 	bsos_iter_t i = (bsos_iter_t)iter;
 	struct bcomp_hist_s hist = {
 		.bin_width = i->filter.bin_width,
@@ -3300,7 +3267,6 @@ static int bs_comp_hist_iter_first(bcomp_hist_iter_t iter)
 
 static int bs_comp_hist_iter_last(bcomp_hist_iter_t iter)
 {
-	bstore_sos_t bss = (bstore_sos_t)iter->bs;
 	bsos_iter_t i = (bsos_iter_t)iter;
 	struct bcomp_hist_s hist = {
 		.bin_width = i->filter.bin_width,
@@ -3315,7 +3281,6 @@ static bcomp_hist_t bs_comp_hist_iter_obj(bcomp_hist_iter_t iter,
 					  bcomp_hist_t comp_h)
 {
 	bsos_iter_t i = (bsos_iter_t)iter;
-	int rc = 0;
 	sos_obj_ref_t ref;
 	sos_key_t key_o;
 
