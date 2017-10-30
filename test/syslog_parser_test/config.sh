@@ -19,7 +19,7 @@ export BTEST_NODE_LEN=17
 export BTEST_N_PATTERNS=8
 export BTEST_N_TRAILING=2
 export BTEST_LONG_TOKEN_LEN=128 # must be > 0
-export BTEST_INPUT_DIR="./log.1"
+export BTEST_INPUT_DIR="./log"
 
 export BTEST_BIN_MAX_MSG_LEN=0
 
