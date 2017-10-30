@@ -68,7 +68,10 @@ BTEST_TKN_HIST = get_btest_int("BTEST_TKN_HIST")
 BTEST_PTN_HIST = get_btest_int("BTEST_PTN_HIST")
 BTEST_PTN_TKN = get_btest_int("BTEST_PTN_TKN")
 
-BTEST_INPUT_DIR = BTEST_VARS["BTEST_INPUT_DIR"]
+try:
+    BTEST_INPUT_DIR = BTEST_VARS["BTEST_INPUT_DIR"]
+except:
+    BTEST_INPUT_DIR = None
 
 BTEST_TKN_TYPE_MASK = get_btest_var_map("BTEST_TKN_TYPE_MASK",
                                         Bq.btkn_type_mask_from_str, 0)

@@ -242,7 +242,6 @@ class TestBS(object):
         self.assertIsNotNone(ptn1)
         pos = itr1.get_pos()
         self.assertIsNotNone(pos)
-        print "pos:", pos
         itr2 = PtnIter(self.bs)
         itr2.set_pos(pos)
         ptn2 = itr2.obj()
@@ -827,9 +826,7 @@ class TestBS(object):
                 self.assertTrue(k not in b)
                 b[k] = h.msg_count
             self.assertGreater(len(a), 0)
-            for (k,v) in a.iteritems():
-                b[k] == v
-            # self.assertEqual(a, b)
+            self.assertEqual(a, b)
         except:
             print ""
             print "bin_width:", bin_width
