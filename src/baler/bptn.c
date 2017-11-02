@@ -62,13 +62,15 @@
 #include <sys/fcntl.h>
 #include <assert.h>
 
+void __bptn_attr_free(struct bptn_attr *attr);
+
 void battrarray_free(struct barray *a)
 {
 	int i;
 	for (i=0; i<a->len; i++) {
 		struct bptn_attr *attr;
 		if (barray_get(a, i, &attr)) {
-			bptn_attr_free(attr);
+			__bptn_attr_free(attr);
 		}
 	}
 	barray_free(a);
@@ -96,7 +98,7 @@ err0:
 	return NULL;
 }
 
-void bptn_attr_free(struct bptn_attr *attr)
+void __bptn_attr_free(struct bptn_attr *attr)
 {
 	int i;
 	for (i=0; i<attr->argc; i++) {

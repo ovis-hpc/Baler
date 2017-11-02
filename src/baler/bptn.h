@@ -130,11 +130,6 @@ struct bptn_attr {
 struct bptn_attr* bptn_attr_alloc(uint32_t argc);
 
 /**
- * Free the \a attr, along with all of the data owned by it.
- */
-void bptn_attr_free(struct bptn_attr *attr);
-
-/**
  * Definition for bvec_set_u32.
  */
 BVEC_DEF(bvec_set_u32, struct bset_u32);
