@@ -85,6 +85,14 @@ cdef extern from "baler/btypes.h":
     ctypedef bmsg *bmsg_t
     bptn_t bptn_dup(bptn_t ptn)
 
+    cdef struct bptn_attr_s:
+        bptn_id_t ptn_id
+        char *attr_type
+        char *attr_value
+        char _data[0]
+    ctypedef bptn_attr_s *bptn_attr_t
+    void bptn_attr_free(bptn_attr_t)
+
 cdef extern from "baler/bstore.h":
     cdef struct bstore_s
     ctypedef uint64_t bstore_iter_pos_t
@@ -103,6 +111,8 @@ cdef extern from "baler/bstore.h":
         btkn_id_t tkn_id
         uint64_t tkn_pos
         uint64_t bin_width
+        const char *attr_type
+        const char *attr_value
 
     ctypedef bstore_iter_filter_s *bstore_iter_filter_t
 
@@ -240,6 +250,42 @@ cdef extern from "baler/bstore.h":
     void bstore_iter_pos_free(bstore_iter_t iter, bstore_iter_pos_t pos_h)
     char *bstore_pos_to_str(bstore_iter_pos_t pos)
     bstore_iter_pos_t bstore_pos_from_str(const char *pos)
+
+    int bstore_attr_new(bstore_t bs, const char *attr_type)
+    int bstore_attr_find(bstore_t bs, const char *attr_type)
+    int bstore_ptn_attr_value_set(bstore_t bs, bptn_id_t ptn_id,
+            const char *attr_type, const char *attr_value)
+    int bstore_ptn_attr_value_add(bstore_t bs, bptn_id_t ptn_id,
+            const char *attr_type, const char *attr_value)
+    int bstore_ptn_attr_value_rm(bstore_t bs, bptn_id_t ptn_id,
+            const char *attr_type, const char *attr_value)
+    int bstore_ptn_attr_unset(bstore_t bs, bptn_id_t ptn_id,
+            const char *attr_type)
+    char *bstore_ptn_attr_get(bstore_t bs, bptn_id_t ptn_id,
+            const char *attr_type)
+
+    # ptn_attr_iter
+    ctypedef bstore_iter_t bptn_attr_iter_t
+    bptn_attr_iter_t bstore_ptn_attr_iter_new(bstore_t bs)
+    void bstore_ptn_attr_iter_free(bptn_attr_iter_t iter)
+    int bstore_ptn_attr_iter_filter_set(bptn_attr_iter_t iter,
+                                     bstore_iter_filter_t filter)
+    bptn_attr_t bstore_ptn_attr_iter_obj(bptn_attr_iter_t iter)
+    int bstore_ptn_attr_iter_find_fwd(bptn_attr_iter_t iter,
+                                  bptn_id_t ptn_id,
+                                  const char *attr_type,
+                                  const char *attr_value)
+    int bstore_ptn_attr_iter_find_rev(bptn_attr_iter_t iter,
+                                  bptn_id_t ptn_id,
+                                  const char *attr_type,
+                                  const char *attr_value)
+    int bstore_ptn_attr_iter_first(bptn_attr_iter_t iter)
+    int bstore_ptn_attr_iter_next(bptn_attr_iter_t iter)
+    int bstore_ptn_attr_iter_prev(bptn_attr_iter_t iter)
+    int bstore_ptn_attr_iter_last(bptn_attr_iter_t iter)
+
+#### -- end of "baler/bstore.h" import -- ####
+
 
 cdef extern from "baler/btkn.h":
     uint64_t btkn_type_mask_from_str(const char *str)

@@ -22,6 +22,8 @@
 #define __be32
 #endif
 
+#define ATTR_TYPE_MAX 512
+
 #define OOM()	berr("Out of memory at %s:%d\n", __func__, __LINE__)
 
 int bstore_lock = 0;
@@ -38,6 +40,8 @@ typedef struct bstore_sos_s {
 	sos_t ptn_tkn_sos;
 	sos_t msg_sos;
 	sos_t hist_sos;
+	sos_t attr_sos;
+
 	sos_schema_t token_value_schema;
 	sos_schema_t message_schema;
 	sos_schema_t pattern_schema;
@@ -45,6 +49,8 @@ typedef struct bstore_sos_s {
 	sos_schema_t token_hist_schema;
 	sos_schema_t pattern_hist_schema;
 	sos_schema_t component_hist_schema;
+	sos_schema_t attribute_schema;
+	sos_schema_t pattern_attribute_schema;
 
 	sos_attr_t tkn_id_attr; /* Token.tkn_id */
 	sos_attr_t tkn_type_mask_attr; /* Token.tkn_type_mask */
@@ -64,6 +70,14 @@ typedef struct bstore_sos_s {
 	sos_attr_t tkn_hist_key_attr;
 	sos_attr_t ptn_hist_key_attr;
 	sos_attr_t comp_hist_key_attr;
+
+	sos_attr_t attr_type_attr;
+
+	sos_attr_t pa_at_attr;
+	sos_attr_t pa_av_attr;
+	sos_attr_t pa_ptv_attr;
+	sos_attr_t pa_tv_attr;
+	sos_attr_t pa_tp_attr;
 
 	btkn_id_t next_tkn_id;
 	bptn_id_t next_ptn_id;
@@ -349,6 +363,83 @@ struct sos_schema_template component_hist_schema = {
 	}
 };
 
+struct sos_schema_template attribute_schema = {
+	.name = "Attribute",
+	.attrs = {
+		{
+			.name = "type",
+			.type = SOS_TYPE_CHAR_ARRAY,
+			.indexed = 1,
+			.idx_type = "HTBL",
+		},
+		{ NULL }
+	}
+};
+
+typedef struct ptn_attr_s {
+	uint64_t ptn_id;
+	union sos_obj_ref_s attr_type;
+	union sos_obj_ref_s attr_value;
+} *ptn_attr_t;
+
+const char *PA_ptn_type_value_join_list[] = {"ptn_id", "attr_type", "attr_value"};
+const char *PA_type_value_join_list[] = {"attr_type", "attr_value"};
+const char *PA_type_ptn_join_list[] = {"attr_type", "ptn_id"};
+struct sos_schema_template pattern_attribute_schema = {
+	.name = "PatternAttribute",
+	.attrs = {
+		{
+			.name = "ptn_id",
+			.type = SOS_TYPE_UINT64,
+		},
+		{
+			.name = "attr_type", /* refers to Attribute.type */
+			.type = SOS_TYPE_CHAR_ARRAY,
+		},
+		{
+			.name = "attr_value",
+			.type = SOS_TYPE_CHAR_ARRAY,
+		},
+		{
+			/*
+			 * For
+			 *   (ptn) |-> ( (type, value), ... ), and
+			 *   (ptn, type) |-> ( (value), ... ).
+			 */
+			.name = "ptn_type_value",
+			.type = SOS_TYPE_JOIN,
+			.size = 3,
+			.join_list = PA_ptn_type_value_join_list,
+			.indexed = 1,
+			.idx_type = "BXTREE",
+		},
+		{
+			/*
+			 * For (type, value) |-> ( (ptn_id), ... ).
+			 */
+			.name = "type_value",
+			.type = SOS_TYPE_JOIN,
+			.size = 2,
+			.join_list = PA_type_value_join_list,
+			.indexed = 1,
+			.idx_type = "BXTREE",
+		},
+		{
+			/*
+			 * For (type)|->( (ptn_id, value) ... )
+			 * ordered by ptn_id.
+			 */
+			.name = "type_ptn",
+			.type = SOS_TYPE_JOIN,
+			.size = 2,
+			.join_list = PA_type_ptn_join_list,
+			.indexed = 1,
+			.idx_type = "BXTREE",
+		},
+		{ NULL }
+	}
+};
+
 static size_t encode_id(uint64_t id, uint8_t *s);
 static size_t encoded_id_len(uint64_t id);
 static size_t decode_ptn(bstr_t ptn, const uint8_t *tkn_str, size_t tkn_count);
@@ -387,7 +478,7 @@ static sos_t create_container(const char *path, int o_mode)
 
 static int create_store(const char *path, int o_mode)
 {
-	sos_t dict, msgs, ptns, ptn_tkns, hist;
+	sos_t dict, msgs, ptns, ptn_tkns, hist, attr;
 	sos_schema_t schema;
 	int rc = ENOMEM;
 	char *cpath = malloc(PATH_MAX);
@@ -460,12 +551,33 @@ static int create_store(const char *path, int o_mode)
 	rc = sos_schema_add(hist, schema);
 	if (rc)
 		goto err_6;
+
+	/*
+	 * Attribute, Pattern-Attribute
+	 */
+	sprintf(cpath, "%s/Attribute", path);
+	attr = create_container(cpath, o_mode);
+	if (!attr)
+		goto err_6;
+	schema = sos_schema_from_template(&attribute_schema);
+	rc = sos_schema_add(attr, schema);
+	if (rc)
+		goto err_7;
+	schema = sos_schema_from_template(&pattern_attribute_schema);
+	rc = sos_schema_add(attr, schema);
+	if (rc)
+		goto err_7;
+
 	free(cpath);
+	sos_container_close(attr, SOS_COMMIT_ASYNC);
 	sos_container_close(hist, SOS_COMMIT_ASYNC);
 	sos_container_close(msgs, SOS_COMMIT_ASYNC);
 	sos_container_close(ptns, SOS_COMMIT_ASYNC);
 	sos_container_close(dict, SOS_COMMIT_ASYNC);
 	return 0;
+
+ err_7:
+	sos_container_close(attr, SOS_COMMIT_ASYNC);
  err_6:
 	sos_container_close(hist, SOS_COMMIT_ASYNC);
  err_5:
@@ -643,10 +755,47 @@ static bstore_t bs_open(bstore_plugin_t plugin, const char *path, int flags, int
 	sos_index_rt_opt_set(sos_attr_index(bs->comp_hist_key_attr), SOS_INDEX_RT_OPT_MP_UNSAFE);
 	sos_index_rt_opt_set(sos_attr_index(bs->comp_hist_key_attr), SOS_INDEX_RT_OPT_VISIT_ASYNC);
 
+	sprintf(cpath, "%s/Attribute", path);
+	bs->attr_sos = sos_container_open(cpath, SOS_PERM_RW);
+	if (!bs->attr_sos)
+		goto err_8;
+	bs->attribute_schema = sos_schema_by_name(bs->attr_sos, "Attribute");
+	if (!bs->attribute_schema)
+		goto err_9;
+	bs->attr_type_attr = sos_schema_attr_by_name(bs->attribute_schema,
+						     "type");
+	if (!bs->attr_type_attr)
+		goto err_9;
+	bs->pattern_attribute_schema =
+			sos_schema_by_name(bs->attr_sos, "PatternAttribute");
+	if (!bs->pattern_attribute_schema)
+		goto err_9;
+	bs->pa_at_attr = sos_schema_attr_by_name(
+			bs->pattern_attribute_schema, "attr_type");
+	if (!bs->pa_at_attr)
+		goto err_9;
+	bs->pa_av_attr = sos_schema_attr_by_name(
+			bs->pattern_attribute_schema, "attr_value");
+	if (!bs->pa_av_attr)
+		goto err_9;
+	bs->pa_ptv_attr = sos_schema_attr_by_name(
+			bs->pattern_attribute_schema, "ptn_type_value");
+	if (!bs->pa_ptv_attr)
+		goto err_9;
+	bs->pa_tv_attr = sos_schema_attr_by_name(
+			bs->pattern_attribute_schema, "type_value");
+	if (!bs->pa_tv_attr)
+		goto err_9;
+	bs->pa_tp_attr = sos_schema_attr_by_name(
+			bs->pattern_attribute_schema, "type_ptn");
+	if (!bs->pa_tp_attr)
+		goto err_9;
+
+
 	/* Compute the next token and pattern ids */
 	sos_iter_t iter = sos_attr_iter_new(bs->tkn_id_attr);
 	if (!iter)
-		goto err_8;
+		goto err_9;
 	rc = sos_iter_end(iter);
 	if (rc) {
 		bs->next_tkn_id = 0x0100;
@@ -661,7 +810,7 @@ static bstore_t bs_open(bstore_plugin_t plugin, const char *path, int flags, int
 	sos_iter_free(iter);
 	iter = sos_attr_iter_new(bs->ptn_id_attr);
 	if (!iter)
-		goto err_8;
+		goto err_9;
 	rc = sos_iter_end(iter);
 	if (rc) {
 		bs->next_ptn_id = 0x0100;
@@ -707,13 +856,15 @@ static bstore_t bs_open(bstore_plugin_t plugin, const char *path, int flags, int
 		tkn->tkn_type_mask |= BTKN_TYPE_MASK(BTKN_TYPE_TYPE);
 		rc = bs_tkn_add_with_id(&bs->base, tkn);
 		if (rc)
-			goto err_8;
+			goto err_9;
 		// bs->type2id[type] = tkn_id;
 		btkn_free(tkn);
 	}
  out:
 	free(cpath);
 	return &bs->base;
+ err_9:
+	sos_container_close(bs->attr_sos, SOS_COMMIT_ASYNC);
  err_8:
 	sos_container_close(bs->hist_sos, SOS_COMMIT_ASYNC);
  err_7:
@@ -1129,6 +1280,10 @@ static btkn_type_t bs_tkn_type_get(bstore_t bs, const char *typ_name, size_t nam
 #define TKN_HIST_ITER		0x41
 #define PTN_HIST_ITER		0x51
 #define COMP_HIST_ITER		0x61
+
+#define PTN_ATTR_ITER_PTV	0x71
+#define PTN_ATTR_ITER_TP	0x72
+#define PTN_ATTR_ITER_TV	0x73
 
 typedef struct bsos_iter_s {
 	bstore_t bs;
@@ -2438,7 +2593,7 @@ static int bs_ptn_hist_update(bstore_t bs,
 	sos_key_join(ph_key, bss->ptn_hist_key_attr, bin_width, secs, ptn_id);
 	idx = sos_attr_index(bss->ptn_hist_key_attr);
 	rc = sos_index_visit(idx, ph_key, hist_cb, NULL);
-	if (rc)
+	if (rc && rc != EINPROGRESS)
 		goto err_0;
 
 	/* Date Histogram */
@@ -2446,7 +2601,7 @@ static int bs_ptn_hist_update(bstore_t bs,
 		     bin_width, secs, BPTN_ID_SUM_ALL);
 	idx = sos_attr_index(bss->ptn_hist_key_attr);
 	rc = sos_index_visit(idx, ph_key, hist_cb, NULL);
-	if (rc)
+	if (rc && rc != EINPROGRESS)
 		goto err_0;
 
 	/* Component Histogram */
@@ -2454,7 +2609,7 @@ static int bs_ptn_hist_update(bstore_t bs,
 		     bin_width, secs, comp_id, ptn_id);
 	idx = sos_attr_index(bss->comp_hist_key_attr);
 	rc = sos_index_visit(idx, ch_key, hist_cb, NULL);
-	if (rc)
+	if (rc && rc != EINPROGRESS)
 		goto err_0;
 
 	return 0;
@@ -3330,6 +3485,911 @@ static int bs_iter_filter_set(btkn_hist_iter_t iter,
 	return 0;
 }
 
+struct attr_cb_ctxt {
+	int rc;
+	bstore_sos_t bss;
+	const char *attr_type;
+	int len;
+};
+
+static sos_visit_action_t attr_new_cb(sos_index_t index,
+				     sos_key_t key, sos_idx_data_t *idx_data,
+				     int found, void *arg)
+{
+	struct attr_cb_ctxt *ctxt = arg;
+	sos_obj_t obj;
+	struct sos_value_s v_, *v;
+	sos_obj_ref_t *ref = (sos_obj_ref_t *)idx_data;
+	if (found) {
+		ctxt->rc = EEXIST;
+		return SOS_VISIT_NOP;
+	}
+	obj = sos_obj_new(ctxt->bss->attribute_schema);
+	if (!obj) {
+		ctxt->rc = ENOMEM;
+		goto err_0;
+	}
+	v = sos_array_new(&v_, ctxt->bss->attr_type_attr, obj, ctxt->len + 1);
+	if (!v) {
+		ctxt->rc = ENOMEM;
+		goto err_1;
+	}
+	memcpy(v->data->array.data.byte_, ctxt->attr_type, ctxt->len+1);
+	sos_value_put(v);
+	*ref = sos_obj_ref(obj);
+	sos_obj_put(obj);
+	ctxt->rc = 0;
+	return SOS_VISIT_ADD;
+
+ err_1:
+	sos_obj_delete(obj);
+	sos_obj_put(obj);
+ err_0:
+	return SOS_VISIT_NOP;
+}
+
+static int bs_attr_new(bstore_t bs, const char *attr_type)
+{
+	int rc;
+	SOS_KEY_SZ(key, ATTR_TYPE_MAX); /* should be enough for attr_type */
+	int len = strlen(attr_type);
+	ods_key_value_t kv;
+	bstore_sos_t bss = (bstore_sos_t)bs;
+	struct attr_cb_ctxt ctxt = {
+				.bss = bss,
+				.attr_type = attr_type,
+				.len = len,
+				};
+	sos_index_t idx = sos_attr_index(bss->attr_type_attr);
+
+	if (len + 1 > ATTR_TYPE_MAX) {
+		rc = ENAMETOOLONG;
+		goto out;
+	}
+	kv = key->as.ptr;
+	memcpy(kv->value, attr_type, len + 1);
+	kv->len = len + 1;
+	rc = sos_index_visit(idx, key, attr_new_cb, &ctxt);
+	if (rc)
+		goto out;
+	if (ctxt.rc) {
+		rc = ctxt.rc;
+		goto out;
+	}
+ out:
+	return rc;
+}
+
+static sos_visit_action_t attr_find_cb(sos_index_t index,
+				     sos_key_t key, sos_idx_data_t *idx_data,
+				     int found, void *arg)
+{
+	struct attr_cb_ctxt *ctxt = arg;
+	if (found) {
+		ctxt->rc = 0;
+	} else {
+		ctxt->rc = ENOENT;
+	}
+	return SOS_VISIT_NOP;
+}
+
+static int bs_attr_find(bstore_t bs, const char *attr_type)
+{
+	int rc;
+	SOS_KEY_SZ(key, ATTR_TYPE_MAX); /* should be enough for attr_type */
+	int len = strlen(attr_type);
+	ods_key_value_t kv;
+	bstore_sos_t bss = (bstore_sos_t)bs;
+	struct attr_cb_ctxt ctxt = {
+				.bss = bss,
+				.attr_type = attr_type,
+				.len = len,
+				};
+	sos_index_t idx = sos_attr_index(bss->attr_type_attr);
+
+	if (len + 1 > ATTR_TYPE_MAX) {
+		rc = ENAMETOOLONG;
+		goto out;
+	}
+	kv = key->as.ptr;
+	memcpy(kv->value, attr_type, len + 1);
+	kv->len = len + 1;
+	rc = sos_index_visit(idx, key, attr_find_cb, &ctxt);
+	if (rc)
+		goto out;
+	rc = ctxt.rc;
+ out:
+	return rc;
+}
+
+struct ptn_attr_value_ctxt {
+	bstore_sos_t bss;
+	bptn_id_t ptn_id;
+	const char *attr_type;
+	const char *attr_value;
+	int attr_type_len;
+	int attr_value_len;
+	int rc;
+};
+
+static int bs_ptn_attr_unset(bstore_t bs, bptn_id_t ptn_id,
+			     const char *attr_type);
+
+static int bs_ptn_attr_value_set(bstore_t bs, bptn_id_t ptn_id,
+		const char *attr_type, const char *attr_value)
+{
+	int rc;
+	int type_len = strlen(attr_type);
+	int value_len = strlen(attr_value);
+	bstore_sos_t bss = (bstore_sos_t)bs;
+	sos_obj_t obj;
+	struct sos_value_s _v, *v;
+	ptn_attr_t pa;
+
+	if (type_len + 1 > ATTR_TYPE_MAX) {
+		rc = ENAMETOOLONG;
+		goto err_0;
+	}
+
+	rc = bs_attr_find(bs, attr_type);
+	if (rc)
+		goto err_0;
+	rc = bs_ptn_attr_unset(bs, ptn_id, attr_type);
+	if (rc)
+		goto err_0;
+	obj = sos_obj_new(bss->pattern_attribute_schema);
+	if (!obj) {
+		rc = errno;
+		goto err_0;
+	}
+
+	/* set TYPE */
+	v = sos_array_new(&_v, bss->pa_at_attr, obj, type_len + 1);
+	if (!v) {
+		rc = errno;
+		goto err_1;
+	}
+	memcpy(v->data->array.data.char_, attr_type, type_len + 1);
+	sos_value_put(v);
+
+	/* set VALUE */
+	v = sos_array_new(&_v, bss->pa_av_attr, obj, value_len + 1);
+	if (!v) {
+		rc = errno;
+		goto err_1;
+	}
+	memcpy(v->data->array.data.char_, attr_value, value_len + 1);
+	sos_value_put(v);
+
+	/* set ptn_id */
+	pa = sos_obj_ptr(obj);
+	pa->ptn_id = ptn_id;
+
+	/* index */
+	rc = sos_obj_index(obj);
+	if (rc)
+		goto err_1;
+
+	sos_obj_put(obj);
+	return 0;
+
+ err_1:
+	sos_obj_delete(obj);
+ err_0:
+	return rc;
+}
+
+static sos_visit_action_t __ptn_attr_value_add_cb(sos_index_t index,
+				     sos_key_t key, sos_idx_data_t *idx_data,
+				     int found, void *arg)
+{
+	struct ptn_attr_value_ctxt *ctxt = arg;
+	sos_obj_t obj = NULL;
+	sos_obj_ref_t *ref = (sos_obj_ref_t *)idx_data;
+	struct sos_value_s _v;
+	sos_value_t v = NULL;
+	ptn_attr_t obj_value;
+	sos_index_t idx;
+	sos_key_t tv_key;
+	SOS_KEY_SZ(tp_key, ATTR_TYPE_MAX + sizeof(bptn_id_t));
+
+	/* REMARK: This is a visit on ptn_type_value index */
+
+	if (found) {
+		/* add the same value, do nothing */
+		ctxt->rc = EEXIST;
+		return SOS_VISIT_NOP;
+	}
+
+	/* create a new object */
+	obj = sos_obj_new(ctxt->bss->pattern_attribute_schema);
+	if (!obj) {
+		ctxt->rc = ENOMEM;
+		goto err_0;
+	}
+	*ref = sos_obj_ref(obj);
+	obj_value = sos_obj_ptr(obj);
+	obj_value->ptn_id = ctxt->ptn_id;
+
+	/* set type */
+	v = sos_array_new(&_v, ctxt->bss->pa_at_attr, obj,
+			  ctxt->attr_type_len + 1);
+	if (!v) {
+		ctxt->rc = ENOMEM;
+		goto err_1;
+	}
+	memcpy(v->data->array.data.byte_, ctxt->attr_type,
+	       ctxt->attr_type_len + 1);
+	sos_value_put(v);
+
+	/* set value */
+	v = sos_array_new(&_v, ctxt->bss->pa_av_attr, obj,
+			  ctxt->attr_value_len + 1);
+	if (!v) {
+		ctxt->rc = ENOMEM;
+		goto err_1;
+	}
+	memcpy(v->data->array.data.byte_, ctxt->attr_value,
+	       ctxt->attr_value_len + 1);
+	sos_value_put(v);
+
+	/* add into the type_value index */
+	idx = sos_attr_index(ctxt->bss->pa_tv_attr);
+	tv_key = sos_key_new(ctxt->attr_type_len + ctxt->attr_value_len + 2);
+	if (!tv_key) {
+		ctxt->rc = ENOMEM;
+		goto err_1;
+	}
+	sos_key_join(tv_key, ctxt->bss->pa_tv_attr,
+			     ctxt->attr_type_len + 1, ctxt->attr_type,
+			     ctxt->attr_value_len + 1, ctxt->attr_value);
+	ctxt->rc = sos_index_insert(idx, tv_key, obj);
+	if (ctxt->rc)
+		goto err_2;
+
+	/* add into the type_ptn index */
+	idx = sos_attr_index(ctxt->bss->pa_tp_attr);
+	sos_key_join(tp_key, ctxt->bss->pa_tp_attr,
+			     ctxt->attr_type_len + 1, ctxt->attr_type,
+			     ctxt->ptn_id);
+	ctxt->rc = sos_index_insert(idx, tp_key, obj);
+	if (ctxt->rc)
+		goto err_3;
+
+	/* clean up */
+	sos_key_put(tp_key);
+	sos_key_put(tv_key);
+	sos_obj_put(obj);
+
+	return SOS_VISIT_ADD;
+
+ err_3:
+	sos_key_put(tp_key);
+	idx = sos_attr_index(ctxt->bss->pa_tv_attr);
+	sos_index_remove(idx, tv_key, obj);
+ err_2:
+	sos_key_put(tv_key);
+ err_1:
+	sos_obj_delete(obj);
+	sos_obj_put(obj);
+ err_0:
+	return SOS_VISIT_NOP;
+}
+
+static int bs_ptn_attr_value_add(bstore_t bs, bptn_id_t ptn_id,
+		const char *attr_type, const char *attr_value)
+{
+	int rc;
+	SOS_KEY_SZ(key, sizeof(bptn_id_t) + ATTR_TYPE_MAX);
+	bstore_sos_t bss = (bstore_sos_t)bs;
+	sos_index_t idx;
+	struct ptn_attr_value_ctxt ctxt = {
+		.bss = bss,
+		.ptn_id = ptn_id,
+		.attr_type = attr_type,
+		.attr_value = attr_value,
+		.attr_type_len = strlen(attr_type),
+		.attr_value_len = strlen(attr_value)
+	};
+
+	if (ctxt.attr_type_len + 1 > ATTR_TYPE_MAX) {
+		rc = ENAMETOOLONG;
+		goto err_0;
+	}
+
+	rc = bs_attr_find(bs, attr_type);
+	if (rc)
+		goto err_0;
+
+	sos_key_join(key, bss->pa_ptv_attr, ptn_id,
+		     ctxt.attr_type_len + 1, attr_type,
+		     ctxt.attr_value_len + 1, attr_value);
+	idx = sos_attr_index(bss->pa_ptv_attr);
+	rc = sos_index_visit(idx, key, __ptn_attr_value_add_cb, &ctxt);
+	if (rc)
+		goto err_0;
+	if (ctxt.rc) {
+		rc = ctxt.rc;
+		goto err_0;
+	}
+	return 0;
+
+ err_0:
+	return rc;
+}
+
+static sos_visit_action_t __ptn_attr_value_rm_cb(sos_index_t index,
+				     sos_key_t key, sos_idx_data_t *idx_data,
+				     int found, void *arg)
+{
+	struct ptn_attr_value_ctxt *ctxt = arg;
+	sos_obj_t obj = NULL;
+	sos_obj_ref_t *ref = (sos_obj_ref_t *)idx_data;
+	sos_index_t idx;
+	sos_key_t tv_key;
+	SOS_KEY_SZ(tp_key, sizeof(bptn_id_t) + ATTR_TYPE_MAX);
+
+	/* REMARK: This is a visit on ptn_type_value index */
+
+	if (!found) {
+		/* not found, can't remove */
+		ctxt->rc = ENOENT;
+		return SOS_VISIT_NOP;
+	}
+
+	obj = sos_ref_as_obj(ctxt->bss->attr_sos, *ref);
+	if (!obj) {
+		ctxt->rc = ENOMEM;
+		goto err_0;
+	}
+
+	/* remove from the type_value index */
+	idx = sos_attr_index(ctxt->bss->pa_tv_attr);
+	tv_key = sos_key_new(ctxt->attr_type_len + ctxt->attr_value_len + 2);
+	if (!tv_key) {
+		ctxt->rc = ENOMEM;
+		goto err_1;
+	}
+	sos_key_join(tv_key, ctxt->bss->pa_tv_attr,
+			  ctxt->attr_type_len + 1, ctxt->attr_type,
+			  ctxt->attr_value_len + 1, ctxt->attr_value);
+	ctxt->rc = sos_index_remove(idx, tv_key, obj);
+	if (ctxt->rc)
+		goto err_2;
+
+	idx = sos_attr_index(ctxt->bss->pa_tp_attr);
+	sos_key_join(tp_key, ctxt->bss->pa_tp_attr,
+			     ctxt->attr_type_len + 1, ctxt->attr_type,
+			     ctxt->ptn_id);
+	ctxt->rc = sos_index_remove(idx, tp_key, obj);
+	if (ctxt->rc)
+		goto err_3;
+
+	/* clean up */
+	sos_key_put(tp_key);
+	sos_key_put(tv_key);
+	sos_obj_delete(obj);
+	sos_obj_put(obj);
+
+	return SOS_VISIT_DEL;
+
+ err_3:
+	sos_key_put(tp_key);
+	/* try to undo the remove of time_value index entry */
+	idx = sos_attr_index(ctxt->bss->pa_tv_attr);
+	sos_index_insert(idx, tv_key, obj);
+ err_2:
+	sos_key_put(tv_key);
+ err_1:
+	sos_obj_put(obj);
+ err_0:
+	return SOS_VISIT_NOP;
+}
+
+static int bs_ptn_attr_value_rm(bstore_t bs, bptn_id_t ptn_id,
+		const char *attr_type, const char *attr_value)
+{
+	int rc;
+	SOS_KEY_SZ(key, sizeof(bptn_id_t) + ATTR_TYPE_MAX);
+	bstore_sos_t bss = (bstore_sos_t)bs;
+	sos_index_t idx;
+	struct ptn_attr_value_ctxt ctxt = {
+		.bss = bss,
+		.ptn_id = ptn_id,
+		.attr_type = attr_type,
+		.attr_value = attr_value,
+		.attr_type_len = strlen(attr_type),
+		.attr_value_len = strlen(attr_value)
+	};
+
+	if (ctxt.attr_type_len + 1 > ATTR_TYPE_MAX) {
+		rc = ENAMETOOLONG;
+		goto err_0;
+	}
+
+	rc = bs_attr_find(bs, attr_type);
+	if (rc)
+		goto err_0;
+
+	sos_key_join(key, bss->pa_ptv_attr, ptn_id,
+		     ctxt.attr_type_len + 1, attr_type,
+		     ctxt.attr_value_len + 1, attr_value);
+	idx = sos_attr_index(bss->pa_ptv_attr);
+	rc = sos_index_visit(idx, key, __ptn_attr_value_rm_cb, &ctxt);
+	if (rc)
+		goto err_0;
+	if (ctxt.rc) {
+		rc = ctxt.rc;
+		goto err_0;
+	}
+	return 0;
+
+ err_0:
+	return rc;
+}
+
+static int bs_ptn_attr_unset(bstore_t bs, bptn_id_t ptn_id,
+			     const char *attr_type)
+{
+	int rc = 0;
+	SOS_KEY_SZ(key, sizeof(bptn_id_t) + ATTR_TYPE_MAX);
+	int len = strlen(attr_type);
+	bstore_sos_t bss = (bstore_sos_t)bs;
+	sos_index_t idx;
+	sos_obj_t obj;
+	struct sos_value_s _v, *v;
+
+	sos_key_join(key, bss->pa_ptv_attr, ptn_id, len + 1, attr_type, 0, "");
+	idx = sos_attr_index(bss->pa_ptv_attr);
+	obj = NULL;
+	v = NULL;
+
+ next:
+	obj = sos_index_find_sup(idx, key);
+	if (!obj) {
+		/* it is OK to run out of objects */
+		rc = 0;
+		goto out;
+	}
+	v = sos_value_init(&_v, obj, bss->pa_at_attr);
+	if (!v) {
+		rc = errno;
+		goto out;
+	}
+	if (strcmp(v->data->array.data.char_, attr_type) != 0) {
+		rc = 0;
+		goto out;
+	}
+	/* Remove the ptn-type-value entry */
+	sos_value_put(v);
+	sos_obj_remove(obj);
+	sos_obj_delete(obj);
+	sos_obj_put(obj);
+	v = NULL;
+	obj = NULL;
+	goto next;
+ out:
+	if (v)
+		sos_value_put(v);
+	if (obj)
+		sos_obj_put(obj);
+	return rc;
+}
+
+static char *bs_ptn_attr_get(bstore_t bs, bptn_id_t ptn_id, const char *attr_type)
+{
+	char *attr_value = NULL;
+	bstore_sos_t bss = (bstore_sos_t)bs;
+	sos_index_t idx;
+	SOS_KEY_SZ(key, sizeof(bptn_id_t) + ATTR_TYPE_MAX);
+	int len = strlen(attr_type);
+	sos_obj_t obj;
+	struct sos_value_s _v, *v;
+
+	if (len + 1 > ATTR_TYPE_MAX) {
+		errno = ENAMETOOLONG;
+		goto err_0;
+	}
+
+	sos_key_join(key, bss->pa_ptv_attr, ptn_id, len + 1, attr_type, 0, "");
+	idx = sos_attr_index(bss->pa_ptv_attr);
+
+	obj = sos_index_find_sup(idx, key);
+	if (!obj)
+		goto err_0;
+
+	/* check the attr_type */
+	v = sos_value_init(&_v, obj, bss->pa_at_attr);
+	if (!v)
+		goto err_1;
+	if (strcmp(attr_type, v->data->array.data.char_) != 0)
+		goto err_2;
+	sos_value_put(v);
+
+	v = sos_value_init(&_v, obj, bss->pa_av_attr);
+	if (!v)
+		goto err_1;
+	attr_value = malloc(v->data->array.count);
+	if (!attr_value)
+		goto err_2;
+	memcpy(attr_value, v->data->array.data.char_, v->data->array.count);
+	sos_value_put(v);
+	sos_obj_put(obj);
+	return attr_value;
+
+ err_2:
+	sos_value_put(v);
+ err_1:
+	sos_obj_put(obj);
+ err_0:
+	return NULL;
+}
+
+static bptn_attr_iter_t bs_ptn_attr_iter_new(bstore_t bs)
+{
+	bstore_sos_t bss = (bstore_sos_t)bs;
+	bsos_iter_t pai = calloc(1, sizeof(*pai));
+	if (pai) {
+		pai->bs = bs;
+		pai->biter_type = BPTN_ATTR_ITER;
+		pai->iter_type = PTN_ATTR_ITER_PTV;
+		pai->iter = sos_attr_iter_new(bss->pa_ptv_attr);
+		if (!pai->iter)
+			goto err;
+		sos_iter_flags_set(pai->iter, SOS_ITER_F_INF_LAST_DUP);
+	}
+	return (bptn_attr_iter_t)pai;
+ err:
+	free(pai);
+	return NULL;
+}
+
+static void bs_ptn_attr_iter_free(bptn_attr_iter_t iter)
+{
+	bsos_iter_t pai = (bsos_iter_t)iter;
+	if (pai->iter)
+		sos_iter_free(pai->iter);
+	free(iter);
+}
+
+static int bs_ptn_attr_iter_filter_set(bptn_attr_iter_t iter,
+				       bstore_iter_filter_t filter)
+{
+	bsos_iter_t pai = (bsos_iter_t)iter;
+	bstore_sos_t bss = (bstore_sos_t)pai->bs;
+	int type;
+	int rc;
+
+	/* we care only ptn_id, attr_type, and attr_value in the filter.
+	 * All combinations are valid except for having attr_value without
+	 * attr_type. */
+	if (filter->attr_value && !filter->attr_type) {
+		rc = EINVAL;
+		goto err;
+	}
+	type = PTN_ATTR_ITER_PTV;
+	if (!filter->ptn_id && filter->attr_type) {
+		if (filter->attr_value) {
+			type = PTN_ATTR_ITER_TV;
+		} else {
+			type = PTN_ATTR_ITER_TP;
+		}
+	}
+	pai->filter = *filter;
+	if (pai->iter_type != type) {
+		pai->iter_type = type;
+		if (pai->iter) {
+			sos_iter_free(pai->iter);
+			pai->iter = NULL;
+		}
+		switch (type) {
+		case PTN_ATTR_ITER_PTV:
+			pai->iter = sos_attr_iter_new(bss->pa_ptv_attr);
+			break;
+		case PTN_ATTR_ITER_TV:
+			pai->iter = sos_attr_iter_new(bss->pa_tv_attr);
+			break;
+		case PTN_ATTR_ITER_TP:
+			pai->iter = sos_attr_iter_new(bss->pa_tp_attr);
+			break;
+		}
+		if (!pai->iter) {
+			rc = errno;
+			goto err;
+		}
+	}
+	return 0;
+
+ err:
+	return rc;
+}
+
+static bptn_attr_t bs_ptn_attr_iter_obj(bptn_attr_iter_t iter)
+{
+	bsos_iter_t pai = (bsos_iter_t)iter;
+	bstore_sos_t bss = (bstore_sos_t)pai->bs;
+	sos_obj_t obj;
+	struct ptn_attr_s *p;
+	struct sos_value_s _tv, *tv;
+	struct sos_value_s _vv, *vv;
+	bptn_attr_t ret;
+
+	obj = sos_iter_obj(pai->iter);
+	if (!obj)
+		goto err_0;
+	vv = sos_value_init(&_vv, obj, bss->pa_av_attr);
+	if (!vv)
+		goto err_1;
+	tv = sos_value_init(&_tv, obj, bss->pa_at_attr);
+	if (!tv)
+		goto err_2;
+	ret = malloc(sizeof(*ret) + vv->data->array.count
+				  + tv->data->array.count);
+	if (!ret)
+		goto err_3;
+	p = sos_obj_ptr(obj);
+	ret->ptn_id = p->ptn_id;
+	ret->attr_type = ret->_data;
+	ret->attr_value = ret->_data + tv->data->array.count;
+	memcpy(ret->attr_type, tv->data->array.data.char_,
+			       tv->data->array.count);
+	memcpy(ret->attr_value, vv->data->array.data.char_,
+				vv->data->array.count);
+	/* clean up */
+	sos_value_put(tv);
+	sos_value_put(vv);
+	sos_obj_put(obj);
+
+	return ret;
+
+ err_3:
+	sos_value_put(tv);
+ err_2:
+	sos_value_put(vv);
+ err_1:
+	sos_obj_put(obj);
+ err_0:
+	return NULL;
+}
+
+static int __bs_ptn_attr_iter_verify(bptn_attr_iter_t iter)
+{
+	/* verify filter condition with current object */
+	bsos_iter_t pai = (bsos_iter_t)iter;
+	bstore_sos_t bss = (bstore_sos_t)pai->bs;
+	struct sos_value_s _v, *v;
+	struct ptn_attr_s *p;
+	sos_obj_t obj;
+	int rc;
+
+	obj = sos_iter_obj(pai->iter);
+	if (!obj) {
+		rc = ENOENT;
+		goto err_0;
+	}
+
+	p = sos_obj_ptr(obj);
+	if (pai->filter.ptn_id && p->ptn_id != pai->filter.ptn_id) {
+		rc = ENOENT;
+		goto err_1;
+	}
+
+	if (pai->filter.attr_type) {
+		v = sos_value_init(&_v, obj, bss->pa_at_attr);
+		if (!v) {
+			rc = errno;
+			goto err_1;
+		}
+		if (strcmp(pai->filter.attr_type, v->data->array.data.char_)) {
+			rc = ENOENT;
+			sos_value_put(v);
+			goto err_1;
+		}
+		sos_value_put(v);
+	}
+
+	if (pai->filter.attr_value) {
+		v = sos_value_init(&_v, obj, bss->pa_av_attr);
+		if (!v) {
+			rc = errno;
+			goto err_1;
+		}
+		if (strcmp(pai->filter.attr_value, v->data->array.data.char_)) {
+			rc = ENOENT;
+			sos_value_put(v);
+			goto err_1;
+		}
+		sos_value_put(v);
+	}
+
+	/* clean-up */
+	sos_obj_put(obj);
+	return 0;
+
+ err_1:
+	sos_obj_put(obj);
+ err_0:
+	return rc;
+}
+
+static int bs_ptn_attr_iter_find_fwd(bptn_attr_iter_t iter,
+				     bptn_id_t ptn_id,
+				     const char *attr_type,
+				     const char *attr_value)
+{
+	bsos_iter_t pai = (bsos_iter_t)iter;
+	bstore_sos_t bss = (bstore_sos_t)pai->bs;
+	const size_t stack_key_sz = sizeof(ptn_id) + ATTR_TYPE_MAX;
+	SOS_KEY_SZ(stack_key, stack_key_sz);
+	int attr_type_len = attr_type?strlen(attr_type):-1;
+	int attr_value_len = attr_value?strlen(attr_value):-1;
+	int rc = 0;
+	sos_key_t key;
+	size_t key_sz;
+
+	/* check filter condition */
+	if (pai->filter.ptn_id && ptn_id && pai->filter.ptn_id != ptn_id) {
+		rc = ENOENT;
+		goto err_0;
+	}
+
+	if (pai->filter.attr_type && attr_type &&
+			0 != strcmp(pai->filter.attr_type, attr_type)) {
+		rc = ENOENT;
+		goto err_0;
+	}
+
+	if (attr_type_len + 1 > ATTR_TYPE_MAX) {
+		rc = ENAMETOOLONG;
+		goto err_0;
+	}
+
+	switch (pai->iter_type) {
+	case PTN_ATTR_ITER_PTV:
+		key_sz = sizeof(ptn_id) + attr_type_len + attr_value_len + 2;
+		if (key_sz > stack_key_sz) {
+			key = sos_key_new(key_sz);
+			if (!key) {
+				rc = ENOMEM;
+				goto err_0;
+			}
+		} else {
+			key = stack_key;
+		}
+		sos_key_join(key, bss->pa_ptv_attr, ptn_id,
+				  attr_type_len + 1, attr_type,
+				  attr_value_len + 1, attr_value);
+		break;
+	case PTN_ATTR_ITER_TV:
+		key_sz = attr_type_len + attr_value_len + 2;
+		if (key_sz > stack_key_sz) {
+			key = sos_key_new(key_sz);
+			if (!key) {
+				rc = ENOMEM;
+				goto err_0;
+			}
+		} else {
+			key = stack_key;
+		}
+		sos_key_join(key, bss->pa_tv_attr,
+				  attr_type_len + 1, attr_type,
+				  attr_value_len + 1, attr_value);
+		break;
+	case PTN_ATTR_ITER_TP:
+		key = stack_key;
+		sos_key_join(key, bss->pa_tp_attr,
+				  attr_type_len + 1, attr_type,
+				  ptn_id);
+		break;
+	default:
+		rc = EINVAL;
+		goto err_0;
+	}
+	rc = sos_iter_sup(pai->iter, key);
+	sos_key_put(key); /* put the key regardless */
+	if (rc)
+		goto err_0;
+	return __bs_ptn_attr_iter_verify(iter);
+
+ err_0:
+	return rc;
+}
+
+static int bs_ptn_attr_iter_find_rev(bptn_attr_iter_t iter,
+				     bptn_id_t ptn_id,
+				     const char *attr_type,
+				     const char *attr_value)
+{
+	return ENOSYS;
+}
+
+static int bs_ptn_attr_iter_first(bptn_attr_iter_t iter)
+{
+	bsos_iter_t pai = (bsos_iter_t)iter;
+	return bs_ptn_attr_iter_find_fwd(iter, pai->filter.ptn_id,
+					       pai->filter.attr_type,
+					       pai->filter.attr_value);
+}
+
+static int bs_ptn_attr_iter_next(bptn_attr_iter_t iter)
+{
+	bsos_iter_t pai = (bsos_iter_t)iter;
+	int rc;
+	rc = sos_iter_next(pai->iter);
+	if (rc)
+		return rc;
+	return __bs_ptn_attr_iter_verify(iter);
+}
+
+static int bs_ptn_attr_iter_prev(bptn_attr_iter_t iter)
+{
+	return ENOSYS;
+}
+
+static int bs_ptn_attr_iter_last(bptn_attr_iter_t iter)
+{
+	return ENOSYS;
+}
+
+
+static battr_ptn_iter_t bs_attr_ptn_iter_new(bstore_t bs)
+{
+	errno = ENOSYS;
+	return NULL;
+}
+
+static void bs_attr_ptn_iter_free(bstore_t bs, battr_ptn_iter_t iter)
+{
+	errno = ENOSYS;
+}
+
+static int bs_attr_ptn_iter_filter_set(battr_ptn_iter_t iter,
+				 bstore_iter_filter_t filter)
+{
+	return ENOSYS;
+}
+
+static char *bs_attr_ptn_iter_obj(battr_ptn_iter_t iter)
+{
+	errno = ENOSYS;
+	return NULL;
+}
+
+static int bs_attr_ptn_iter_find_fwd(battr_ptn_iter_t iter,
+			      const char *attr_type,
+			      const char *attr_value)
+{
+	return ENOSYS;
+}
+
+static int bs_attr_ptn_iter_find_rev(battr_ptn_iter_t iter,
+			      const char *attr_type,
+			      const char *attr_value)
+{
+	return ENOSYS;
+}
+
+static int bs_attr_ptn_iter_first(battr_ptn_iter_t iter)
+{
+	return ENOSYS;
+}
+
+static int bs_attr_ptn_iter_next(battr_ptn_iter_t iter)
+{
+	return ENOSYS;
+}
+
+static int bs_attr_ptn_iter_prev(battr_ptn_iter_t iter)
+{
+	return ENOSYS;
+}
+
+static int bs_attr_ptn_iter_last(battr_ptn_iter_t iter)
+{
+	return ENOSYS;
+}
+
+
 static struct bstore_plugin_s plugin = {
 	.open = bs_open,
 	.close = bs_close,
@@ -3429,6 +4489,25 @@ static struct bstore_plugin_s plugin = {
 	.iter_pos_set = bs_iter_pos_set,
 	.iter_pos_get = bs_iter_pos_get,
 	.iter_pos_free = bs_iter_pos_free,
+
+	.attr_new = bs_attr_new,
+	.attr_find = bs_attr_find,
+	.ptn_attr_value_set = bs_ptn_attr_value_set,
+	.ptn_attr_value_add = bs_ptn_attr_value_add,
+	.ptn_attr_value_rm = bs_ptn_attr_value_rm,
+	.ptn_attr_unset = bs_ptn_attr_unset,
+	.ptn_attr_get = bs_ptn_attr_get,
+
+	.ptn_attr_iter_new = bs_ptn_attr_iter_new,
+	.ptn_attr_iter_free = bs_ptn_attr_iter_free,
+	.ptn_attr_iter_filter_set = bs_ptn_attr_iter_filter_set,
+	.ptn_attr_iter_obj = bs_ptn_attr_iter_obj,
+	.ptn_attr_iter_find_fwd = bs_ptn_attr_iter_find_fwd,
+	.ptn_attr_iter_find_rev = bs_ptn_attr_iter_find_rev,
+	.ptn_attr_iter_first = bs_ptn_attr_iter_first,
+	.ptn_attr_iter_next = bs_ptn_attr_iter_next,
+	.ptn_attr_iter_prev = bs_ptn_attr_iter_prev,
+	.ptn_attr_iter_last = bs_ptn_attr_iter_last,
 };
 
 bstore_plugin_t get_plugin(void)

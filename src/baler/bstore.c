@@ -686,6 +686,106 @@ bstore_iter_pos_t bstore_pos_from_str(const char *str)
 	return pos;
 }
 
+int bstore_attr_new(bstore_t bs, const char *attr_type)
+{
+	return bs->plugin->attr_new(bs, attr_type);
+}
+
+int bstore_attr_find(bstore_t bs, const char *attr_type)
+{
+	return bs->plugin->attr_find(bs, attr_type);
+}
+
+int bstore_ptn_attr_value_set(bstore_t bs, bptn_id_t ptn_id,
+		const char *attr, const char *value)
+{
+	return bs->plugin->ptn_attr_value_set(bs, ptn_id, attr, value);
+}
+
+int bstore_ptn_attr_value_add(bstore_t bs, bptn_id_t ptn_id,
+		const char *attr, const char *value)
+{
+	return bs->plugin->ptn_attr_value_add(bs, ptn_id, attr, value);
+}
+
+int bstore_ptn_attr_value_rm(bstore_t bs, bptn_id_t ptn_id,
+		const char *attr, const char *value)
+{
+	return bs->plugin->ptn_attr_value_rm(bs, ptn_id, attr, value);
+}
+
+int bstore_ptn_attr_unset(bstore_t bs, bptn_id_t ptn_id, const char *attr)
+{
+	return bs->plugin->ptn_attr_unset(bs, ptn_id, attr);
+}
+
+char *bstore_ptn_attr_get(bstore_t bs, bptn_id_t ptn_id, const char *attr_type)
+{
+	return bs->plugin->ptn_attr_get(bs, ptn_id, attr_type);
+}
+
+bptn_attr_iter_t bstore_ptn_attr_iter_new(bstore_t bs)
+{
+	return bs->plugin->ptn_attr_iter_new(bs);
+}
+
+void bstore_ptn_attr_iter_free(bptn_attr_iter_t iter)
+{
+	return iter->bs->plugin->ptn_attr_iter_free(iter);
+}
+
+int bstore_ptn_attr_iter_filter_set(bptn_attr_iter_t iter,
+				 bstore_iter_filter_t filter)
+{
+	return iter->bs->plugin->ptn_attr_iter_filter_set(iter, filter);
+}
+
+bptn_attr_t bstore_ptn_attr_iter_obj(bptn_attr_iter_t iter)
+{
+	return iter->bs->plugin->ptn_attr_iter_obj(iter);
+}
+
+int bstore_ptn_attr_iter_find_fwd(bptn_attr_iter_t iter,
+				  bptn_id_t ptn_id,
+				  const char *attr_type,
+				  const char *attr_value)
+{
+	return iter->bs->plugin->ptn_attr_iter_find_fwd(iter,
+							ptn_id,
+							attr_type,
+							attr_value);
+}
+int bstore_ptn_attr_iter_find_rev(bptn_attr_iter_t iter,
+				  bptn_id_t ptn_id,
+				  const char *attr_type,
+				  const char *attr_value)
+{
+	return iter->bs->plugin->ptn_attr_iter_find_rev(iter,
+							ptn_id,
+							attr_type,
+							attr_value);
+}
+
+int bstore_ptn_attr_iter_first(bptn_attr_iter_t iter)
+{
+	return iter->bs->plugin->ptn_attr_iter_first(iter);
+}
+
+int bstore_ptn_attr_iter_next(bptn_attr_iter_t iter)
+{
+	return iter->bs->plugin->ptn_attr_iter_next(iter);
+}
+
+int bstore_ptn_attr_iter_prev(bptn_attr_iter_t iter)
+{
+	return iter->bs->plugin->ptn_attr_iter_prev(iter);
+}
+
+int bstore_ptn_attr_iter_last(bptn_attr_iter_t iter)
+{
+	return iter->bs->plugin->ptn_attr_iter_last(iter);
+}
+
 static void __attribute__ ((destructor)) bstore_term(void)
 {
 	struct plugin_entry *pe;

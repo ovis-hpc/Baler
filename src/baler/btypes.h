@@ -509,6 +509,13 @@ typedef struct bptn {
 	bstr_t str;
 } *bptn_t;
 
+typedef struct bptn_attr_s {
+	bptn_id_t ptn_id;
+	char *attr_type; /* this points into the _data[] */
+	char *attr_value; /* this points into the _data[] */
+	char _data[0];
+} *bptn_attr_t;
+
 typedef struct btkn_hist_s {
 	btkn_id_t tkn_id;
 	uint32_t bin_width;
@@ -561,6 +568,11 @@ static inline bptn_t bptn_dup(bptn_t ptn)
 static inline void bptn_free(bptn_t ptn) {
 	free(ptn->str);
 	free(ptn);
+}
+
+static inline void bptn_attr_free(bptn_attr_t pa)
+{
+	free(pa);
 }
 
 

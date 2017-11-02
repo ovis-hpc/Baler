@@ -28,6 +28,7 @@ typedef enum bstore_iter_type {
 	BTKN_HIST_ITER,
 	BPTN_HIST_ITER,
 	BCOMP_HIST_ITER,
+	BPTN_ATTR_ITER,
 } bstore_iter_type_t;
 
 typedef struct bstore_iter_s {
@@ -42,6 +43,9 @@ typedef bstore_iter_t bptn_tkn_iter_t;
 typedef bstore_iter_t bcomp_hist_iter_t;
 typedef bstore_iter_t bptn_hist_iter_t;
 typedef bstore_iter_t btkn_hist_iter_t;
+typedef bstore_iter_t battr_iter_t;
+typedef bstore_iter_t bptn_attr_iter_t;
+typedef bstore_iter_t battr_ptn_iter_t;
 
 typedef uint64_t bstore_iter_pos_t;
 
@@ -53,6 +57,8 @@ struct bstore_iter_filter_s {
 	btkn_id_t tkn_id;
 	uint64_t tkn_pos;
 	uint64_t bin_width;
+	const char *attr_type;
+	const char *attr_value;
 };
 
 typedef struct bstore_iter_filter_s *bstore_iter_filter_t;
@@ -798,6 +804,65 @@ typedef struct bstore_plugin_s {
 	/**
 	 * \}
 	 */
+
+	/**
+	 * \defgroup bstore_dev_ptn_attr (DEV) Baler Store Pattern Attribute
+	 * \{
+	 */
+	int (*attr_new)(bstore_t bs, const char *attr_type);
+	int (*attr_find)(bstore_t bs, const char *attr_type);
+	/* Set attr-value to a pattern. If attr does not exist for the pattern,
+	 * add it automatically. If it does exist, just re-set the value. */
+	int (*ptn_attr_value_set)(bstore_t bs, bptn_id_t ptn_id,
+				  const char *attr_type,
+				  const char *attr_value);
+	/* For multi-value attribute (e.g. tags) */
+	int (*ptn_attr_value_add)(bstore_t bs, bptn_id_t ptn_id,
+				  const char *attr_type,
+				  const char *attr_value);
+	/* For multi-value attribute (e.g. tags) */
+	int (*ptn_attr_value_rm)(bstore_t bs, bptn_id_t ptn_id,
+				 const char *attr_type,
+				 const char *attr_value);
+	int (*ptn_attr_unset)(bstore_t bs, bptn_id_t ptn_id,
+				  const char *attr_type);
+	char *(*ptn_attr_get)(bstore_t bs, bptn_id_t ptn_id,
+			      const char *attr_type);
+
+	/* attr iterator */
+	battr_iter_t (*attr_iter_new)(bstore_t bs);
+	void (*attr_iter_free)(battr_iter_t iter);
+	int (*attr_iter_filter_set)(battr_iter_t iter,
+					 bstore_iter_filter_t filter);
+	char *(*attr_iter_obj)(battr_iter_t iter);
+	int (*attr_iter_find)(battr_iter_t iter, const char *attr_type);
+	int (*attr_iter_first)(battr_iter_t iter);
+	int (*attr_iter_next)(battr_iter_t iter);
+	int (*attr_iter_prev)(battr_iter_t iter);
+	int (*attr_iter_last)(battr_iter_t iter);
+
+	/* ptn-attr iterator */
+	bptn_attr_iter_t (*ptn_attr_iter_new)(bstore_t bs);
+	void (*ptn_attr_iter_free)(bptn_attr_iter_t iter);
+	int (*ptn_attr_iter_filter_set)(bptn_attr_iter_t iter,
+					 bstore_iter_filter_t filter);
+	bptn_attr_t (*ptn_attr_iter_obj)(bptn_attr_iter_t iter);
+	int (*ptn_attr_iter_find_fwd)(bptn_attr_iter_t iter,
+				      bptn_id_t ptn_id,
+				      const char *attr_type,
+				      const char *attr_value);
+	int (*ptn_attr_iter_find_rev)(bptn_attr_iter_t iter,
+				      bptn_id_t ptn_id,
+				      const char *attr_type,
+				      const char *attr_value);
+	int (*ptn_attr_iter_first)(bptn_attr_iter_t iter);
+	int (*ptn_attr_iter_next)(bptn_attr_iter_t iter);
+	int (*ptn_attr_iter_prev)(bptn_attr_iter_t iter);
+	int (*ptn_attr_iter_last)(bptn_attr_iter_t iter);
+
+	/**
+	 * \}
+	 */
 } *bstore_plugin_t;
 
 /**
@@ -934,6 +999,216 @@ void bstore_iter_pos_free(bstore_iter_t iter, bstore_iter_pos_t pos_h);
 int bstore_iter_pos_set(bstore_iter_t iter, bstore_iter_pos_t pos_h);
 char *bstore_pos_to_str(bstore_iter_pos_t pos);
 bstore_iter_pos_t bstore_pos_from_str(const char *pos);
+
+/**
+ * \defgroup bstore_ptn_attr Baler Store Pattern Attribute
+ * \{
+ *
+ * \brief Baler Store Pattern Attribute Routines
+ *
+ * In a Baler Store, a pattern can be associated with attributes. The attribute
+ * value can be a single string, or a collection of strings. The following is a
+ * synopsis how to use it:
+ *
+ * \code{.py}
+ * #!/usr/bin/env python
+ * from baler import Bq
+ * bs = Bq.Bstore()
+ * bs.open("path/to/store")
+ *
+ * # Create some new attribute types
+ * bs.attr_new("TAG") # for pattern tags (multiple tags / pattern)
+ * bs.attr_new("NOTE") # a note for a pattern
+ *
+ * # Set a NOTE attribute
+ * bs.ptn_attr_value_set(345, "NOTE", "This is pattern 345.")
+ *
+ * # Add several tags
+ * bs.ptn_attr_value_add(345, "TAG", "example")
+ * bs.ptn_attr_value_add(345, "TAG", "bad")
+ * bs.ptn_attr_value_add(345, "TAG", "misc")
+ *
+ * # Getting the value of an attribute of a pattern
+ * note = bs.ptn_attr_get(345, "NOTE")
+ *
+ * # Iterating through multi-value attribute (e.g. TAG) for a pattern
+ * itr = Bq.Bptn_attr_iter(bs)
+ * itr.set_filter(ptn_id=345, attr_type="TAG")
+ * for attr_obj in itr:
+ *     print attr_obj.attr_value()
+ *     # .ptn_id() for ptn_id, and .attr_type() for attr_type()
+ *     # .as_tuple() to get (ptn_id, attr_type, attr_value) tuple
+ *
+ * # Iterating through all attribute-value of a pattern
+ * itr = Bq.Bptn_attr_iter(bs)
+ * itr.set_filter(ptn_id=345)
+ * for attr_obj in itr:
+ *     print (attr_obj.attr_type(), attr_obj.attr_value())
+ *
+ * # Iterating through all ptn_id-attribute-value
+ * itr = Bq.Bptn_attr_iter(bs)
+ * for attr_obj in itr:
+ *     print attr_obj.as_tuple()
+ *
+ * # Get all ptn_id's that has a certain value of an attribute (e.g. TAG)
+ * itr = Bq.Bptn_attr_iter(bs)
+ * itr.set_filter(attr_type="TAG", attr_value="bad")
+ * for attr_obj in itr:
+ *     print attr_obj.ptn_id()
+ *
+ * # Get all ptn_id-attr_value of an attribute type
+ * itr = Bq.Bptn_attr_iter(bs)
+ * itr.set_filter(attr_type="NOTE")
+ * # This will give all ptn_id-NOTEs
+ * for attr_obj in itr:
+ *     print (attr_obj.ptn_id(), attr_obj.attr_value())
+ *
+ * # Remove an attribute value from a pattern
+ * bs.ptn_attr_value_rm(345, "TAG", "bad")
+ *
+ * \endcode
+ *
+ * \code{.c}
+ * bstore_t bs;
+ *
+ * bstore_attr_new(bs, "TAG");
+ * bstore_attr_new(bs, "NOTE");
+ *
+ * // Set a NOTE attribute
+ * bstore_ptn_attr_value_set(bs, 345, "NOTE", "This is pattern 345.");
+ *
+ * // Add several tags
+ * bstore_ptn_attr_value_add(bs, 345, "TAG", "example");
+ * bstore_ptn_attr_value_add(bs, 345, "TAG", "bad");
+ * bstore_ptn_attr_value_add(bs, 345, "TAG", "misc");
+ *
+ * // Getting the value of an attribute of a pattern
+ * char *note = bstore_ptn_attr_get(bs, 345, "NOTE");
+ * printf("%s", note);
+ * free(note);
+ *
+ * bptn_attr_t ao;
+ *
+ * // Iterating through multi-value attribute (e.g. TAG) for a pattern
+ * bptn_attr_iter_t itr = bstore_ptn_attr_iter_new(bs);
+ * struct bstore_iter_filter_s filter = {.ptn_id=345, .attr_type="TAG"};
+ * bstore_ptn_attr_iter_filter_set(itr, &filter);
+ * for (rc = bstore_ptn_attr_iter_first();
+ *                             rc;
+ *                             rc = bstore_ptn_attr_iter_next()) {
+ *         ao = bstore_ptn_attr_iter_obj();
+ *         printf("%s\n", ao->attr_value);
+ *         // ao has ptn_id, attr_type and attr_value members
+ *         bptn_attr_free(ao);
+ * }
+ *
+ * // Iterating through all attribute-value of a pattern
+ * //   Do the same as above, just change the filter
+ * bptn_attr_iter_t itr = bstore_ptn_attr_iter_new(bs);
+ * struct bstore_iter_filter_s filter = {.ptn_id=345};
+ * bstore_ptn_attr_iter_filter_set(itr, &filter);
+ * ...
+ *
+ * // Iterating through all ptn_id-attribute-value
+ * //   Do the same as above, just apply no filter
+ * bptn_attr_iter_t itr = bstore_ptn_attr_iter_new(bs);
+ * for ...
+ *
+ * // Get all ptn_id's that has a certain value of an attribute (e.g. TAG)
+ * //   Do the same as above with different filter
+ * bptn_attr_iter_t itr = bstore_ptn_attr_iter_new(bs);
+ * struct bstore_iter_filter_s filter = {.attr_type="TAG", .attr_value"bad"};
+ * bstore_ptn_attr_iter_filter_set(itr, &filter);
+ * ...
+ *
+ * // Get all ptn_id-attr_value of an attribute type
+ * //   Do the same as above with different filter
+ * bptn_attr_iter_t itr = bstore_ptn_attr_iter_new(bs);
+ * struct bstore_iter_filter_s filter = {.attr_type="NOTE"};
+ * bstore_ptn_attr_iter_filter_set(itr, &filter);
+ * // This will give all ptn_id-NOTEs
+ * ...
+ *
+ * // Remove an attribute value from a pattern
+ * bstore_ptn_attr_value_rm(bs, 345, "TAG", "bad");
+ *
+ * \endcode
+ */
+
+/**
+ * \brief Create a new attribute type
+ * \retval 0 if success
+ * \retval errno if failed
+ */
+int bstore_attr_new(bstore_t bs, const char *attr_type);
+
+/**
+ * \brief Find the attribute type in the store
+ * \retval 0 if it is found
+ * \retval ENOENT if it is not found
+ */
+int bstore_attr_find(bstore_t bs, const char *attr_type);
+
+/**
+ * \brief Set attribute-value to a pattern.
+ *
+ * If the pattern does not have the attribute, automatically add it to
+ * the pattern. If the pattern have had the attribute, re-set its value.
+ *
+ * \retval 0 if success
+ * \retval errno if failed
+ */
+int bstore_ptn_attr_value_set(bstore_t bs, bptn_id_t ptn_id,
+		const char *attr_type, const char *attr_value);
+
+/**
+ * \brief Add a value to the pattern's attribute (multi-value, e.g. tag)
+ */
+int bstore_ptn_attr_value_add(bstore_t bs, bptn_id_t ptn_id,
+		const char *attr_type, const char *attr_value);
+
+/**
+ * \brief Remove a value to the pattern's attribute (multi-value, e.g. tag)
+ */
+int bstore_ptn_attr_value_rm(bstore_t bs, bptn_id_t ptn_id,
+		const char *attr_type, const char *attr_value);
+
+/**
+ * \brief Unset the pattern attribute
+ *
+ * For both multi-value and single-value, calling this function will
+ * delete the attribute from the pattern.
+ */
+int bstore_ptn_attr_unset(bstore_t bs, bptn_id_t ptn_id,
+		const char *attr_type);
+
+/**
+ * \brief Get a value from an attribute type of a pattern
+ * \note The caller must free the returned string.
+ * \note In the case of multi-value attribute type, the first value is returned.
+ */
+char *bstore_ptn_attr_get(bstore_t bs, bptn_id_t ptn_id, const char *attr_type);
+
+bptn_attr_iter_t bstore_ptn_attr_iter_new(bstore_t bs);
+void bstore_ptn_attr_iter_free(bptn_attr_iter_t iter);
+int bstore_ptn_attr_iter_filter_set(bptn_attr_iter_t iter,
+				 bstore_iter_filter_t filter);
+bptn_attr_t bstore_ptn_attr_iter_obj(bptn_attr_iter_t iter);
+int bstore_ptn_attr_iter_find_fwd(bptn_attr_iter_t iter,
+			      bptn_id_t ptn_id,
+			      const char *attr_type,
+			      const char *attr_value);
+int bstore_ptn_attr_iter_find_rev(bptn_attr_iter_t iter,
+			      bptn_id_t ptn_id,
+			      const char *attr_type,
+			      const char *attr_value);
+int bstore_ptn_attr_iter_first(bptn_attr_iter_t iter);
+int bstore_ptn_attr_iter_next(bptn_attr_iter_t iter);
+int bstore_ptn_attr_iter_prev(bptn_attr_iter_t iter);
+int bstore_ptn_attr_iter_last(bptn_attr_iter_t iter);
+/**
+ * \}
+ */
 
 /**
  * \}

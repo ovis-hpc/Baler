@@ -152,6 +152,67 @@ cdef class Bstore:
         Bs.bmc_list_free(bmc_list)
         return _list
 
+    cpdef attr_new(self, const char *attr_type):
+        cdef int rc
+        rc = Bs.bstore_attr_new(self.c_store, attr_type)
+        if rc == EEXIST:
+            raise ValueError("attribute '%s' existed" % attr_type)
+        if rc:
+            raise RuntimeError("bstore_attr_new() return code: %d" % rc)
+
+    cpdef attr_find(self, const char *attr_type):
+        cdef int rc
+        rc = Bs.bstore_attr_find(self.c_store, attr_type)
+        if rc:
+            return False
+        return True
+
+    cpdef ptn_attr_value_set(self, int ptn_id,
+                                   const char *attr_type,
+                                   const char *attr_value):
+        cdef int rc
+        rc = Bs.bstore_ptn_attr_value_set(self.c_store, ptn_id,
+                                                     attr_type,
+                                                     attr_value)
+        if rc:
+            raise RuntimeError("bstore_ptn_attr_value_set() rc: %d" % rc)
+
+    cpdef ptn_attr_get(self, int ptn_id, const char *attr_type):
+        cdef char *attr_value
+        attr_value = Bs.bstore_ptn_attr_get(self.c_store, ptn_id, attr_type)
+        if not attr_value:
+            if errno == ENOENT:
+                raise KeyError("'%s' not found" % attr_type)
+            raise RuntimeError("bstore_ptn_attr_get() errno: %d" % errno)
+        return attr_value
+
+    cpdef ptn_attr_value_add(self, int ptn_id,
+                                   const char *attr_type,
+                                   const char *attr_value):
+        cdef int rc
+        rc = Bs.bstore_ptn_attr_value_add(self.c_store, ptn_id,
+                                                        attr_type,
+                                                        attr_value)
+        if rc == EEXIST:
+            raise ValueError("(%d, '%s', '%s') existed" %
+                                            (ptn_id, attr_type, attr_value))
+        if rc:
+            raise RuntimeError("bstore_ptn_attr_value_add() rc: %d" % rc)
+
+    cpdef ptn_attr_value_rm(self, int ptn_id,
+                                  const char *attr_type,
+                                  const char *attr_value):
+        cdef int rc
+        rc = Bs.bstore_ptn_attr_value_rm(self.c_store, ptn_id,
+                                                       attr_type,
+                                                       attr_value)
+        if rc == ENOENT:
+            raise LookupError("(%d, '%s', '%s') not found" %
+                                            (ptn_id, attr_type, attr_value))
+        if rc:
+            raise RuntimeError("bstore_ptn_attr_value_add() rc: %d" % rc)
+
+
 cdef class Bmc:
     cdef Bs.bmc_id_t _meta_id
     cdef Bptn _meta_ptn
@@ -319,6 +380,10 @@ cdef class Biter:
             self.c_filter.tkn_pos = kwargs['tkn_pos']
         if 'bin_width' in kwargs:
             self.c_filter.bin_width = kwargs['bin_width']
+        if 'attr_type' in kwargs:
+            self.c_filter.attr_type = kwargs['attr_type']
+        if 'attr_value' in kwargs:
+            self.c_filter.attr_value = kwargs['attr_value']
         self.iterFilterSet(&self.c_filter)
 
     cdef obj_update(self, void *ptr):
@@ -566,6 +631,38 @@ cdef class Bptn:
             ptn_str += tkn.ptn_tkn_str()
         return ptn_str
 
+
+cdef class Bptn_attr:
+    cdef Bs.bptn_attr_t c_ptn_attr
+
+    def __cinit__(self):
+        self.c_ptn_attr = NULL
+
+    def __dealloc__(self):
+        Bs.bptn_attr_free(self.c_ptn_attr)
+
+    def __iter__(self):
+        yield self.c_ptn_attr.ptn_id
+        yield self.c_ptn_attr.attr_type
+        yield self.c_ptn_attr.attr_value
+
+    def as_list(self):
+        return list(iter(self))
+
+    def as_tuple(self):
+        return tuple(iter(self))
+
+    def ptn_id(self):
+        return self.c_ptn_attr.ptn_id
+
+    def attr_type(self):
+        return self.c_ptn_attr.attr_type
+
+    def attr_value(self):
+        return self.c_ptn_attr.attr_value
+
+
+
 cdef class Bptn_iter(Biter):
     """Create an iterator for Patterns
 
@@ -625,6 +722,57 @@ cdef class Bptn_iter(Biter):
 
     cdef int iterFilterSet(self, Bs.bstore_iter_filter_t f):
         return Bs.bstore_ptn_iter_filter_set(self.c_iter, f)
+
+
+cdef class Bptn_attr_iter(Biter):
+    def __init__(self, Bstore store):
+        Biter.__init__(self, store)
+
+    cdef Bs.bstore_iter_t iterNew(self):
+        return Bs.bstore_ptn_attr_iter_new(self.store.c_store)
+
+    cdef void iterDel(self):
+        Bs.bstore_ptn_attr_iter_free(self.c_iter)
+
+    cpdef unsigned long card(self):
+        return -1
+
+    cdef object obj_wrap(self, void *c_obj):
+        ptn_attr = Bptn_attr()
+        ptn_attr.c_ptn_attr = <Bs.bptn_attr_t>c_obj
+        return ptn_attr
+
+    def iterFindFwd(self, **kwargs):
+        ptn_id = <int>kwargs["ptn_id"]
+        attr_type = <char*>kwargs["attr_type"]
+        attr_value = <char*>kwargs["attr_value"]
+        return Bs.bstore_ptn_attr_iter_find_fwd(self.c_iter,
+                                           ptn_id, attr_type, attr_value)
+
+    def iterFindRev(self, **kwargs):
+        ptn_id = <int>kwargs["ptn_id"]
+        attr_type = <char*>kwargs["attr_type"]
+        attr_value = <char*>kwargs["attr_value"]
+        return Bs.bstore_ptn_attr_iter_find_rev(self.c_iter,
+                                           ptn_id, attr_type, attr_value)
+
+    cdef void *iterObj(self):
+        return Bs.bstore_ptn_attr_iter_obj(self.c_iter)
+
+    cdef int iterFirst(self):
+        return Bs.bstore_ptn_attr_iter_first(self.c_iter)
+
+    cdef int iterNext(self):
+        return Bs.bstore_ptn_attr_iter_next(self.c_iter)
+
+    cdef int iterPrev(self):
+        return Bs.bstore_ptn_attr_iter_prev(self.c_iter)
+
+    cdef int iterLast(self):
+        return Bs.bstore_ptn_attr_iter_last(self.c_iter)
+
+    cdef int iterFilterSet(self, Bs.bstore_iter_filter_t f):
+        return Bs.bstore_ptn_attr_iter_filter_set(self.c_iter, f)
 
 
 cdef class Bptn_tkn_iter(Biter):

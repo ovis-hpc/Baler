@@ -282,6 +282,11 @@ def PTN(_ptn):
         return Ptn(_ptn)
     return None
 
+def PTN_ATTR(_ptn_attr):
+    if _ptn_attr:
+        return PtnAttr(_ptn_attr)
+    return None
+
 
 def TKN(_tkn):
     if _tkn:
@@ -365,6 +370,23 @@ class BStore(object):
         assert(_id)
         return PTN(self.bs.ptn_by_id(_id))
 
+    def attrNew(self, attr_type):
+        self.bs.attr_new(attr_type)
+
+    def attrFind(self, attr_type):
+        return self.bs.attr_find(attr_type)
+
+    def ptnAttrValueSet(self, ptn_id, attr_type, attr_value):
+        return self.bs.ptn_attr_value_set(ptn_id, attr_type, attr_value)
+
+    def ptnAttrGet(self, ptn_id, attr_type):
+        return self.bs.ptn_attr_get(ptn_id, attr_type)
+
+    def ptnAttrValueAdd(self, ptn_id, attr_type, attr_value):
+        return self.bs.ptn_attr_value_add(ptn_id, attr_type, attr_value)
+
+    def ptnAttrValueRm(self, ptn_id, attr_type, attr_value):
+        return self.bs.ptn_attr_value_rm(ptn_id, attr_type, attr_value)
 
 class Tkn(object):
     __slots__ = ('tkn_count', 'tkn_text', 'tkn_type_mask', 'tkn_id',
@@ -608,6 +630,19 @@ class Ptn(object):
                 str(self) == str(other)
 
 
+class PtnAttr(object):
+    __slots__ = ("ptn_id", "attr_type", "attr_value")
+
+    def __init__(self, ptn_attr = Bq.Bptn_attr()):
+        assert(type(ptn_attr) == Bq.Bptn_attr)
+        self.ptn_id = ptn_attr.ptn_id()
+        self.attr_type = ptn_attr.attr_type()
+        self.attr_value = ptn_attr.attr_value()
+
+    def __str__(self):
+        return "(%d, '%s', %s')" % (self.ptn_id, self.attr_type, self.attr_value)
+
+
 class Msg(object):
     __slots__ = ('bs', 'ptn_id', 'timestamp', 'comp_id', 'host', 'tkn_list')
 
@@ -732,6 +767,15 @@ class PtnIter(Iter):
 
     def obj(self):
         return PTN(self.itr.obj())
+
+
+class PtnAttrIter(Iter):
+    def __init__(self, bs):
+        assert(type(bs) == BStore)
+        self.itr = Bq.Bptn_attr_iter(bs.bs)
+
+    def obj(self):
+        return PTN_ATTR(self.itr.obj())
 
 
 class PtnTknIter(Iter):

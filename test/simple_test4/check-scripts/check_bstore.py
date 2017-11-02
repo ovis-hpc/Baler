@@ -935,11 +935,94 @@ class TestBS(object):
                         itertools.product(_width, _comp, _ptn_id, _time):
             self.__test_comp_hist_iter_pos(bw, ts, comp, pid)
 
+    def test_ptn_attr(self):
+        self.assertTrue(self.bs.attrFind("HEX"))
+        with self.assertRaises(ValueError):
+            self.bs.attrNew("HEX")
+        for ptn in PtnIter(self.bs):
+            attr_value = self.bs.ptnAttrGet(ptn.ptn_id, "HEX")
+            self.assertEqual(attr_value, hex(ptn.ptn_id))
+        # also try setting a new value
+        self.bs.ptnAttrValueSet(257, "HEX", str(0))
+        self.assertEqual(self.bs.ptnAttrGet(257, "HEX"), str(0))
+
+        # set it back
+        self.bs.ptnAttrValueSet(257, "HEX", hex(257))
+        self.assertEqual(self.bs.ptnAttrGet(257, "HEX"), hex(257))
+
+    def test_ptn_attr_case_1(self):
+        # (ptn_id, attr_tyoe) |-> ( (value), ... )
+        itr = PtnAttrIter(self.bs)
+        itr.set_filter( ptn_id = 258, attr_type = "TAG" )
+        tags = [ ent.attr_value for ent in itr ]
+        tags.sort()
+        self.assertEqual(tags, ["even", "triple"])
+
+    def test_ptn_attr_case_2(self):
+        # (ptn_id) |-> ( (type, value), ... )
+        itr = PtnAttrIter(self.bs)
+        itr.set_filter( ptn_id = 258)
+        tvs = [ (ent.attr_type, ent.attr_value) for ent in itr ]
+        tvs.sort()
+        self.assertEqual(tvs, [
+                            ("HEX", hex(long(258))),
+                            ("TAG", "even"),
+                            ("TAG", "triple"),
+                        ])
+
+    def test_ptn_attr_case_3(self):
+        # (type) |-> ( (ptn_id, value), ... )
+        itr = PtnAttrIter(self.bs)
+        itr.set_filter( attr_type = "TAG" )
+        cmpr = [ (ent.ptn_id, ent.attr_type, ent.attr_value) for ent in itr ]
+        self.tag_base.sort()
+        cmpr.sort()
+        self.assertEqual(cmpr, self.tag_base)
+
+    def test_ptn_attr_case_4(self):
+        # (type, value) |-> ( (ptn_id), ... )
+        itr = PtnAttrIter(self.bs)
+        itr.set_filter( attr_type = "TAG", attr_value = "triple" )
+        cmpr = [ ent.ptn_id for ent in itr ]
+        base = [ x[0] for x in self.tag_base if x[2] == "triple" ]
+        cmpr.sort()
+        base.sort()
+        self.assertGreater(len(cmpr), 0)
+        self.assertEqual(cmpr, base)
+
+    def test_ptn_attr_add_rm(self):
+        self.bs.ptnAttrValueAdd(258, "TAG", "rm_me")
+        itr = PtnAttrIter(self.bs)
+        itr.set_filter( ptn_id = 258, attr_type = "TAG" )
+        tags = [ e.attr_value for e in itr ]
+        tags.sort()
+        self.assertEqual(tags, ["even", "rm_me", "triple"])
+
+        self.bs.ptnAttrValueRm(258, "TAG", "rm_me")
+        itr = PtnAttrIter(self.bs)
+        itr.set_filter( ptn_id = 258, attr_type = "TAG" )
+        tags = [ e.attr_value for e in itr ]
+        tags.sort()
+        self.assertEqual(tags, ["even", "triple"])
+
 
 class TestBSS(TestBS, unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.bs = BStore.open("bstore_sos", "store", os.O_RDWR, 0)
+        cls.tag_base = []
+        cls.bs.attrNew("TAG")
+        cls.bs.attrNew("HEX")
+        for ptn in PtnIter(cls.bs):
+            cls.bs.ptnAttrValueSet(ptn.ptn_id, "HEX", hex(ptn.ptn_id))
+            if ptn.ptn_id % 2:
+                cls.tag_base.append( (ptn.ptn_id, "TAG", "odd") )
+            else:
+                cls.tag_base.append( (ptn.ptn_id, "TAG", "even") )
+            if ptn.ptn_id % 3 == 0:
+                cls.tag_base.append( (ptn.ptn_id, "TAG", "triple") )
+        for (ptn_id, attr_type, attr_value) in cls.tag_base:
+            cls.bs.ptnAttrValueAdd(ptn_id, attr_type, attr_value)
 
     @classmethod
     def tearDownClass(cls):
