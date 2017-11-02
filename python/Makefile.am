@@ -18,7 +18,7 @@ pkgpyexecdir = $(pkgpythondir)
 Bq.c: Bq.pyx Bs.pxd
 	$(CYTHON) --gdb $< -o $@
 
-dist_bin_SCRIPTS = bq bclient
+dist_bin_SCRIPTS = bq bclient n2daplot
 
 clean-local:
 	rm -f Bq.c

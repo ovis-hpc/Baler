@@ -1,0 +1,220 @@
+#!/usr/bin/env python
+
+import os
+import sys
+import logging
+import argparse
+import re
+from baler import named2darray as n2da
+
+##### Logging stuff #####
+LOG_LEVEL = logging.DEBUG
+
+log = logging.getLogger(__name__)
+log.setLevel(LOG_LEVEL)
+
+lf = logging.Formatter("%(asctime)s %(name)s %(levelname)s: %(message)s")
+
+lh = logging.StreamHandler()
+lh.setLevel(LOG_LEVEL)
+lh.setFormatter(lf)
+
+log.addHandler(lh)
+#######################
+
+
+class Debug(object): pass
+
+DEBUG = Debug() # the debug object
+
+class Bound(object):
+    __slots__ = ["xmin", "xmax", "ymin", "ymax"]
+    def __init__(self, xmin=float("Inf"), xmax=float("-Inf"),
+                       ymin=float("Inf"), ymax=float("-Inf")):
+        self.xmin = xmin
+        self.xmax = xmax
+        self.ymin = ymin
+        self.ymax = ymax
+
+    def update(self, x, y):
+        """Update the boundary with point (x, y)"""
+        if x < self.xmin:
+            self.xmin = x
+        if self.xmax < x:
+            self.xmax = x
+        if y < self.ymin:
+            self.ymin = y
+        if self.ymax < y:
+            self.ymax = y
+
+    def __str__(self):
+        return "(%d, %d, %d, %d)" % (self.xmin, self.xmax, self.ymin, self.ymax)
+
+
+DIM_RE = re.compile("^(\\d+)[xX](\\d+)$")
+class Dimension(object):
+    __slots__ = ["width", "height"]
+    def __init__(self, width, height):
+        self.width = int(width)
+        self.height = int(height)
+
+    @classmethod
+    def fromStr(cls, s):
+        m = DIM_RE.match(s)
+        if not m:
+            raise ValueError("Dimension format error, expecting: WIDTHxHEIGHT, \
+but got: '%s'" % s)
+        DEBUG.m = m
+        return Dimension(*(m.groups()))
+
+    def as_tuple(self):
+        return (self.width, self.height)
+
+
+def scatter_plot(n2):
+    x = []
+    y = []
+    z = []
+    for p in n2:
+        x.append(p[0])
+        y.append(p[1])
+        z.append(p[2])
+    sc = plt.scatter(x, y, s=40, c=z, cmap="hot_r", marker="s",
+                    linewidths = 0.5)
+    plt.colorbar(sc)
+
+
+def round(x, b):
+    return (int((x - 1) / b) + 1) * b
+
+
+def heatmap(n2, odim, bound=None):
+    global mc
+    import matplotlib.colors as mc
+    # n2da ==> img ==> imshow()
+    #   img: [ [row1 data], [row2 data] ... ]
+    # Gather data info for some image mapping calculation
+    # ** bound is just a guide
+    x_bin_width = n2.get_x_bin_width()
+    y_bin_width = n2.get_y_bin_width()
+    p0 = n2.get(0)
+    pN = n2.get_last_cell()
+    # calculate default bound
+    _b = Bound()
+    n2.seek(0, 0)
+    for (x, y, c) in n2:
+        _b.update(x, y)
+    # Use user-defined boundaries if specified
+    if bound and bound.xmin < float("Inf"):
+        _b.xmin = bound.xmin
+    if bound and bound.xmax > float("-Inf"):
+        _b.xmax = bound.xmax
+    if bound and bound.ymin < float("Inf"):
+        _b.ymin = bound.ymin
+    if bound and bound.ymax > float("-Inf"):
+        _b.ymax = bound.ymax
+
+    idim = ( int(_b.xmax - _b.xmin + x_bin_width)/x_bin_width,
+             int(_b.ymax - _b.ymin + y_bin_width)/y_bin_width )
+    odim = ( idim[0] if idim[0] < odim[0] else odim[0],
+             idim[1] if idim[1] < odim[1] else odim[1] )
+    # fitting the input boundary into the output dimension
+    # ox_bin_width shall be multiple of x_bin_width
+    # oy_bin_width shall be multiple of y_bin_width
+    k = (_b.xmax - _b.xmin) / odim[0] + 1.0
+    ox_bin_width = round(k, x_bin_width)
+    k = (_b.ymax - _b.ymin) / odim[1] + 1.0
+    oy_bin_width = round(k, y_bin_width)
+    im = [ [0 for i in range(0, odim[0])] for j in range(0, odim[1]) ]
+    DEBUG.im = im
+    DEBUG.odim = odim
+    DEBUG.idim = idim
+    DEBUG._b = _b
+    DEBUG.n2 = n2
+    DEBUG.x_bin_width = x_bin_width
+    DEBUG.y_bin_width = y_bin_width
+    DEBUG.ox_bin_width = ox_bin_width
+    DEBUG.oy_bin_width = oy_bin_width
+    n2.seek(_b.xmin, _b.ymin)
+    for (x, y, c) in n2:
+        if y < _b.ymin or _b.ymax < y:
+            continue # just skip
+        if _b.xmax < x:
+            break # because n2da data is ordered by x-y
+        row = (y - _b.ymin) / oy_bin_width
+        col = (x - _b.xmin) / ox_bin_width
+        DEBUG.row = row
+        DEBUG.col = col
+        im[row][col] += c
+    f_ratio = float(odim[0])/odim[1]
+    DEBUG.f_ratio = f_ratio
+    plt.figure(figsize=(int(8*f_ratio), 8))
+    implt = plt.imshow(im,
+                       origin="lower",
+                       cmap="gist_heat_r",
+                       interpolation="nearest",
+                       norm=mc.LogNorm(vmin=0.1, vmax=1e6),
+                       )
+    DEBUG.implt = implt
+
+    # y-labels
+    y_inc = 1 if odim[1] < 32 else int(odim[1])/16
+    y_ticks = range(0, odim[1], y_inc)
+    y_labels = [_b.ymin + t * oy_bin_width for t in y_ticks]
+    plt.yticks(y_ticks, y_labels)
+
+    # x-labels
+    x_inc = 1 if odim[1] < 32 else int(odim[1])/16
+    x_ticks = range(0, odim[1], x_inc)
+    x_labels = [_b.xmin + t * ox_bin_width for t in x_ticks]
+    plt.xticks(x_ticks, x_labels, rotation=-90)
+
+    implt.axes.tick_params(direction="out")
+    cbar = plt.colorbar(implt, extend="max", format="%g")
+    cbar.ax.tick_params(direction="out")
+    DEBUG.cbar = cbar
+
+
+def n2daplot(n2da_path, fout, dim, bound=None):
+    global plt
+    import matplotlib
+    if fout:
+        # Need to call matplotlib.use("Agg") before importing pyplot
+        matplotlib.use("Agg")
+    from matplotlib import pyplot as plt
+
+    n2 = n2da.Named2DArray(n2da_path)
+    # scatter_plot(n2)
+    heatmap(n2, odim = dim.as_tuple(), bound=bound)
+    if fout:
+        plt.savefig(fout)
+    else:
+        plt.show()
+
+
+if __name__ == "__main__":
+    if sys.flags.interactive:
+        # started with python -i, enable readline autocompletion
+        log.info("interactive")
+        import rlcompleter, readline
+        readline.parse_and_bind("tab: complete")
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--input", metavar="N2DA_FILE", type=str,
+                    help="Input file (Named2DArray)")
+    ap.add_argument("--output", metavar="PNG_FILE", type=str, default=None,
+                    help="(Optional) Output file (PNG). If not given, the " +
+                    "default is to plot on the screen.")
+    ap.add_argument("--xmin", type=int, default=float("Inf"),
+                    help="(Optional) Minimum value of x-axis.")
+    ap.add_argument("--xmax", type=int, default=float("-Inf"),
+                    help="(Optional) Maximum value of x-axis.")
+    ap.add_argument("--ymin", type=int, default=float("Inf"),
+                    help="(Optional) Minimum value of y-axis.")
+    ap.add_argument("--ymax", type=int, default=float("-Inf"),
+                    help="(Optional) Maximum value of y-axis.")
+    ap.add_argument("--dimension", type=Dimension.fromStr, default="64x64",
+                    metavar="WIDTHxHEIGHT",
+                    help="(Option) The output plot dimension. (default: 64x64).")
+    args = ap.parse_args()
+    bound = Bound(args.xmin, args.xmax, args.ymin, args.ymax)
+    n2daplot(args.input, args.output, args.dimension, bound=bound)
