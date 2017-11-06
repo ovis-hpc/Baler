@@ -63,9 +63,11 @@ class Named2DArray(object):
     """
     def __init__(self, path, mode="r"):
         if mode == "r":
-            self._fmode = "rb+"
+            _fmode = "rb+"
+            self._write = False
         elif mode == "w":
-            self._fmode = "ab+"
+            _fmode = "ab+"
+            self._write = True
         else:
             raise AttributeError("mode canonly be 'r' or 'w'")
         self.mode = mode
@@ -73,15 +75,23 @@ class Named2DArray(object):
         self._hdr_map = None
         self._packed_hdr = None
         self._path = path
-        self._file = open(path, self._fmode, 0) # no buffering
-        try:
-            self._load_hdr()
-        except HeaderException:
-            if mode == "w":
+
+        if self._write:
+            self._file = open(path, "ab+", 0) # no buffering
+            try:
+                self._load_hdr()
+            except HeaderException:
                 self._hdr_init()
                 self._load_hdr()
-            else:
-                raise
+        else:
+            # read-only, use mmap ... it is way faster
+            self._file = f = open(path, "rb+")
+            self._load_hdr()
+            fno = f.fileno()
+            f.seek(0, 2) # seek to EOF
+            sz = f.tell()
+            self._file = mmap.mmap(fno, sz, mmap.MAP_SHARED, mmap.PROT_READ)
+            f.close()
         self._read_last_cell()
 
     def __del__(self):
@@ -117,6 +127,9 @@ class Named2DArray(object):
         else:
             c = f.read(CELL_SZ)
             self._last_cell = struct.unpack(CELL_FMT, c)
+        if not self._write:
+            # position at the first cell
+            f.seek(HDR_SZ)
         return self._last_cell
 
     def _hdr_init(self):
@@ -183,6 +196,9 @@ class Named2DArray(object):
         s = self._hdr_map.read(8)
         return struct.unpack("<q", s)[0]
 
+    def get_last_cell(self):
+        return self._last_cell
+
     def _set_cell_count(self, val):
         self._cell_count = val
         self._hdr_map.seek(256 + 3*8)
@@ -195,7 +211,7 @@ class Named2DArray(object):
                                      (str((x, y, count)),
                                      str(self._last_cell)))
         data = struct.pack(CELL_FMT, x, y, count)
-        # NOTE: Other methods guarantee that self._file is always at EOF.
+        self._file.seek(0, 2)
         self._file.write(data)
         self._set_total_count(self._total_count + count)
         self._set_cell_count(self._cell_count + 1)
@@ -223,14 +239,49 @@ class Named2DArray(object):
         for p in self:
             print p
 
+    def get(self, i):
+        """Get the i-th entry"""
+        try:
+            self._file.seek(HDR_SZ + i * CELL_SZ)
+            s = self._file.read(CELL_SZ)
+            if not s:
+                raise ValueError()
+        except ValueError:
+            raise IndexError("Invalid index %d" % i)
+        p = struct.unpack(CELL_FMT, s)
+        return p
+
+    def seek(self, x, y):
+        """Seek to (x, y) element, or the first element greater thant (x, y)."""
+        s = (x, y, 0)
+        l = 0
+        r = self._cell_count - 1
+        while l <= r:
+            c = (l+r)/2
+            p = self.get(c)
+            if p[0] == x and p[1] == y:
+                # found
+                r = c - 1
+                break
+            if s < p:
+                r = c - 1
+            else:
+                l = c + 1
+        self._file.seek(HDR_SZ + (r + 1)*CELL_SZ)
+
+    def next(self):
+        """Read a cell from the Named2DArray file."""
+        s = self._file.read(CELL_SZ)
+        if not s:
+            return None
+        p = struct.unpack(CELL_FMT, s)
+        return p
+
     def __iter__(self):
-        f = open(self._path, "rb", 0) # so that the main fd is not messed with
-        f.seek(HDR_SZ)
-        for i in range(0, self._cell_count):
-            s = f.read(CELL_SZ)
-            p = struct.unpack(CELL_FMT, s)
-            yield(p)
-        f.close()
+        p = self.next()
+        while p:
+            yield p
+            p = self.next()
 
 
 if __name__ == "__main__":
@@ -241,9 +292,11 @@ if __name__ == "__main__":
     ts_array = [1502985600, 1502985600+3600, 1502985600 + 2*3600]
     comp_id_array = [256, 257, 258, 259]
     total_count = 0
+    i = 10
     for t in ts_array:
         for c in comp_id_array:
-            total_count += 10
-            a.append(t, c, 10)
+            total_count += i
+            a.append(t, c, i)
+            i += 10
     assert(a.get_total_count() == total_count)
     a.dump()
