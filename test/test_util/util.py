@@ -799,6 +799,9 @@ class MsgIter(Iter):
     def obj(self):
         return MSG(self.bs, self.itr.obj())
 
+    def count(self, ptn_id, **kwargs):
+        return self.itr.count(ptn_id, **kwargs)
+
 
 class MsgIterFilter(MsgIter):
     def __init__(self, bs, tv_begin=(0,0), tv_end=(0,0), comp_id=0, ptn_id=0):

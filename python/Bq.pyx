@@ -967,23 +967,38 @@ cdef class Bmsg_iter(Biter):
         cdef uint32_t start, end, delta, bin_width
         cdef Bs.bptn_hist_iter_t it
         cdef Bs.bptn_hist_s hist
-        cdef Bs.bptn_hist_t ph
         cdef size_t msg_count
         cdef Bmsg m
+        cdef Bs.bstore_iter_filter_s c_filter
+        cdef int rc
+
+        c_filter.tv_begin.tv_sec = 0
+        c_filter.tv_begin.tv_usec = 0
+        c_filter.tv_end.tv_sec = 0
+        c_filter.tv_end.tv_usec = 0
+        c_filter.ptn_id = ptn_id if ptn_id else 1
+        c_filter.bin_width = 60 # may change to 3600 later
+
+        it = Bs.bstore_ptn_hist_iter_new(self.store.c_store)
+        Bs.bstore_ptn_hist_iter_filter_set(it, &c_filter)
 
         if not start_time:
-            if not self.first():
-                return 0
-            m = self.obj()
-            start = m.tv_sec()
+            rc = Bs.bstore_ptn_hist_iter_first(it)
+            if rc:
+                Bs.bstore_ptn_hist_iter_free(it)
+                return 0 # no entry
+            Bs.bstore_ptn_hist_iter_obj(it, &hist)
+            start = hist.time
         else:
             start = start_time
 
         if not end_time:
-            if not self.last():
-                return 0
-            m = self.obj()
-            end = m.tv_sec()
+            rc = Bs.bstore_ptn_hist_iter_last(it)
+            if rc:
+                Bs.bstore_ptn_hist_iter_free(it)
+                return 0 # no entry
+            Bs.bstore_ptn_hist_iter_obj(it, &hist)
+            end = hist.time
         else:
             end = end_time
 
@@ -992,25 +1007,23 @@ cdef class Bmsg_iter(Biter):
             bin_width = 3600
         else:
             bin_width = 60
+
         start = start - (start % bin_width)
         end += bin_width - 1
         end = end - (end % bin_width)
+        c_filter.tv_begin.tv_sec = start
+        c_filter.tv_end.tv_sec = end
+        c_filter.bin_width = bin_width
 
-        if not ptn_id:
-            ptn_id = 1
-        hist.ptn_id = ptn_id
-        hist.bin_width = bin_width
-        hist.time = start
+        Bs.bstore_ptn_hist_iter_filter_set(it, &c_filter)
 
         msg_count = 0
-        it = Bs.bstore_ptn_hist_iter_new(self.store.c_store)
-        ph = &hist
         rc = Bs.bstore_ptn_hist_iter_first(it)
         while rc == 0:
-            ph = Bs.bstore_ptn_hist_iter_obj(it, ph)
-            if ph.time > end:
+            Bs.bstore_ptn_hist_iter_obj(it, &hist)
+            if hist.time >= end:
                 break
-            msg_count = msg_count + ph.msg_count
+            msg_count += hist.msg_count
             rc = Bs.bstore_ptn_hist_iter_next(it)
         Bs.bstore_ptn_hist_iter_free(it)
 

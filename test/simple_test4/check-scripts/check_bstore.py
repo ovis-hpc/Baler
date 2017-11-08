@@ -1005,6 +1005,32 @@ class TestBS(object):
         tags.sort()
         self.assertEqual(tags, ["even", "triple"])
 
+    def test_msg_iter_count(self):
+        itr = MsgIter(self.bs)
+        c_all = 0
+        c_256 = 0
+        c_4ts = 0
+        for m in itr:
+            c_all += 1
+            if m.ptn_id == 256:
+                c_256 += 1
+            if m.timestamp < BTEST_TS_BEGIN + 4*BTEST_TS_INC:
+                c_4ts += 1
+        ic_all = itr.count(1)
+        ic_256 = itr.count(256)
+        ic_4ts = itr.count(0, end_time = (BTEST_TS_BEGIN + 4*BTEST_TS_INC))
+
+        DEBUG.c_all = c_all
+        DEBUG.c_256 = c_256
+        DEBUG.c_4ts = c_4ts
+        DEBUG.ic_all = ic_all
+        DEBUG.ic_256 = ic_256
+        DEBUG.ic_4ts = ic_4ts
+
+        self.assertEqual(c_all, ic_all)
+        self.assertEqual(c_256, ic_256)
+        self.assertEqual(c_4ts, ic_4ts)
+
 
 class TestBSS(TestBS, unittest.TestCase):
     @classmethod
