@@ -972,6 +972,11 @@ cdef class Bmsg_iter(Biter):
         cdef Bs.bstore_iter_filter_s c_filter
         cdef int rc
 
+        if ptn_id >= 256 and not start_time and not end_time:
+            # need no iteration, just return the pattern.msg_count
+            ptn = self.store.ptn_by_id(ptn_id)
+            return ptn.msg_count()
+
         c_filter.tv_begin.tv_sec = 0
         c_filter.tv_begin.tv_usec = 0
         c_filter.tv_end.tv_sec = 0
@@ -1028,6 +1033,7 @@ cdef class Bmsg_iter(Biter):
         Bs.bstore_ptn_hist_iter_free(it)
 
         return msg_count
+
 
 cdef class Bptn_hist:
     cdef Bs.bptn_hist_s c_hist
