@@ -20,7 +20,7 @@ my @PTNS = <$fin>;
 my @TSTA = ();
 my @NODES = ();
 
-my $tz = strftime("%z", localtime());
+my $tz = strftime("%z", localtime($BTEST_TS_BEGIN));
 $tz =~ s/([+-]\d\d)(\d\d)/$1:$2/;
 
 for ($TS=0; $TS<$BTEST_TS_LEN; $TS+=$BTEST_TS_INC) {
