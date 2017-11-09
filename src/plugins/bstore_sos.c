@@ -610,6 +610,53 @@ static int __cnt_cmp_fn(void *a, const void *b)
 	return 0;
 }
 
+static
+int __bs_attribute_sos_create(bstore_sos_t bs, int o_mode)
+{
+	int rc;
+	sos_t cont;
+	sos_schema_t schema;
+	char *cpath = malloc(4096);
+	if (!cpath) {
+		rc = ENOMEM;
+		goto err_0;
+	}
+	sprintf(cpath, "%s/Attribute", bs->base.path);
+	cont = create_container(cpath, o_mode);
+	if (!cont) {
+		rc = errno;
+		goto err_1;
+	}
+	schema = sos_schema_from_template(&attribute_schema);
+	if (!schema) {
+		rc = errno;
+		goto err_2;
+	}
+	rc = sos_schema_add(cont, schema);
+	if (rc)
+		goto err_3;
+	schema = sos_schema_from_template(&pattern_attribute_schema);
+	if (!schema) {
+		rc = errno;
+		goto err_2;
+	}
+	rc = sos_schema_add(cont, schema);
+	if (rc)
+		goto err_3;
+	sos_container_close(cont, SOS_COMMIT_ASYNC);
+	free(cpath);
+	return 0;
+
+ err_3:
+	sos_schema_free(schema);
+ err_2:
+	sos_container_close(cont, SOS_COMMIT_ASYNC);
+ err_1:
+	free(cpath);
+ err_0:
+	return rc;
+}
+
 static bstore_t bs_open(bstore_plugin_t plugin, const char *path, int flags, int o_mode)
 {
 	int create = 0;
@@ -757,8 +804,14 @@ static bstore_t bs_open(bstore_plugin_t plugin, const char *path, int flags, int
 
 	sprintf(cpath, "%s/Attribute", path);
 	bs->attr_sos = sos_container_open(cpath, SOS_PERM_RW);
-	if (!bs->attr_sos)
-		goto err_8;
+	if (!bs->attr_sos) {
+		rc = __bs_attribute_sos_create(bs, 0600);
+		if (rc)
+			goto err_8;
+		bs->attr_sos = sos_container_open(cpath, SOS_PERM_RW);
+		if (!bs->attr_sos)
+			goto err_8;
+	}
 	bs->attribute_schema = sos_schema_by_name(bs->attr_sos, "Attribute");
 	if (!bs->attribute_schema)
 		goto err_9;
