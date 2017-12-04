@@ -1,5 +1,3 @@
-SUBDIRS = . test/
-
 bin_PROGRAMS =
 lib_LTLIBRARIES =
 AM_CFLAGS = -I@top_srcdir@/src/ -D_GNU_SOURCE
@@ -102,16 +100,6 @@ libbout_sos_msg_la_LIBADD = ../baler/libbaler.la \
 			    -lpthread \
 			    -lsos -lods @SOS_LIBDIR_FLAG@ @SOS_LIB64DIR_FLAG@
 lib_LTLIBRARIES += libbout_sos_msg.la
-
-if ENABLE_BOUT_ME
-libbout_me_la_SOURCES = bout_me.c
-libbout_me_la_CFLAGS = $(AM_CFLAGS) @LIBEVENT_INCDIR_FLAG@ -I@OVIS_LIB_INCDIR@
-libbout_me_la_LIBADD = ../baler/libbaler.la \
-		       -lpthread \
-		       -levent -levent_pthreads -L@LIBEVENT_LIBDIR@ \
-		       -lzap -L@OVIS_LIB_LIBDIR@
-lib_LTLIBRARIES += libbout_me.la
-endif
 
 libbin_test_la_SOURCES = bin_test.c
 libbin_test_la_CFLAGS = $(AM_CFLAGS)

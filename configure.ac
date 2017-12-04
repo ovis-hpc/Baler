@@ -119,15 +119,6 @@ dnl ^^^^^^^^^^^^^^^^ (zap) ^^^^^^^^^^^^^^^^^^^
 
 OPTION_DEFAULT_DISABLE([n2da-test], [ENABLE_N2DA_TEST])
 
-dnl output plugin to model evaluator
-OPTION_DEFAULT_DISABLE([bout-me], [ENABLE_BOUT_ME])
-AM_COND_IF([ENABLE_BOUT_ME],[
-	AM_COND_IF([ENABLE_ZAP],
-		[],
-		[AC_MSG_ERROR([bout-me requires zap])]
-	)
-])
-
 OPTION_DEFAULT_DISABLE([ocm], [ENABLE_OCM])
 
 OPTION_DOC
@@ -148,7 +139,6 @@ AC_CONFIG_FILES([Makefile docs/Makefile src/Makefile
 	src/test/Makefile
 	src/n2dassoc/Makefile
 	src/tools/Makefile
-	src/plugins/test/Makefile
 	etc/Makefile
 	etc/baler/Makefile
 	etc/systemd/Makefile
