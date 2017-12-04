@@ -26,11 +26,6 @@ libbstore_agg_la_LIBADD = ../baler/libbaler.la -lsos -lpthread \
 			  @SOS_LIBDIR_FLAG@ @SOS_LIB64DIR_FLAG@
 lib_LTLIBRARIES += libbstore_agg.la
 
-librsyslog_parser_la_SOURCES = rsyslog_parser.c
-librsyslog_parser_la_CFLAGS = $(AM_CFLAGS)
-librsyslog_parser_la_LIBADD = ../baler/libbaler.la
-lib_LTLIBRARIES += librsyslog_parser.la
-
 libbin_tcp_la_SOURCES = bin_tcp.c
 libbin_tcp_la_CFLAGS = $(AM_CFLAGS) @LIBEVENT_INCDIR_FLAG@
 libbin_tcp_la_LIBADD = -levent -levent_pthreads -L@LIBEVENT_LIBDIR@ \
