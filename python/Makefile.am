@@ -1,5 +1,8 @@
 SUBDIRS = ptn_cmp_ext
 
+EXTRA_DIST = bq.dox \
+	     bclient.dox
+
 CFLAGS := $(filter-out -Werror, ${CFLAGS})
 
 pkgpython_PYTHON = __init__.py ptn_order.py util.py \

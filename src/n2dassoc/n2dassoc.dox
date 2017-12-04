@@ -50,14 +50,54 @@
  */
 
 /**
-\page n2dassoc A named-2d-array association rule mining tool
+\page n2dassoc named-2d-array association rule mining tool
 
 \section synopsis SYNOPSIS
-\b n2dassoc [-c CONFIG_FILE] [OPTIONS]
+\b n2dassoc [-c CONFIG_FILE]
 
 \section description DESCRIPTION
-SOME DESCRIPTION
+\b n2dassoc is a program to perform association rule mining on named-2d-array
+files.
 
-\section options OPTIONS
+\section config_file CONFIG_FILE
+The configuration file contains "attribute = value" options for \b n2dassoc.
+The options are as the following:
+
+\par tmpdir = DIR
+The temporary data directory. \b n2dassoc needs a temp dir to work on
+association rule mining.
+
+\par confidence = FLOAT
+The minimum confidence threshold of the output rules (0.0 - 1.0).
+
+\par significance = FLOAT
+The minimum significance threshold of the output rules (0.0 - 1.0).
+
+\par difference = FLOAT
+A prunning threshold (0.0 - 1.0) that terminate a search branch if the support
+of the new rule does not change more than the given difference threshold.
+
+\par target = N2DA_FILE
+Specify the named-2d-array file being a target (the right-hand-side of the rule)
+of the association rule mining. This option can be specified multiple times.
+
+\par rulefile = FILE
+The output file that will contain rules from the mining.
+
+\par targetfile = FILE
+The file that contains a list of target named-2d-array files (one file per line).
+
+\par lhsfile = FILE
+The file that contains a list of named-2d-array files that supply the
+left-hand-side of the rule.
+
+\par threads = NUM
+The number of mining threads.
+
+\par maxdepth = NUM
+The maximum search depth (the maximum length of left-hand-side).
+
+\par qsize = NUM
+The breadth-first-search queue size (in bytes).
 
 */

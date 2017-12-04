@@ -1,6 +1,6 @@
 /* -*- c-basic-offset: 8 -*-
- * Copyright (c) 2013-2016 Open Grid Computing, Inc. All rights reserved.
- * Copyright (c) 2013-2016 Sandia Corporation. All rights reserved.
+ * Copyright (c) 2013-2017 Open Grid Computing, Inc. All rights reserved.
+ * Copyright (c) 2013-2017 Sandia Corporation. All rights reserved.
  *
  * Under the terms of Contract DE-AC04-94AL85000, there is a non-exclusive
  * license for use of this work by or on behalf of the U.S. Government.
@@ -58,31 +58,19 @@
 /**
  * \mainpage Baler - a log processing system.
  *
- * Baler is a set of software for log processing. <tt>balerd</tt> (\ref balerd)
+ * Baler is a set of software for log processing. \ref balerd "balerd"
  * listens for forwarded logs from various sources (one of which is rsyslogd),
  * then it extracts a pattern and stores the message (in a reduced form -- see
- * \ref balerd for more information). <tt>balerd</tt> also supports distributed
- * log processing -- having more than one <tt>balerd</tt> working together to
- * process large number of logs (e.g. from different node/rack).
- *
- * \c bquery (\ref bquery) is a program to query patterns, messages and other
- * information from the data processed by \c balerd. The query can be performed
- * live, i.e. \c bquery can query the data while \c balerd is running. Please
- * see \ref bquery page for more information about querying.
- *
- * \c bhttpd (\ref bhttpd) is an HTTP server providing Baler data access similar
- * to \c bquery. Please note that \c bhttpd serves only the back-end data (in
- * JSON format). The front-end elements are not included.
- *
- * For the front-end GUI, Baler comes with a set of basic GUI widgets and query
- * library (to communicate with \c bhttpd) implemented in JavaScript. Please see
- * baler/src/bhttpd/html/ in the source tree for more information.
+ * \ref balerd for more information). \c balerd also supports distributed
+ * log processing -- having more than one \c balerd working together to
+ * process large number of logs (e.g. from different node/rack). The data can
+ * then be queried using \ref bq "bq" command (non-interactive CLI) or \ref
+ * bclient "bclient" (interactive CLI).
  *
  * \par links
- * - \ref balerd
- * - \ref bquery
- * - \ref bhttpd
- * - \ref bassoc
+ * - \ref balerd "balerd"
+ * - \ref bq "bq"
+ * - \ref bclient "bclient"
  */
 
 /**
@@ -103,7 +91,8 @@
  * \b balerd process an input entry by transforming the host name and tokens
  * into numbers (IDs). The message at this stage will be described as a sequence
  * of token IDs instead of a sequence of tokens. The mapping (token_ID <-->
- * token) is stored in \b balerd internal store.
+ * token) is stored in \b balerd internal store using \c bstore interface (see
+ * bstore.h).
  *
  * Next, \b balerd extracts a pattern out of a message by preserving static
  * tokens in the message and replacing the variable tokens by a special token
@@ -129,6 +118,9 @@
  * \par -s STORE_PATH
  * Path to a baler store (default: ./store)
  *
+ * \par -S STORE_PLUGIN
+ * The store plugin (default: bstore_sos)
+ *
  * \par -C CONFIG_FILE
  * Path to the configuration (Baler commands) file. This is optional as users
  * may use ocmd to configure baler.
@@ -136,15 +128,17 @@
  * \par -F
  * Run in foreground mode (default: daemon mode)
  *
- * \par -z OCM_PORT
- * Specifying a port for receiving OCM connection and configuration (default:
- * 20005).
- *
  * \par -I NUMBER
  * Specify the number of input worker threads (default: 1).
  *
  * \par -O NUMBER
  * Specify the number of output worker threads (default: 1).
+ *
+ * \par -Q NUMBER
+ * Specify the work queue depth (default: 1024).
+ *
+ * \par -v (DEBUG|INFO|WARN|ERROR)
+ * Specify the log level (default: WARN).
  *
  * \par -?
  * Display help message.
@@ -157,9 +151,10 @@
  *
  * \subsection config_command CONFIGURATION COMMANDS
  *
- * \par tokens type=(ENG|HOST) path=PATH
- * Load ENG or HOST tokens from PATH. Please see \ref tkn_file_format below for
- * more information.
+ * \par tokens type=(WORD|HOSTNAME|SERVICE) path=PATH
+ * Load tokens from the given \c PATH and assign the given \c type to them.
+ * Please see \ref tkn_file_format below for more information about the format
+ * of this file.
  *
  * \par plugin name=PLUGIN_NAME [PLUGIN-SPECIFIC-OPTIONS]
  * Load the plugin \b PLUGIN_NAME and configure the plugin with \b
@@ -169,7 +164,8 @@
  * 'bout_'. It is advisable to load output plugins BEFORE the input plugins to
  * prevent lost output data as \b balerd could finish processing some of the
  * input before the output plugins finish loading. Please see each plugin
- * documentation for its specific options (e.g. \b bin_rsyslog_tcp.config(5)).
+ * documentation for its specific options (e.g. \b bin_tcp(5), \b
+ * bout_store_msg(5), or \c bout_store_hist(5)).
  *
  * \par # comment
  * The '#' comment at the beginning of each line is supported. However, the
@@ -183,49 +179,41 @@
  * \section conf_example CONFIGURATION_EXAMPLE
  * \par
  * \code
- * tokens type=ENG path=/path/to/word.list
- * tokens type=HOST path=/path/to/host.list
+ * tokens type=HOSTNAME path=/path/to/host.list
+ * tokens type=WORD path=/path/to/word.list
  *
- * # Image output with 3600 seconds (1 hour) pixel granularity.
- * plugin name=bout_sos_img delta_ts=3600
- *
- * # Another image output with 60 seconds (1 minute) pixel granularity.
- * plugin name=bout_sos_img delta_ts=60
+ * # Histogram output, with token histogram, pattern histogram
+ * # (pattern-component histogram included), and pattern-token histogram.
+ * plugin name=bout_store_hist tkn=1 ptn=1 ptn_tkn=1
  *
  * # Message output
- * plugin name=bout_sos_msg
+ * plugin name=bout_store_msg
  *
- * # Input plugin for rsyslog, don't forget to configure rsyslog in each
- * # node to forward messages to balerd host, port 11111.
- * plugin name=bin_rsyslog_tcp port=11111
- *
- * # Input processing plugin for metric data. The metric data will be converted
- * # into message-based event data (metricX is in range [A, B]) to feed to
- * # balerd.
- * plugin name=bin_metric port=22222 bin_file=METRIC_BIN_FILE
+ * # TCP input with syslog_parser, and unlimited max message length (no message
+ * # truncation).
+ * plugin name=bin_tcp port=10514 parser=syslog_parser max_msg_len=0
  * \endcode
  *
  * For the detail of each plugin configuration, please see the respective plugin
- * configuration page (e.g. \b bin_rsyslog_tcp.config(5))
+ * configuration pages.
  *
  *
- * \section tkn_file_format HOST AND TOKEN FILE FORMAT
+ * \section tkn_file_format TOKEN FILE FORMAT
  *
  * Each line of the file contains a token with an optional ID assignment:
  *   \b TOKEN [<b>ID</b>]
  *
  * Token aliasing can be ndone by assign those tokens the same token ID.
  *
- * \subsection tkn_file TOKEN FILE
  * The following example of a token file with aliasing:
  * \par
  * \code
- * ABC 128
- * DEF 128
+ * ABC 256
+ * DEF 256
  * XYZ
  * \endcode
  *
- * Please note that token IDs less than 128 are reserved for \b balerd internal
+ * Please note that token IDs less than 256 are reserved for \b balerd internal
  * use. In the above example, if ABC or DEF appeared in messages, they will be
  * recognized as the same token. If the ID is not present, \b balerd
  * automatically assigns the max_ID + 1.
@@ -233,28 +221,6 @@
  * The output of \b balerd will always produce the first alias, because \b
  * balerd stores messages as a sequence of token IDs which get translated back
  * to strings at the output.
- *
- * \subsection hst_file HOST FILE
- *
- * The following example of a host file with aliasing:
- * \par
- * \code
- * nid00000 0
- * login0 0
- * nid00001 1
- * login1 1
- * \endcode
- *
- * Host IDs starts from 0 to make things more convenient for users. \b balerd
- * will convert that into the real token ID space (starts from 128) internally.
- *
- * From the above example, the host field of the messages generated from
- * nid00000 and login0 will be recognized and stored as 0. Similar to token
- * file, if the ID is not present, \b balerd will automatically assign the
- * max_ID+1.
- *
- * Please note that on the output side, the first alias will be printed.
- *
  */
 
 /**
@@ -375,8 +341,6 @@ int boutqwkrN = 1; /**< Output Worker Thread Number */
 int qdepth = 1024; /**< Input/Output queue depth */
 int is_foreground = 0; /**< Run as foreground? */
 
-char *m_host = NULL;
-char *sm_xprt = "sock";
 struct timeval reconnect_interval = {.tv_sec = 2};
 
 /**\}*/
@@ -1170,9 +1134,6 @@ next_arg:
 		ocm_port = atoi(optarg);
 		break;
 #endif
-	case 'h':
-		m_host = optarg;
-		break;
 	case 'v':
 		rc = blog_set_level_str(optarg);
 		if (rc) {

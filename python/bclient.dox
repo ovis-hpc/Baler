@@ -1,0 +1,153 @@
+/**
+
+\page bclient Baler CLI interactive client
+
+\section synopsis SYNOPSIS
+<tt><b>
+bclient [-P PLUGIN] [-p PATH] [-v VERBOSE] [-h]
+</b></tt>
+
+\section description DESCRIPTION
+
+\b bclient is an interactive CLI program for querying Baler store data. To start
+an interactive session, simply execute \b bclient without any arguments.
+Alternatively, the option <tt><b>-p PATH</b></tt> can be given to specify the
+path to the store (with optionally <tt><b>-P PLUGIN</b></tt> option).
+
+\section options OPTIONS
+
+\par -h, --help
+Show help message and exit.
+
+\par -P,--plugin PLUGIN
+Specify the store plugin (default: bstore_sos).
+
+\par -p,--path PATH
+Specify the store path.
+
+\par -v,--verbose (DEBUG|INFO|WARN|ERROR|CRITICAL)
+Verbosity level (default: INFO)
+
+\section commands COMMANDS
+
+The following is the list of commands in \b bclient and their usage.
+
+\par open path=PATH [plugin=BSTORE_PLUGIN]
+Open the bstore with path \c PATH, and optionally plugin \c BSTORE_PLUGIN. The
+default bstore plugin is \b bstore_sos.
+
+\par msg_query [ptn_id=NUM] [comp_id=NUM] [comp_str=TEXT] [begin=TIMESTAMP] [end=TIMESTAMP]
+Query messages matching the given conditions.
+
+\par
+\b Conditions:
+- \b ptn_id=NUM is the pattern ID from the store (e.g. 256).
+- \b comp_id=NUM is the host ID from the store (e.g. 12345).
+- \b comp_str=TEXT is the component text from the store (e.g. "nid00001"). This
+  option overrides `comp_id` option.
+- \b limit=NUM is the limitation to the number of messages. This apply only to the
+  redirection mode.
+- \b begin=TIMESTAMP constrains the result messages to have timestamp greater than
+  or equals to the given TIMESTAMP.
+- \b end=TIMESTAMP constrains the result messages to have timestamp less than or
+  equals to the given TIMESTAMP.
+
+\par
+The TIMESTAMP format is "yyyy-mm-ddTHH:MM:SS[(+|-)HH:MM]".  It is
+the same timestamp format appeared in the results of `ptn_query` and
+`msg_query`, excluding the microsecond part. The microsecond can be
+put in, but will be ignored as currently our time index does not
+include the microsecond part. If the timezone (the trailing "-HH:MM"
+or "+HH:MM") is omitted, the system timezone is used.
+
+\par ptn_query [text=REGEX] [ids=RANGES] [format=FMT] [order=KEY_ORDER]
+Query the store for patterns that match all of the given conditions.
+
+\par
+\b Conditions:
+- \b text=REGEX is the regular expression to match pattern text
+  (e.g. ".*error.*").
+- \b ids=RANGES is the comma-separated ranges to match IDs (e.g. "1,3-5,11").
+
+\par
+<b>Optional options</b>:
+- \b format=FMT chooses what to print. The format is a python string, in which
+'%(field)s' will be replaced with the corresponding `field.` By default, the FMT
+is "%(ptn_id)s %(msg_count)s %(first_seen)s
+%(last_seen)s %(text)s". The available fields are:
+  - ptn_id: the pattern ID,
+  - msg_count: the message count in that pattern,
+  - first_seen: the timestamp text of `first_seen`,
+  - first_seen_unix: the seconds since epoch of `first_seen`,
+  - last_seen: the timestamp text of `last_seen`,
+  - last_seen_unix: the seconds since epoch of `last_seen`,
+- \b order=COMPARATOR orders the results according to the comparator.
+Available comparators are:
+  - ptn_id_asc
+  - ptn_id_desc
+  - tkn_count_asc
+  - tkn_count_desc
+  - msg_count_asc
+  - msg_count_desc
+  - first_seen_asc
+  - first_seen_desc
+  - last_seen_asc
+  - last_seen_desc
+  - eng_ratio, or eng_ratio_desc
+  - eng_ratio_asc
+
+Users can implement their own comparators and put them in baler.ptn_cmp_ext
+package. Please see baler.ptn_cmp_ext.eng module as an example.
+
+
+\par comp_hist_query type=TKN|PTN|COMP bin_width=60|3600|86400 [ptn_id=INT] [comp_id=INT] [comp_str=STR] [tkn_id=INT] [tkn_str-STR] [begin=TIMESTAMP] [end=TIMESTAMP]
+Query historgram of given type restricted to the given conditions.
+
+\par
+The OUTPUT format is a list of histogram entries, one entry per line, described
+by following:
+  - for TKN: BIN_WIDTH, UNIX_TIMESTAMP, TKN_ID, COUNT
+  - for PTN: BIN_WIDTH, UNIX_TIMESTAMP, PTN_ID, COUNT
+  - for COMP: BIN_WIDTH, UNIX_TIMESTAMP, COMP_ID, PTN_ID, COUNT.
+
+\par
+\b Conditions:
+- \b bin_width=SECS is the bin-width (time) of the histogram. The possible values
+  are 60, 3600, 86400. The default is 3600.
+- \b ptn_id=INT is the pattern ID. This option is used only in type=PTN and
+  type=COMP.
+- \b comp_id=INT is the component ID. This option is used only in type=COMP.
+  Alternatively, one may use `comp_str` parameter instead of comp_id.
+- \b comp_str=STR is the component string. This option is used only in
+  type=COMP. This option also overrides `comp_id` option.
+- \b tkn_id=INT is the token ID. This option is used only in type=TKN.
+- \b tkn_str=STR is the token string. This option is used only in type=TKN.
+  This option also overrides `tkn_id` option.
+
+- \b begin=TIMESTAMP constrains the results to have timestamp greater than or
+  equals to the given TIMESTAMP.
+
+- \b end=TIMESTAMP constrains the results to have timestamp less than or equals
+  to the given TIMESTAMP.
+
+\par
+The TIMESTAMP format is "yyyy-mm-ddTHH:MM:SS[(+|-)HH:MM]".  It is the same
+timestamp format appeared in the results of `ptn_query` and `msg_query`,
+excluding the microsecond part. The microsecond can be put in, but will be
+ignored as currently our time index does not include the microsecond part. If
+the timezone (the trailing "-HH:MM" or "+HH:MM") is omitted, the system
+timezone is used.
+
+
+\subsection output_redirection OUTPUT REDIRECTION
+
+All commands in \b bclient support output redirection. Simply append <b>">
+FILE"</b> at the end of the bclient input line, and the results of the command
+will be written into the specified file \b FILE. <b>">> FILE"</b> can also be
+used for appending instead of overwriting.
+
+\par Example:
+\code
+bclient> msg_query comp_str=node001 begin="2017-12-25" > output.txt
+\endcode
+ */

@@ -1,0 +1,145 @@
+/**
+
+\page bq Baler CLI tool for querying
+
+\section synopsis SYNOPSIS
+
+<b><tt>
+bq [-h] -p PATH [-q NAME] [-Q PATH] [-m] [--limit LIMIT]
+   [--begin BEGIN] [--end END] [--ptn] [--ptn-order PTN_ORDER] [--comp]
+   [--named-2d-array NAMED_2D_ARRAY] [--name NAME] [--summary]
+   [--verbose] [--tkn] [--tkn_type TKN_TYPE] [--tkn_id TKN_ID]
+   [--tkn_str TKN_STR] [--match] [--hist] [--dist] [--ptn_tkn]
+   [--ptn_id PTN_ID] [--ptn_ids PTN_IDS] [--comp_id TKN_ID]
+   [--comp_str TKN_STR] [--bin_width {d,h,m}] [--color] [--csv]
+   [--unix_time] [--raw_id] [--plot] [--label_size LABEL_SIZE]
+   [--y_scale Y_SCALE] [--header | --no-header] [--loc | --no-loc]
+</tt></b>
+
+\section description DESCRIPTION
+
+Query Baler data from the store (\b PATH).
+
+\section options OPTIONS
+
+\par -h, --help
+show this help message and exit
+
+\par -p PATH, --path PATH
+The path to the Baler store
+
+\par -q NAME, --named-query NAME
+Use the named query from `named-query-file`.
+
+\par -Q PATH, --named-query-file PATH
+The path to the named query file. The format of the file is simply `name =
+options` for each line. If the line is too long `\` can be used at the end of
+the line to concatenate the next line. The leading `#` marks the line as a
+comment.
+
+\par -m, --msg
+Query messages
+
+\par --limit LIMIT
+Limit the number of messages to print
+
+\par --begin BEGIN
+Specify the start time/date for the query. Format is YYYY/MM/DD HH:MM
+
+\par --end END
+Specify the start time/date for the query. Format is YYYY/MM/DD HH:MM
+
+\par --ptn
+Query patterns.
+
+\par --ptn-order PTN_ORDER
+Pattern order.
+
+\par --comp
+Query component histories
+
+\par --named-2d-array NAMED_2D_ARRAY
+Generate a named-2d-array file from the component histories
+
+\par --name NAME
+Name of the named-2d-array
+
+\par --summary
+Show a summary of the database
+
+\par --verbose
+Show more detailed summary information
+
+\par --tkn
+Query tokens
+
+\par --tkn_type TKN_TYPE
+Specifies the type of a token
+
+\par --tkn_id TKN_ID
+Specifies the integer id for a token
+
+\par --tkn_str TKN_STR
+Specifies the string value of a token.
+
+\par --match
+Show the patterns that contain a token
+
+\par --hist
+Query the occurance histogram for --tkn, --ptn, and --comp
+
+\par --dist
+Query the disrtribution --tkn, --ptn, and --comp
+
+\par --ptn_tkn
+Query the tokens that appear in a pattern
+
+\par --ptn_id PTN_ID
+The pattern id.
+
+\par --ptn_ids PTN_IDS
+A comma separated list of pattern ids.
+
+\par --comp_id TKN_ID
+Specifies a component id
+
+\par --comp_str TKN_STR
+Specifies the component name
+
+\par --bin_width {d,h,m}
+Specifies the histogram bin width
+
+\par --color
+Set to color code tokens.
+
+\par --csv
+Format the output as a comma separated text
+
+\par --unix_time
+Format time as a Unix timestamp
+
+\par --raw_id
+Show token id for component name instead of text
+
+\par --plot
+Plot the data instead of displaying it as text
+
+\par --label_size LABEL_SIZE
+Specify the bar label font size
+
+\par --y_scale Y_SCALE
+Specify the y-scale as 'log' or 'linear'
+
+\par --header
+Enable table headers
+
+\par --no-header
+Disable table headers
+
+\par --loc
+Put a ^ character beneath the matching token in a pattern
+
+\par --no-loc
+Do not put a ^ character beneath the matching token in a pattern
+
+*/

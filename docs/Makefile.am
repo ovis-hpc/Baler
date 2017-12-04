@@ -7,8 +7,9 @@ doc: docs
 docs: doxygen-out texdocs
 
 #DOCDEPS = $(shell find $(top_srcdir)/src -iname '*.[ch]')
-DOCDEPS = $(top_srcdir)/src/*/*.c $(top_srcdir)/src/*/*.h
-
+DOCDEPS = $(top_srcdir)/src/*/*.c $(top_srcdir)/src/*/*.h \
+	  $(top_srcdir)/src/*/*.dox \
+	  $(top_srcdir)/python/*.dox
 
 doxygen-out: $(DOCDEPS)
 	@DOXYGEN@
@@ -75,7 +76,9 @@ man/man7/%.7: man/man3/%.3
 #
 # man1_files will use the rule above to convert man3 to man1.
 man1_files = man/man1/balerd.1 \
-	    man/man1/n2dassoc.1
+	     man/man1/n2dassoc.1 \
+	     man/man1/bq.1 \
+	     man/man1/bclient.1
 
 $(man1_files): doxygen-out
 
