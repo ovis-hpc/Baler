@@ -1,6 +1,8 @@
 lib_LTLIBRARIES =
 bin_PROGRAMS =
 
+EXTRA_DIST = n2dassoc.dox
+
 AM_CFLAGS = -I$(srcdir)/../ -D_GNU_SOURCE
 
 pkginclude_HEADERS = assoc.h \
