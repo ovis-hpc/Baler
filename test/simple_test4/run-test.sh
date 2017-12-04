@@ -41,7 +41,7 @@ if [[ -n "$_TMP" ]] && [[ "$_TMP" = "function" ]]; then
 else
 	cat <<EOF
 tokens type=WORD path=$BTEST_ENG_DICT
-tokens type=WORD path=$BTEST_HOST_LIST
+tokens type=HOSTNAME path=$BTEST_HOST_LIST
 plugin name=bout_store_msg
 plugin name=bout_store_hist \
        blocking_mq=$BTEST_BLOCKING_MQ \
