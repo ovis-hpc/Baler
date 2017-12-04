@@ -42,13 +42,6 @@ libbin_udp_la_CFLAGS = $(AM_CFLAGS)
 libbin_udp_la_LIBADD = -lpthread -ldl ../baler/libbaler.la
 lib_LTLIBRARIES += libbin_udp.la
 
-libbin_rsyslog_tcp_la_SOURCES = bin_rsyslog_tcp.c
-libbin_rsyslog_tcp_la_CFLAGS = $(AM_CFLAGS) @LIBEVENT_INCDIR_FLAG@
-libbin_rsyslog_tcp_la_LIBADD = -levent -levent_pthreads -L@LIBEVENT_LIBDIR@ \
-			       -lpthread \
-			       ../baler/libbaler.la
-lib_LTLIBRARIES += libbin_rsyslog_tcp.la
-
 libbout_store_msg_la_SOURCES = bout_store_msg.c bout_store_msg.h
 libbout_store_msg_la_CFLAGS = $(AM_CFLAGS)
 libbout_store_msg_la_LIBADD = ../baler/libbaler.la -lpthread
