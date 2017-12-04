@@ -49,13 +49,6 @@ libbin_rsyslog_tcp_la_LIBADD = -levent -levent_pthreads -L@LIBEVENT_LIBDIR@ \
 			       ../baler/libbaler.la
 lib_LTLIBRARIES += libbin_rsyslog_tcp.la
 
-libbin_metric_la_SOURCES = bin_metric.c bin_metric.h
-libbin_metric_la_CFLAGS = $(AM_CFLAGS) @LIBEVENT_INCDIR_FLAG@
-libbin_metric_la_LIBADD = -levent -levent_pthreads -L@LIBEVENT_LIBDIR@ \
-			  -lpthread \
-			  ../baler/libbaler.la
-lib_LTLIBRARIES += libbin_metric.la
-
 libbout_store_msg_la_SOURCES = bout_store_msg.c bout_store_msg.h
 libbout_store_msg_la_CFLAGS = $(AM_CFLAGS)
 libbout_store_msg_la_LIBADD = ../baler/libbaler.la -lpthread
