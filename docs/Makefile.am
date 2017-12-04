@@ -84,14 +84,6 @@ $(man1_files): doxygen-out
 man1_MANS = $(man1_files)
 
 
-# Plugin configuration documents are put in section 5 (config files)
-man5_files = man/man5/bout_sos_msg.config.5 \
-	     man/man5/bout_sos_img.config.5
-
-$(man5_files): doxygen-out
-
-man5_MANS = $(man5_files)
-
 man7_files = man/man7/bstore_agg.7
 
 $(man7_files): doxygen-out
