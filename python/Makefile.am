@@ -1,4 +1,4 @@
-SUBDIRS = abhttp ptn_cmp_ext
+SUBDIRS = ptn_cmp_ext
 
 CFLAGS := $(filter-out -Werror, ${CFLAGS})
 

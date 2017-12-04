@@ -7,9 +7,7 @@ doc: docs
 docs: doxygen-out texdocs
 
 #DOCDEPS = $(shell find $(top_srcdir)/src -iname '*.[ch]')
-DOCDEPS = $(top_srcdir)/src/*/*.c $(top_srcdir)/src/*/*.h \
-          $(top_srcdir)/python/abhttp/*.py \
-          $(top_srcdir)/python/abhttp/*.dox
+DOCDEPS = $(top_srcdir)/src/*/*.c $(top_srcdir)/src/*/*.h
 
 
 doxygen-out: $(DOCDEPS)

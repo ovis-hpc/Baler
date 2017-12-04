@@ -144,7 +144,6 @@ AC_CONFIG_FILES([Makefile docs/Makefile src/Makefile
 	etc/systemd/Makefile
 	dict/Makefile
 	python/Makefile
-	python/abhttp/Makefile
 	python/ptn_cmp_ext/Makefile
 ])
 
