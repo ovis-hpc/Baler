@@ -110,6 +110,9 @@ AC_DEFUN([OPTION_GITINFO], [
 	if test -n "$GITSHA"; then
 		dnl Git OK from ovis repo.
 		AC_MSG_RESULT([using git SHA and TAG])
+		dnl Also write the sha/tag to the text files for EXTRA_DIST
+		echo ${GITSHA} > $srcdir/SHA.txt
+		echo ${GITTAG} > $srcdir/TAG.txt
 	elif test -s $srcdir/TAG.txt -a -s $srcdir/SHA.txt ; then
 		dnl Git not OK, try $srcdir/SHA.txt
 		GITTAG="$(cat $srcdir/TAG.txt)"
