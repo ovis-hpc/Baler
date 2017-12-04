@@ -1,4 +1,4 @@
-EXTRA_DIST = baler.cfg hosts.txt SHA.txt TAG.txt
+EXTRA_DIST = SHA.txt TAG.txt
 
 ACLOCAL_AMFLAGS = -I m4
 
