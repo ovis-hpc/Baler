@@ -146,7 +146,6 @@ fi
 AC_CONFIG_FILES([Makefile docs/Makefile src/Makefile
 	src/baler/Makefile src/plugins/Makefile
 	src/test/Makefile
-	src/bassoc/Makefile
 	src/n2dassoc/Makefile
 	src/tools/Makefile
 	src/plugins/test/Makefile
