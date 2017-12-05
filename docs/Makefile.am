@@ -85,6 +85,19 @@ $(man1_files): doxygen-out
 man1_MANS = $(man1_files)
 
 
+# man5 for file format and conventions
+# Since plugin options are specified in balerd config file, they should be in
+# section 5 :)
+man5_files = man/man5/bin_tcp.5 \
+	     man/man5/bin_udp.5 \
+	     man/man5/bout_store_msg.5 \
+	     man/man5/bout_store_hist.5
+
+$(man5_files): doxygen-out
+
+man5_MANS = $(man5_files)
+
+
 man7_files = man/man7/bstore_agg.7
 
 $(man7_files): doxygen-out

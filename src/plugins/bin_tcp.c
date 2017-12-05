@@ -50,9 +50,44 @@
  */
 /**
  * \file bin_tcp.c
- * \author Narate Taerat (narate@ogc.us)
  *
- * \defgroup bin_tcp Generic TCP input plugin
+ * \author Narate Taerat (narate at ogc dot us)
+ * \author Tom Tucker (tom at ogc dot us)
+ *
+ */
+
+/**
+ * \page bin_tcp Baler Input Plugin for TCP Data Stream
+ *
+ * \section synopsis SYNOPSIS
+ * <tt>
+ * <b>plugin name=bin_tcp</b> <b>port=</b>PORT <b>parser=</b>PARSER <b>max_msg_len=</b>LEN
+ * </tt>
+ *
+ * \section description DESCRIPTION
+ * \b bin_tcp is a baler input plugin for TCP data stream. The plugin listens on
+ * the port \c PORT, and will accept all incoming connections. Once connected,
+ * the data stream is parsed by the \c PARSER plugin, and the parsed messages
+ * will be passed to baler daemon accordingly. The \c max_msg_len limits the
+ * maximum length of a message, and will truncate the rest of the message.
+ *
+ * \section options OPTIONS
+ *
+ * \par port=PORT
+ * Specify the TCP port to listen to incoming connections.
+ *
+ * \par parser=PARSER
+ * Specify the parser plugin to process the data stream. The following is the
+ * currently available parsers:
+ *   - \b syslog -- for parsing syslog stream
+ *   - \b craylog -- for parsing syslog stream from cray machine
+ *
+ * \par max_msg_len=LEN (default: 0)
+ * Specify the maximum byte length of a message. 0 for unlimited.
+ */
+
+/**
+ * \defgroup bin_tcp_dev Generic TCP input plugin
  * \{
  */
 #include "baler/binput.h"

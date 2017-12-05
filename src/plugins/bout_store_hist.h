@@ -54,6 +54,55 @@
 #include "baler/boutput.h"
 #include "baler/bstore.h"
 
+/**
+ * \page bout_store_hist Baler Output Plugin for Histogram
+ *
+ * \section synopsis SYNOPSIS
+ * <tt>
+ * <b>plugin name=bout_store_hist</b>
+ * 	[<b>tkn=</b>(0|1)]
+ * 	[<b>ptn=</b>(0|1)]
+ * 	[<b>ptn_tkn=</b>(0|1)]
+ * </tt>
+ *
+ * \section description DESCRIPTION
+ * \b bout_store_hist is a baler output plugin that receives processed messages
+ * from \ref balerd "balerd" and further processes them into various histogram
+ * data before storing them into \b bstore. Please see \ref
+ * bout_store_hist_options section for more information of each histograms
+ * processed by this plugin.
+ *
+ * \section bout_store_hist_options OPTIONS
+ * \par tkn=(0|1) (optional, default: 0)
+ * Disable (0) or enable (1) <b>token histogram</b> processing. A token
+ * histogram tracks the number of occurrences of a token over time (by minutes,
+ * hours, or days).
+ *
+ * \par ptn=(0|1) (optional, default: 0)
+ * Disable (0) or enable (1) <b>pattern histogram</b> processing. A pattern
+ * histogram, similarly to token histogram, tracks the number of occurrences of
+ * a pattern over time (by minutes, hours, or days).
+ *
+ * \par
+ * <b>Pattern-component histogram</b> processing is also enabled when the pattern
+ * histogram processing is enabled. A pattern-component histogram tracks the
+ * number of occurrences of a pattern on a component over time (by minutes,
+ * hours, or days).
+ *
+ * \par ptn_tkn=(0|1) (optional, default: 0)
+ * Disable (0) or enable (1) pattern-token histogram processing. A
+ * <b>pattern-token histogram</b> tracks the number of occurrences of tokens in
+ * a token position of a pattern. For example, if we have the following
+ * messages:
+ * \code
+ * Successful su for root by bob
+ * Successful su for root by alice
+ * \endcode
+ * and let's suppose we have the pattern <b>Successful * for root by *</b>, we
+ * will have 'su' with count=2 in the first '*' position, and bob with count=1
+ * and alice with count=1 in the 2nd '*' position.
+ */
+
 struct bout_store_hist_plugin {
 	struct boutplugin base;
 	pthread_mutex_t lock;
@@ -64,4 +113,3 @@ struct bout_store_hist_plugin {
 };
 
 #endif
-/** \} */

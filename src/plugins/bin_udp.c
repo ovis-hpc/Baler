@@ -51,8 +51,40 @@
 /**
  * \file bin_udp.c
  * \author Tom Tucker (tom at ogc.us)
+ */
+
+/**
+ * \page bin_udp Baler Input Plugin for UDP Data
  *
- * \defgroup bin_udp Generic UDP input plugin
+ * \section synopsis SYNOPSIS
+ * <tt>
+ * <b>plugin name=bin_udp</b> <b>port=</b>PORT <b>parser=</b>PARSER <b>max_msg_len=</b>LEN
+ * </tt>
+ *
+ * \section description DESCRIPTION
+ * \b bin_udp is a baler input plugin for UDP data. The plugin binds to the port
+ * \c PORT, and will process all incoming data. The incoming data is parsed by
+ * the \c PARSER plugin, and the parsed messages will be passed to baler daemon
+ * accordingly. The \c max_msg_len limits the maximum length of a message, and
+ * will truncate the rest of the message.
+ *
+ * \section options OPTIONS
+ *
+ * \par port=PORT
+ * Specify the port to listen to incoming connections.
+ *
+ * \par parser=PARSER
+ * Specify the parser plugin to process the data stream. The following is the
+ * currently available parsers:
+ *   - \b syslog -- for parsing syslog stream
+ *   - \b craylog -- for parsing syslog stream from cray machine
+ *
+ * \par max_msg_len=LEN (default: 0)
+ * Specify the maximum byte length of a message. 0 for unlimited.
+ */
+
+/**
+ * \defgroup bin_udp_dev Generic UDP input plugin
  * \{
  */
 #include "baler/binput.h"

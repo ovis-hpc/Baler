@@ -54,6 +54,17 @@
 #include "baler/boutput.h"
 #include "baler/bstore.h"
 
+/**
+ * \page bout_store_msg Baler Output Plugin for Messages
+ *
+ * \section synopsis SYNOPSIS
+ * <tt><b>plugin name=bout_store_msg</b></tt>
+ *
+ * \section description DESCRIPTION
+ * \b bout_store_msg takes no options. It simply receives the processed messages
+ * from \ref balerd "balerd" and inserts them into \b bstore.
+ */
+
 struct bout_store_msg_plugin {
 	struct boutplugin base;
 	pthread_mutex_t lock;
@@ -61,4 +72,3 @@ struct bout_store_msg_plugin {
 };
 
 #endif
-/** \} */
