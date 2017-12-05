@@ -69,6 +69,10 @@
  *
  * \par links
  * - \ref balerd "balerd"
+ *   - \ref bin_tcp "Input Plugin for TCP transport"
+ *   - \ref bin_udp "Input Plugin for UDP transport"
+ *   - \ref bout_store_msg "Output Plugin for Message Storage"
+ *   - \ref bout_store_hist "Output Plugin for Histogram Processing and Storage"
  * - \ref bq "bq"
  * - \ref bclient "bclient"
  */
@@ -221,6 +225,10 @@
  * The output of \b balerd will always produce the first alias, because \b
  * balerd stores messages as a sequence of token IDs which get translated back
  * to strings at the output.
+ *
+ * \section see_also SEE ALSO
+ * \ref bin_tcp "bin_tcp(5)", \ref bin_udp "bin_udp(5)", \ref bout_store_msg
+ * "bout_store_msg(5)", \ref bout_store_hist "bout_store_hist(5)".
  */
 
 /**
