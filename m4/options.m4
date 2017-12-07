@@ -99,16 +99,22 @@ dnl dnl queries git for version hash and branch info.
 dnl export GITSHA and GITTAG variables
 AC_DEFUN([OPTION_GITINFO], [
 	AC_MSG_CHECKING([git sha])
-	GITTAG="$(git describe --tags --always --long 2>/dev/null)"
-	GITSHA="$(git rev-parse HEAD 2>/dev/null)"
-	GITDIRTY="$(git status -uno -s 2>/dev/null)"
-	if test -n "$GITSHA" -a -n "$GITDIRTY"; then
-		GITSHA="${GITSHA}-dirty"
-		GITTAG="${GITTAG}-dirty"
+	if -d "$srcdir/.git"; then
+		dnl Only get git information if this is baler source tree.
+		dnl This will prevent getting wrong git information when
+		dnl building baler from a tar ball in other project's source
+		dnl tree (e.g. RPM build).
+		GITTAG="$(git describe --tags --always --long 2>/dev/null)"
+		GITSHA="$(git rev-parse HEAD 2>/dev/null)"
+		GITDIRTY="$(git status -uno -s 2>/dev/null)"
+		if test -n "$GITSHA" -a -n "$GITDIRTY"; then
+			GITSHA="${GITSHA}-dirty"
+			GITTAG="${GITTAG}-dirty"
+		fi
 	fi
 
 	if test -n "$GITSHA"; then
-		dnl Git OK from ovis repo.
+		dnl Git OK from baler repo.
 		AC_MSG_RESULT([using git SHA and TAG])
 		dnl Also write the sha/tag to the text files for EXTRA_DIST
 		echo ${GITSHA} > $srcdir/SHA.txt
