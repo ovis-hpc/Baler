@@ -3,38 +3,36 @@
 # Please copy this file to /etc/systemd/system/ before
 # applying any of the following commands.
 #
-# To make ldmsd starts automatically at system startup time:
-#   systemctl enable balerd.master.service
+# To make balerd starts automatically at system startup time:
+#   systemctl enable balerd.service
 #
 # To disable automatic startup:
-#   systemctl disable balerd.master.service
+#   systemctl disable balerd.service
 #
 # To manually start the service:
-#   systemctl start balerd.master.service
+#   systemctl start balerd.service
 #
 # To check status:
-#   systemctl status balerd.master.service
+#   systemctl status balerd.service
 #
 # To stop the service:
-#   sytemctl stop balerd.master.service
+#   sytemctl stop balerd.service
 
 [Unit]
-Description = Baler Daemon - Master Mode
+Description = Baler Daemon
 Documentation = http://ovis.ca.sandia.gov
 
 [Service]
 Type = forking
-EnvironmentFile = @sysconfdir@/baler/balerd.master.env
+EnvironmentFile = @sysconfdir@/baler/balerd.env
 Environment = "HOSTNAME=$(hostname)"
-ExecStart = @sbindir@/balerd \
+ExecStart = @bindir@/balerd \
 		-s ${BALERD_STORE} \
+		-S ${BALERD_STORE_PLUGIN} \
 		-C ${BALERD_PLUGIN_CONFIG} \
-		-x sock \
-		-p ${BALERD_MASTER_PORT} \
 		-v ${BALERD_LOG_LEVEL} \
 		-I ${BALERD_IN_Q_WORKERS} \
-		-O ${BALERD_OUT_Q_WORKERS} \
-		-m master
+		-O ${BALERD_OUT_Q_WORKERS}
 
 [Install]
 WantedBy = default.target

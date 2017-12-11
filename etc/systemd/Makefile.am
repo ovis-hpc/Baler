@@ -6,15 +6,12 @@ do_subst = sed -e 's,[@]datadir[@],$(datadir),g' \
 	   -e 's,[@]localstatedir[@],$(localstatedir),g' \
 	   -e 's,[@]sysconfdir[@],$(sysconfdir),g' \
 	   -e 's,[@]ZAP_LIBPATH[@],$(ZAP_LIBPATH),g' \
-	   -e 's,[@]sbindir[@],$(sbindir),g'
+	   -e 's,[@]sbindir[@],$(sbindir),g' \
+	   -e 's,[@]bindir[@],$(bindir),g' 
 
-EXTRA_DIST = balerd.master.service.in \
-	     balerd.slave.service.in \
-	     bhttpd.service.in
+EXTRA_DIST = balerd.service.in
 
-SERVICE_FILES = balerd.master.service \
-		balerd.slave.service \
-		bhttpd.service
+SERVICE_FILES = balerd.service
 
 # rules to generate service file
 %.service: $(srcdir)/%.service.in

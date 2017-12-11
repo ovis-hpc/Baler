@@ -1,0 +1,5 @@
+tokens type=WORD path=@sysconfdir@/baler/eng-dictionary
+tokens type=HOSTNAME path=@sysconfdir@/baler/hosts.txt
+plugin name=bout_store_msg
+plugin name=bout_store_hist tkn=1 ptn=1 ptn_tkn=1
+plugin name=bin_tcp port=10514 parser=syslog_parser
