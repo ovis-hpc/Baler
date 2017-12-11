@@ -57,8 +57,8 @@ for my $TS_TEXT (@TSTA) {
 				$text =~ s/\x{2022}/$LONG_TKN/;
 				$text =~ s/\x{2022}/$N/g;
 				print $text;
+				$num++;
 			}
-			$num++;
 			$N++;
 		}
 		$NP++;
