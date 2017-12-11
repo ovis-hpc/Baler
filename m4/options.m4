@@ -99,7 +99,7 @@ dnl dnl queries git for version hash and branch info.
 dnl export GITSHA and GITTAG variables
 AC_DEFUN([OPTION_GITINFO], [
 	AC_MSG_CHECKING([git sha])
-	if -d "$srcdir/.git"; then
+	if test -d "$srcdir/.git"; then
 		dnl Only get git information if this is baler source tree.
 		dnl This will prevent getting wrong git information when
 		dnl building baler from a tar ball in other project's source
