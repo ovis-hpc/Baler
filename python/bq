@@ -346,7 +346,7 @@ def show_summary(bs, args):
 
     mi = Bq.Bmsg_iter(bs)
     pi = Bq.Bptn_iter(bs)
-    ptn_count = pi.count(0)
+    ptn_count = pi.count()
     print("Pattern Count        : {0}".format(ptn_count))
     msg_count = mi.count(1)
     print("Message Count        : {0}".format(msg_count))
