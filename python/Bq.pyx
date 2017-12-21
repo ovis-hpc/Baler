@@ -2,8 +2,6 @@ from __future__ import print_function
 import cython
 from cpython cimport PyObject, Py_INCREF
 import datetime as dt
-import numpy as np
-cimport numpy as np
 from libc.stdint cimport *
 from libc.stdlib cimport *
 from libc.errno cimport *
@@ -66,9 +64,9 @@ cdef class Bstore:
     def __cinit__(self, plugin='bstore_sos'):
         self.c_store = NULL
         self.plugin = plugin
-        self.iters = []
 
     def open(self, path, int flags=Bs.O_RDWR, int mode=0660):
+        self.iters = []
         self.path = path
         self.c_store = Bs.bstore_open(self.plugin, self.path, flags, mode)
         if self.c_store is NULL:
@@ -77,6 +75,10 @@ cdef class Bstore:
         return self
 
     def close(self):
+        if self.iters:
+            for iter in self.iters:
+                del iter
+        self.iters = None
         if self.c_store is not NULL:
             Bs.bstore_close(self.c_store)
             self.c_store = NULL
@@ -329,6 +331,7 @@ cdef class Biter:
             raise MemoryError()
         self.c_iter = c_it
         self.c_rc = -1
+        store.iters.append(self)
 
     def __dealloc__(self):
         if self.c_iter is not NULL:
