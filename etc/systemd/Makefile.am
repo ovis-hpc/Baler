@@ -11,15 +11,15 @@ do_subst = sed -e 's,[@]datadir[@],$(datadir),g' \
 
 EXTRA_DIST = balerd.service.in
 
-SERVICE_FILES = balerd.service
+SERVICE_FILES = $(builddir)/balerd.service
 
 # rules to generate service file
-%.service: $(srcdir)/%.service.in
+$(builddir)/%.service: $(srcdir)/%.service.in
 	$(do_subst) < $< > $@
 
 install-data-local: $(SERVICE_FILES)
 	$(MKDIR_P) $(SYSTEMD_DIR)
-	$(INSTALL_DATA) $(SERVICE_FILES) $(SYSTEMD_DIR)
+	$(INSTALL_DATA) $(SERVICE_FILES) $(SYSTEMD_DIR)/
 
 uninstall-local:
-	cd $(SYSTEMD_DIR) && rm -f $(SERVICE_FILES)
+	rm -f $(SYSTEMD_DIR)/baler.service
