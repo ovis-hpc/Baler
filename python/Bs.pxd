@@ -1,5 +1,4 @@
 import cython
-cimport numpy as np
 
 cdef extern from "strings.h":
     void bzero(void *s, size_t n)
