@@ -77,6 +77,7 @@ cdef class Bstore:
     def close(self):
         if self.iters:
             for iter in self.iters:
+                iter.__close_store()
                 del iter
         self.iters = None
         if self.c_store is not NULL:
@@ -334,7 +335,7 @@ cdef class Biter:
         store.iters.append(self)
 
     def __dealloc__(self):
-        if self.c_iter is not NULL:
+        if self.store and self.c_iter is not NULL:
             self.iterDel()
             self.c_iter = NULL
 
@@ -347,6 +348,9 @@ cdef class Biter:
             assert(obj != None)
             yield obj
             self.next()
+
+    def __close_store(self):
+        self.store = None
 
     def set_filter(self, **kwargs):
         """Specify filter conditions for the objects returned by the iterator
