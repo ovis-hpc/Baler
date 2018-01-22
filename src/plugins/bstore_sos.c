@@ -23,6 +23,7 @@
 #endif
 
 #define ATTR_TYPE_MAX 512
+#define ATTR_VALUE_MAX 512
 
 #define OOM()	berr("Out of memory at %s:%d\n", __func__, __LINE__)
 
@@ -3744,7 +3745,7 @@ static sos_visit_action_t __ptn_attr_value_add_cb(sos_index_t index,
 	ptn_attr_t obj_value;
 	sos_index_t idx;
 	sos_key_t tv_key;
-	SOS_KEY_SZ(tp_key, ATTR_TYPE_MAX + sizeof(bptn_id_t));
+	sos_key_t tp_key;
 
 	/* REMARK: This is a visit on ptn_type_value index */
 
@@ -3788,26 +3789,29 @@ static sos_visit_action_t __ptn_attr_value_add_cb(sos_index_t index,
 
 	/* add into the type_value index */
 	idx = sos_attr_index(ctxt->bss->pa_tv_attr);
-	tv_key = sos_key_new(ctxt->attr_type_len + ctxt->attr_value_len + 2);
+	tv_key = sos_key_for_attr(NULL, ctxt->bss->pa_tv_attr,
+				  ctxt->attr_type_len + 1, ctxt->attr_type,
+				  ctxt->attr_value_len + 1, ctxt->attr_value);
 	if (!tv_key) {
 		ctxt->rc = ENOMEM;
 		goto err_1;
 	}
-	sos_key_join(tv_key, ctxt->bss->pa_tv_attr,
-			     ctxt->attr_type_len + 1, ctxt->attr_type,
-			     ctxt->attr_value_len + 1, ctxt->attr_value);
 	ctxt->rc = sos_index_insert(idx, tv_key, obj);
 	if (ctxt->rc)
 		goto err_2;
 
 	/* add into the type_ptn index */
 	idx = sos_attr_index(ctxt->bss->pa_tp_attr);
-	sos_key_join(tp_key, ctxt->bss->pa_tp_attr,
-			     ctxt->attr_type_len + 1, ctxt->attr_type,
-			     ctxt->ptn_id);
+	tp_key = sos_key_for_attr(NULL, ctxt->bss->pa_tp_attr,
+				  ctxt->attr_type_len + 1, ctxt->attr_type,
+				  ctxt->ptn_id);
+	if (!tp_key) {
+		ctxt->rc = ENOMEM;
+		goto err_3;
+	}
 	ctxt->rc = sos_index_insert(idx, tp_key, obj);
 	if (ctxt->rc)
-		goto err_3;
+		goto err_4;
 
 	/* clean up */
 	sos_key_put(tp_key);
@@ -3816,8 +3820,9 @@ static sos_visit_action_t __ptn_attr_value_add_cb(sos_index_t index,
 
 	return SOS_VISIT_ADD;
 
- err_3:
+ err_4:
 	sos_key_put(tp_key);
+ err_3:
 	idx = sos_attr_index(ctxt->bss->pa_tv_attr);
 	sos_index_remove(idx, tv_key, obj);
  err_2:
@@ -3880,7 +3885,7 @@ static sos_visit_action_t __ptn_attr_value_rm_cb(sos_index_t index,
 	sos_obj_ref_t *ref = (sos_obj_ref_t *)idx_data;
 	sos_index_t idx;
 	sos_key_t tv_key;
-	SOS_KEY_SZ(tp_key, sizeof(bptn_id_t) + ATTR_TYPE_MAX);
+	sos_key_t tp_key;
 
 	/* REMARK: This is a visit on ptn_type_value index */
 
@@ -3898,22 +3903,21 @@ static sos_visit_action_t __ptn_attr_value_rm_cb(sos_index_t index,
 
 	/* remove from the type_value index */
 	idx = sos_attr_index(ctxt->bss->pa_tv_attr);
-	tv_key = sos_key_new(ctxt->attr_type_len + ctxt->attr_value_len + 2);
+	tv_key = sos_key_for_attr(NULL, ctxt->bss->pa_tv_attr,
+				  ctxt->attr_type_len + 1, ctxt->attr_type,
+				  ctxt->attr_value_len + 1, ctxt->attr_value);
 	if (!tv_key) {
 		ctxt->rc = ENOMEM;
 		goto err_1;
 	}
-	sos_key_join(tv_key, ctxt->bss->pa_tv_attr,
-			  ctxt->attr_type_len + 1, ctxt->attr_type,
-			  ctxt->attr_value_len + 1, ctxt->attr_value);
 	ctxt->rc = sos_index_remove(idx, tv_key, obj);
 	if (ctxt->rc)
 		goto err_2;
 
 	idx = sos_attr_index(ctxt->bss->pa_tp_attr);
-	sos_key_join(tp_key, ctxt->bss->pa_tp_attr,
-			     ctxt->attr_type_len + 1, ctxt->attr_type,
-			     ctxt->ptn_id);
+	tp_key = sos_key_for_attr(NULL, ctxt->bss->pa_tp_attr,
+				  ctxt->attr_type_len + 1, ctxt->attr_type,
+				  ctxt->ptn_id);
 	ctxt->rc = sos_index_remove(idx, tp_key, obj);
 	if (ctxt->rc)
 		goto err_3;
@@ -3981,18 +3985,24 @@ static int bs_ptn_attr_value_rm(bstore_t bs, bptn_id_t ptn_id,
 	return rc;
 }
 
+/*
+ * Remove all attributes named attr_type on the ptn_id
+ */
 static int bs_ptn_attr_unset(bstore_t bs, bptn_id_t ptn_id,
 			     const char *attr_type)
 {
 	int rc = 0;
-	SOS_KEY_SZ(key, sizeof(bptn_id_t) + ATTR_TYPE_MAX);
+	sos_key_t key;
 	int len = strlen(attr_type);
 	bstore_sos_t bss = (bstore_sos_t)bs;
 	sos_index_t idx;
 	sos_obj_t obj;
 	struct sos_value_s _v, *v;
 
-	sos_key_join(key, bss->pa_ptv_attr, ptn_id, len + 1, attr_type, 0, "");
+	key = sos_key_for_attr(NULL, bss->pa_ptv_attr, ptn_id, len + 1, attr_type, 0, "");
+	if (!key)
+		return ENOMEM;
+
 	idx = sos_attr_index(bss->pa_ptv_attr);
 	obj = NULL;
 	v = NULL;
@@ -4022,6 +4032,7 @@ static int bs_ptn_attr_unset(bstore_t bs, bptn_id_t ptn_id,
 	obj = NULL;
 	goto next;
  out:
+	sos_key_put(key);
 	if (v)
 		sos_value_put(v);
 	if (obj)
@@ -4272,13 +4283,14 @@ static int bs_ptn_attr_iter_find_fwd(bptn_attr_iter_t iter,
 {
 	bsos_iter_t pai = (bsos_iter_t)iter;
 	bstore_sos_t bss = (bstore_sos_t)pai->bs;
-	const size_t stack_key_sz = sizeof(ptn_id) + ATTR_TYPE_MAX;
-	SOS_KEY_SZ(stack_key, stack_key_sz);
 	int attr_type_len = attr_type?strlen(attr_type):-1;
 	int attr_value_len = attr_value?strlen(attr_value):-1;
 	int rc = 0;
-	sos_key_t key;
-	size_t key_sz;
+	size_t key_sz = sos_key_join_size(bss->pa_ptv_attr, 0, ATTR_TYPE_MAX + 1, NULL, ATTR_VALUE_MAX + 1, NULL);
+	sos_key_t key = sos_key_new(key_sz);
+
+	if (!key)
+		return ENOMEM;
 
 	/* check filter condition */
 	if (pai->filter.ptn_id && ptn_id && pai->filter.ptn_id != ptn_id) {
@@ -4299,52 +4311,31 @@ static int bs_ptn_attr_iter_find_fwd(bptn_attr_iter_t iter,
 
 	switch (pai->iter_type) {
 	case PTN_ATTR_ITER_PTV:
-		key_sz = sizeof(ptn_id) + attr_type_len + attr_value_len + 2;
-		if (key_sz > stack_key_sz) {
-			key = sos_key_new(key_sz);
-			if (!key) {
-				rc = ENOMEM;
-				goto err_0;
-			}
-		} else {
-			key = stack_key;
-		}
 		sos_key_join(key, bss->pa_ptv_attr, ptn_id,
-				  attr_type_len + 1, attr_type,
-				  attr_value_len + 1, attr_value);
+			     attr_type_len + 1, attr_type,
+			     attr_value_len + 1, attr_value);
 		break;
 	case PTN_ATTR_ITER_TV:
-		key_sz = attr_type_len + attr_value_len + 2;
-		if (key_sz > stack_key_sz) {
-			key = sos_key_new(key_sz);
-			if (!key) {
-				rc = ENOMEM;
-				goto err_0;
-			}
-		} else {
-			key = stack_key;
-		}
 		sos_key_join(key, bss->pa_tv_attr,
-				  attr_type_len + 1, attr_type,
-				  attr_value_len + 1, attr_value);
+			     attr_type_len + 1, attr_type,
+			     attr_value_len + 1, attr_value);
 		break;
 	case PTN_ATTR_ITER_TP:
-		key = stack_key;
 		sos_key_join(key, bss->pa_tp_attr,
-				  attr_type_len + 1, attr_type,
-				  ptn_id);
+			     attr_type_len + 1, attr_type,
+			     ptn_id);
 		break;
 	default:
 		rc = EINVAL;
 		goto err_0;
 	}
 	rc = sos_iter_sup(pai->iter, key);
-	sos_key_put(key); /* put the key regardless */
 	if (rc)
 		goto err_0;
+	sos_key_put(key);
 	return __bs_ptn_attr_iter_verify(iter);
-
  err_0:
+	sos_key_put(key);
 	return rc;
 }
 
