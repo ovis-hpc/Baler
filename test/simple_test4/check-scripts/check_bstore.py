@@ -1035,7 +1035,7 @@ class TestBS(object):
 class TestBSS(TestBS, unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.bs = BStore.open("bstore_sos", "store", os.O_RDWR, 0)
+        cls.bs = BStore.open("bstore_sos", BSTORE, os.O_RDWR, 0)
         cls.tag_base = []
         cls.bs.attrNew("TAG")
         cls.bs.attrNew("HEX")
