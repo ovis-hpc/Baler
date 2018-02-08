@@ -572,6 +572,7 @@ static int create_store(const char *path, int o_mode)
 	free(cpath);
 	sos_container_close(attr, SOS_COMMIT_ASYNC);
 	sos_container_close(hist, SOS_COMMIT_ASYNC);
+	sos_container_close(ptn_tkns, SOS_COMMIT_ASYNC);
 	sos_container_close(msgs, SOS_COMMIT_ASYNC);
 	sos_container_close(ptns, SOS_COMMIT_ASYNC);
 	sos_container_close(dict, SOS_COMMIT_ASYNC);
@@ -945,6 +946,7 @@ static void bs_close(bstore_t bs)
 	if (!bs)
 		return;
 	free(bs->path);
+	sos_container_close(bss->attr_sos, SOS_COMMIT_ASYNC);
 	sos_container_close(bss->dict_sos, SOS_COMMIT_ASYNC);
 	sos_container_close(bss->ptn_sos, SOS_COMMIT_ASYNC);
 	sos_container_close(bss->ptn_tkn_sos, SOS_COMMIT_ASYNC);
