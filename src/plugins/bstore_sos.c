@@ -1741,9 +1741,10 @@ static int __matching_ptn(bptn_iter_t iter, int fwd)
 	sos_obj_t obj;
 	struct timeval tv;
 	int rc = 0;
+	int match;
 	int (*iter_step)(sos_iter_t);
 
-	if (!i->filter.tv_begin.tv_sec)
+	if (!i->filter.tv_begin.tv_sec && !i->filter.ptn_id)
 		return 0; /* no filter for ptn_iter */
 
 	iter_step = fwd?sos_iter_next:sos_iter_prev;
@@ -1753,11 +1754,13 @@ static int __matching_ptn(bptn_iter_t iter, int fwd)
 		ptn = sos_obj_ptr(obj);
 		tv.tv_sec = ptn->first_seen.secs;
 		tv.tv_usec = ptn->first_seen.usecs;
-		if (timercmp(&i->filter.tv_begin, &tv, <=)) {
-			sos_obj_put(obj);
-			break;
-		}
+		match = (!i->filter.tv_begin.tv_sec ||
+				timercmp(&i->filter.tv_begin, &tv, <=)) &&
+			(!i->filter.ptn_id || ptn->ptn_id == i->filter.ptn_id);
+		/* ptn matches all conditions */
 		sos_obj_put(obj);
+		if (match)
+			break;
 	}
 	return rc;
 }
