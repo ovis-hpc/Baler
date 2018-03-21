@@ -7,6 +7,10 @@ from libc.stdlib cimport *
 from libc.errno cimport *
 from sosdb import Array
 import os
+
+import util
+from StringIO import StringIO
+
 cimport Bs
 
 cpdef uint64_t btkn_type_mask_from_str(const char *_str):
@@ -313,6 +317,9 @@ cdef class Btkn:
                 return typ
             self.c_typ += 1
         raise StopIteration
+
+    def __str__(self):
+        return self.tkn_str()
 
 cdef class Biter:
 
@@ -871,6 +878,19 @@ cdef class Bmsg:
             self.c_arg += 1
             return tkn
         raise StopIteration
+
+    def __str__(self):
+        sio = StringIO()
+        ts = util.Timestamp(self.tv_sec(), self.tv_usec())
+        sio.write(str(ts))
+        sio.write(" ")
+        for idx in range(0, self.c_msg.argc):
+            tkn_id = self.c_msg.argv[idx]
+            tkn_id = tkn_id >> 8
+            tkn = self.store.tkn_by_id(tkn_id)
+            sio.write(str(tkn))
+        return sio.getvalue()
+
 
 cdef class Bmsg_iter(Biter):
     def __init__(self, Bstore store):
