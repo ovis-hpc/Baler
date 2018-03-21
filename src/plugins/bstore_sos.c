@@ -977,11 +977,19 @@ struct token_value_s {
  * provides for richer output formatting options without having to
  * also look up the pattern.
  */
-static btkn_id_t allocate_tkn_id(bstore_sos_t bss)
+static btkn_id_t allocate_tkn_id(bstore_sos_t bss, btkn_id_t req_id)
 {
-	btkn_id_t tkn_id = bss->next_tkn_id;
-	tkn_id = bss->next_tkn_id;
-	bss->next_tkn_id = tkn_id + 1;
+	btkn_id_t tkn_id;
+	if (!req_id) {
+		tkn_id = __sync_fetch_and_add(&bss->next_tkn_id, 1);
+	} else {
+		tkn_id = req_id;
+		while (bss->next_tkn_id <= req_id) {
+			__sync_val_compare_and_swap(&bss->next_tkn_id,
+						    bss->next_tkn_id,
+						    req_id + 1);
+		}
+	}
 	return tkn_id;
 }
 
@@ -1117,7 +1125,7 @@ static sos_visit_action_t tkn_add_cb(sos_index_t index,
 		ctxt->tkn->tkn_type_mask &= ~BTKN_TYPE_MASK(BTKN_TYPE_TEXT);
 	tkn_value->tkn_type_mask = ctxt->tkn->tkn_type_mask;
 	// pthread_mutex_lock(&ctxt->bss->lock);
-	tkn_id = allocate_tkn_id(ctxt->bss);
+	tkn_id = allocate_tkn_id(ctxt->bss, 0);
 	// pthread_mutex_unlock(&ctxt->bss->lock);
 	ctxt->tkn->tkn_id = tkn_value->tkn_id = tkn_id;
 	sos_key_set(id_key, &tkn_id, sizeof(tkn_id));
@@ -1179,6 +1187,7 @@ static int bs_tkn_add_with_id(bstore_t bs, btkn_t tkn)
 
 	if (bstore_lock)
 		pthread_mutex_lock(&bss->dict_lock);
+	allocate_tkn_id(bss, tkn->tkn_id);
 	if (tkn->tkn_str->blen > 2048) {
 		text_key = sos_key_new(tkn->tkn_str->blen);
 		if (!text_key) {
@@ -1213,6 +1222,7 @@ static int bs_type_add_with_id(bstore_t bs, btkn_t tkn)
 
 	if (bstore_lock)
 		pthread_mutex_lock(&bss->dict_lock);
+	allocate_tkn_id(bss, tkn->tkn_id);
 	encode_tkn_key(text_key, tkn->tkn_str->cstr, tkn->tkn_str->blen);
 	/* If the token is already added, return an error */
 	tkn_obj = sos_obj_find(bss->tkn_text_attr, text_key);
