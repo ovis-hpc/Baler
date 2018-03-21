@@ -56,7 +56,6 @@ import time
 import calendar
 import re
 import json
-import Bq
 import curses
 import pkgutil
 from datetime import datetime
