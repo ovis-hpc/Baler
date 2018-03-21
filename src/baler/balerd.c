@@ -222,9 +222,10 @@
  * recognized as the same token. If the ID is not present, \b balerd
  * automatically assigns the max_ID + 1.
  *
- * The output of \b balerd will always produce the first alias, because \b
- * balerd stores messages as a sequence of token IDs which get translated back
- * to strings at the output.
+ * The output of \b balerd will always produce the \e LAST alias. This is because
+ * \b balerd stores messages as a sequence of token IDs which get translated
+ * back to strings at the output, and the last inserted text is found first in
+ * the translation.
  *
  * \section see_also SEE ALSO
  * \ref bin_tcp "bin_tcp(5)", \ref bin_udp "bin_udp(5)", \ref bout_store_msg
