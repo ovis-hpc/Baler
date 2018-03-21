@@ -177,7 +177,7 @@
  * \par
  * \code
  * # This is a good comment.
- * tokens type=ENG path=my_dict # This is a bad comment.
+ * tokens type=WORD path=my_dict # This is a bad comment.
  * \endcode
  *
  * \section conf_example CONFIGURATION_EXAMPLE
