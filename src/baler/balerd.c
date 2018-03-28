@@ -1293,7 +1293,6 @@ static int process_input_entry(struct bwq_entry *bwq_ent, void *arg)
 		switch (tkn_type) {
 		case BTKN_TYPE_SEPARATOR:
 		case BTKN_TYPE_WORD:
-		case BTKN_TYPE_WHITESPACE:
 			ptn->u64str[tkn_idx] = (tkn_id << 8) | tkn_type;
 			break;
 		case BTKN_TYPE_HOSTNAME:

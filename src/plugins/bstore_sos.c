@@ -1914,7 +1914,7 @@ static bmsg_t __make_msg(bstore_sos_t bss, bsos_iter_t i, sos_obj_t msg_obj)
 	x = dmsg->argc - 1;
 	for (y = ptn->tkn_count - 1; y >= 0; y--) {
 		btkn_id_t tkn_type_id = ptn->str->u64str[y] & BTKN_TYPE_ID_MASK;
-		if (btkn_id_is_wildcard(tkn_type_id)) {
+		if (tkn_type_id == BTKN_TYPE_WHITESPACE || btkn_id_is_wildcard(tkn_type_id)) {
 			dmsg->argv[y] = dmsg->argv[x];
 			x--;
 		} else {
@@ -2710,7 +2710,7 @@ static int bs_msg_add(bstore_t bs, struct timeval *tv, bmsg_t msg)
 	wc = 0;
 	for (i = 0; i < msg->argc; i++) {
 		type_id = msg->argv[i] & BTKN_TYPE_ID_MASK;
-		if (btkn_id_is_wildcard(type_id)) {
+		if (type_id == BTKN_TYPE_WHITESPACE || btkn_id_is_wildcard(type_id)) {
 			/* wc <= i */
 			msg->argv[wc] = msg->argv[i];
 			wc++;
