@@ -1213,31 +1213,6 @@ static int bs_tkn_add_with_id(bstore_t bs, btkn_t tkn)
 	return rc;
 }
 
-static int bs_type_add_with_id(bstore_t bs, btkn_t tkn)
-{
-	int rc;
-	sos_obj_t tkn_obj;
-	bstore_sos_t bss = (bstore_sos_t)bs;
-	SOS_KEY(text_key);
-
-	if (bstore_lock)
-		pthread_mutex_lock(&bss->dict_lock);
-	allocate_tkn_id(bss, tkn->tkn_id);
-	encode_tkn_key(text_key, tkn->tkn_str->cstr, tkn->tkn_str->blen);
-	/* If the token is already added, return an error */
-	tkn_obj = sos_obj_find(bss->tkn_text_attr, text_key);
-	if (tkn_obj) {
-		sos_obj_put(tkn_obj);
-		rc = ENOENT;
-		goto err_0;
-	}
-	rc = __add_tkn_with_id(bss, tkn, 0);
- err_0:
-	if (bstore_lock)
-		pthread_mutex_unlock(&bss->dict_lock);
-	return rc;
-}
-
 static btkn_t bs_tkn_find_by_id(bstore_t bs, btkn_id_t tkn_id)
 {
 	btkn_t token = NULL;
