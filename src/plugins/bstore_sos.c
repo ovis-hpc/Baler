@@ -1024,6 +1024,8 @@ static int __add_tkn_with_id(bstore_sos_t bss, btkn_t tkn, uint64_t count)
 	size_t sz;
 	sos_obj_t tkn_obj;
 
+	allocate_tkn_id(bss, tkn->tkn_id);
+
 	/* Allocate a new object */
 	tkn_obj = sos_obj_new(bss->token_value_schema);
 	if (!tkn_obj) {
@@ -1181,13 +1183,13 @@ static int bs_tkn_add_with_id(bstore_t bs, btkn_t tkn)
 {
 	int rc;
 	sos_obj_t tkn_obj;
+	tkn_value_t tkn_value;
 	bstore_sos_t bss = (bstore_sos_t)bs;
 	SOS_KEY_SZ(stack_key, 2048);
 	sos_key_t text_key = stack_key;
 
 	if (bstore_lock)
 		pthread_mutex_lock(&bss->dict_lock);
-	allocate_tkn_id(bss, tkn->tkn_id);
 	if (tkn->tkn_str->blen > 2048) {
 		text_key = sos_key_new(tkn->tkn_str->blen);
 		if (!text_key) {
@@ -1199,11 +1201,13 @@ static int bs_tkn_add_with_id(bstore_t bs, btkn_t tkn)
 	/* If the token is already added, return an error */
 	tkn_obj = sos_obj_find(bss->tkn_text_attr, text_key);
 	if (tkn_obj) {
+		tkn_value = sos_obj_ptr(tkn_obj);
+		rc = (tkn_value->tkn_id == tkn->tkn_id)?(0):(EEXIST);
 		sos_obj_put(tkn_obj);
-		rc = EEXIST;
 		goto err_0;
 	}
 	rc = __add_tkn_with_id(bss, tkn, 0);
+	/* let-through */
  err_0:
 	if (text_key != stack_key) {
 		sos_key_put(text_key);

@@ -854,6 +854,7 @@ int __process_cmd_tokens_line_cb(char *line, void *_ctxt)
 	struct __process_cmd_tokens_line_ctxt *ctxt = _ctxt;
 	char *id_str;
 	int n;
+	int rc;
 	int spc_idx;
 	uint32_t tkn_id = 0;
 	int has_tkn_id = 0;
@@ -885,8 +886,17 @@ int __process_cmd_tokens_line_cb(char *line, void *_ctxt)
 	if (has_tkn_id) {
 		if (ctxt->tkn_type == BTKN_TYPE_TYPE)
 			tkn->tkn_type_mask |= BTKN_TYPE_MASK(tkn_id);
-		if (bstore_tkn_add_with_id(ctxt->store, tkn)) {
-			berr("error inserting token '%s' with id %d\n", line, tkn_id);
+		rc = bstore_tkn_add_with_id(ctxt->store, tkn);
+		switch (rc) {
+		case 0:
+			/* OK */
+			break;
+		case EEXIST:
+			berr("token '%s' exists with different ID\n", line);
+			break;
+		default:
+			berr("token '%s' insert error: %d %s\n", line, rc, berrnostr(rc));
+			break;
 		}
 	} else {
 		tkn_id = bstore_tkn_add(ctxt->store, tkn);
