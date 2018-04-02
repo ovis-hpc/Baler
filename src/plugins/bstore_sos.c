@@ -189,6 +189,8 @@ typedef struct __attribute__ ((__packed__)) msg_s {
 	union sos_obj_ref_s tkn_ids;
 } *msg_t;
 
+const char *first_seen_ptn[] = { "first_seen", "ptn_id" };
+const char *last_seen_ptn[] = { "last_seen", "ptn_id" };
 struct sos_schema_template pattern_schema = {
 	.name = "Pattern",
 	.attrs = {
@@ -201,12 +203,10 @@ struct sos_schema_template pattern_schema = {
 		{
 			.name = "first_seen",
 			.type = SOS_TYPE_TIMESTAMP,
-			.indexed = 1,
 		},
 		{
 			.name = "last_seen",
 			.type = SOS_TYPE_TIMESTAMP,
-			.indexed = 1,
 		},
 		{
 			.name = "count",
@@ -215,6 +215,20 @@ struct sos_schema_template pattern_schema = {
 		{
 			.name = "tkn_count",
 			.type = SOS_TYPE_UINT64,
+		},
+		{
+			.name = "first_seen_ptn",
+			.type = SOS_TYPE_JOIN,
+			.size = 2,
+			.join_list = first_seen_ptn,
+			.indexed = 1,
+		},
+		{
+			.name = "last_seen_ptn",
+			.type = SOS_TYPE_JOIN,
+			.size = 2,
+			.join_list = last_seen_ptn,
+			.indexed = 1,
 		},
 		{
 			.name = "tkn_type_ids",
@@ -228,8 +242,8 @@ struct sos_schema_template pattern_schema = {
 
 typedef struct ptn_s {
 	uint64_t ptn_id;
-	struct sos_timestamp_s first_seen;
-	struct sos_timestamp_s last_seen;
+	union sos_timestamp_u first_seen;
+	union sos_timestamp_u last_seen;
 	uint64_t count;
 	uint64_t tkn_count;
 	union sos_obj_ref_s tkn_type_ids;
@@ -745,10 +759,10 @@ static bstore_t bs_open(bstore_plugin_t plugin, const char *path, int flags, int
 	bs->ptn_id_attr = sos_schema_attr_by_name(bs->pattern_schema, "ptn_id");
 	if (!bs->ptn_id_attr)
 		goto err_6;
-	bs->first_seen_attr = sos_schema_attr_by_name(bs->pattern_schema, "first_seen");
+	bs->first_seen_attr = sos_schema_attr_by_name(bs->pattern_schema, "first_seen_ptn");
 	if (!bs->first_seen_attr)
 		goto err_6;
-	bs->last_seen_attr = sos_schema_attr_by_name(bs->pattern_schema, "last_seen");
+	bs->last_seen_attr = sos_schema_attr_by_name(bs->pattern_schema, "last_seen_ptn");
 	if (!bs->last_seen_attr)
 		goto err_6;
 	bs->tkn_type_ids_attr =
@@ -1624,10 +1638,10 @@ static bptn_t __make_ptn(bstore_sos_t bss, bsos_iter_t i, sos_obj_t ptn_obj)
 		goto out;
 
 	ptn->ptn_id = sptn->ptn_id;
-	ptn->first_seen.tv_sec = sptn->first_seen.secs;
-	ptn->first_seen.tv_usec = sptn->first_seen.usecs;
-	ptn->last_seen.tv_sec = sptn->last_seen.secs;
-	ptn->last_seen.tv_usec = sptn->last_seen.usecs;
+	ptn->first_seen.tv_sec = sptn->first_seen.tv.tv_sec;
+	ptn->first_seen.tv_usec = sptn->first_seen.tv.tv_usec;
+	ptn->last_seen.tv_sec = sptn->last_seen.tv.tv_sec;
+	ptn->last_seen.tv_usec = sptn->last_seen.tv.tv_usec;
 	ptn->count = sptn->count;
 	ptn->tkn_count = sptn->tkn_count;
 	decode_ptn(ptn->str, tkn_str->data->array.data.byte_, sptn->tkn_count);
@@ -1706,10 +1720,10 @@ static int bs_ptn_find_by_ptnstr(bstore_t bs, bptn_t ptn)
 	ptn_value = sos_obj_ptr(ptn_obj);
 	ptn->ptn_id = ptn_value->ptn_id;
 	ptn->count = ptn_value->count;
-	ptn->first_seen.tv_sec = ptn_value->first_seen.secs;
-	ptn->first_seen.tv_usec = ptn_value->first_seen.usecs;
-	ptn->last_seen.tv_sec = ptn_value->last_seen.secs;
-	ptn->last_seen.tv_usec = ptn_value->last_seen.usecs;
+	ptn->first_seen.tv_sec = ptn_value->first_seen.tv.tv_sec;
+	ptn->first_seen.tv_usec = ptn_value->first_seen.tv.tv_usec;
+	ptn->last_seen.tv_sec = ptn_value->last_seen.tv.tv_sec;
+	ptn->last_seen.tv_usec = ptn_value->last_seen.tv.tv_usec;
 	sos_obj_put(ptn_obj);
 	rc = 0;
 	/* let-through for clean-up */
@@ -1741,8 +1755,8 @@ static int __matching_ptn(bptn_iter_t iter, int fwd)
 	for (;0 == rc; rc = iter_step(i->iter)) {
 		obj = sos_iter_obj(i->iter);
 		ptn = sos_obj_ptr(obj);
-		tv.tv_sec = ptn->first_seen.secs;
-		tv.tv_usec = ptn->first_seen.usecs;
+		tv.tv_sec = ptn->first_seen.tv.tv_sec;
+		tv.tv_usec = ptn->first_seen.tv.tv_usec;
 		match = (!i->filter.tv_begin.tv_sec ||
 				timercmp(&i->filter.tv_begin, &tv, <=)) &&
 			(!i->filter.ptn_id || ptn->ptn_id == i->filter.ptn_id);
@@ -2364,35 +2378,43 @@ static sos_visit_action_t ptn_add_cb(sos_index_t index,
 			goto err_0;
 		}
 		ptn_value = sos_obj_ptr(ptn_obj);
-		last_seen.tv_sec = ptn_value->last_seen.secs;
-		last_seen.tv_usec = ptn_value->last_seen.usecs;
-		first_seen.tv_sec = ptn_value->first_seen.secs;
-		first_seen.tv_usec = ptn_value->first_seen.usecs;
+		last_seen.tv_sec = ptn_value->last_seen.tv.tv_sec;
+		last_seen.tv_usec = ptn_value->last_seen.tv.tv_usec;
+		first_seen.tv_sec = ptn_value->first_seen.tv.tv_sec;
+		first_seen.tv_usec = ptn_value->first_seen.tv.tv_usec;
 		if (timercmp(&first_seen, ctxt->tv, >)) {
 			/* new first seen is before the db first seen */
 			/* remove existing key */
-			sos_key_set(ts_key, &ptn_value->first_seen,
-						sizeof(&ptn_value->first_seen));
-			sos_index_remove(first_seen_idx, ts_key, ptn_obj);
+			rc = sos_key_join(ts_key, ctxt->bss->first_seen_attr,
+					  ptn_value->first_seen, ptn_value->ptn_id);
+			assert(rc == 0);
+			rc = sos_index_remove(first_seen_idx, ts_key, ptn_obj);
+			assert(rc == 0);
 			/* add new key */
-			ptn_value->first_seen.secs = ctxt->tv->tv_sec;
-			ptn_value->first_seen.usecs = ctxt->tv->tv_usec;
-			sos_key_set(ts_key, &ptn_value->first_seen,
-						sizeof(&ptn_value->first_seen));
-			sos_index_insert(first_seen_idx, ts_key, ptn_obj);
+			ptn_value->first_seen.tv.tv_sec = ctxt->tv->tv_sec;
+			ptn_value->first_seen.tv.tv_usec = ctxt->tv->tv_usec;
+			rc = sos_key_join(ts_key, ctxt->bss->first_seen_attr,
+					  ptn_value->first_seen, ptn_value->ptn_id);
+			assert(rc == 0);
+			rc = sos_index_insert(first_seen_idx, ts_key, ptn_obj);
+			assert(rc == 0);
 		}
 		if (timercmp(&last_seen, ctxt->tv, <)) {
 			/* new time is after the db last seen */
 			/* remove existing key */
-			sos_key_set(ts_key, &ptn_value->last_seen,
-						sizeof(&ptn_value->last_seen));
-			sos_index_remove(last_seen_idx, ts_key, ptn_obj);
+			rc = sos_key_join(ts_key, ctxt->bss->last_seen_attr,
+					  ptn_value->last_seen, ptn_value->ptn_id);
+			assert(rc == 0);
+			rc = sos_index_remove(last_seen_idx, ts_key, ptn_obj);
+			assert(rc == 0);
 			/* add new key */
-			ptn_value->last_seen.secs = ctxt->tv->tv_sec;
-			ptn_value->last_seen.usecs = ctxt->tv->tv_usec;
-			sos_key_set(ts_key, &ptn_value->last_seen,
-						sizeof(&ptn_value->last_seen));
-			sos_index_insert(last_seen_idx, ts_key, ptn_obj);
+			ptn_value->last_seen.tv.tv_sec = ctxt->tv->tv_sec;
+			ptn_value->last_seen.tv.tv_usec = ctxt->tv->tv_usec;
+			rc = sos_key_join(ts_key, ctxt->bss->last_seen_attr,
+					  ptn_value->last_seen, ptn_value->ptn_id);
+			assert(rc == 0);
+			rc = sos_index_insert(last_seen_idx, ts_key, ptn_obj);
+			assert(rc == 0);
 		}
 		ptn_value->count ++;
 		ctxt->ptn_id = ptn_value->ptn_id;
@@ -2409,8 +2431,8 @@ static sos_visit_action_t ptn_add_cb(sos_index_t index,
 	if (!ptn_value)
 		goto err_1;
 
-	ptn_value->first_seen.secs = ptn_value->last_seen.secs = ctxt->tv->tv_sec;
-	ptn_value->first_seen.usecs = ptn_value->last_seen.usecs = ctxt->tv->tv_usec;
+	ptn_value->first_seen.tv.tv_sec = ptn_value->last_seen.tv.tv_sec = ctxt->tv->tv_sec;
+	ptn_value->first_seen.tv.tv_usec = ptn_value->last_seen.tv.tv_usec = ctxt->tv->tv_usec;
 	ptn_value->tkn_count = ctxt->tkn_count;
 	ptn_value->count = 1;
 
@@ -2431,19 +2453,28 @@ static sos_visit_action_t ptn_add_cb(sos_index_t index,
 	if (rc)
 		goto err_1;
 
-	/* index the first_seen */
-	sos_key_set(ts_key, &ptn_value->first_seen, sizeof(&ptn_value->first_seen));
+	/* index first_seen */
+	sos_key_join(ts_key, ctxt->bss->first_seen_attr,
+		     ptn_value->first_seen, ptn_value->ptn_id);
 	rc = sos_index_insert(first_seen_idx, ts_key, ptn_obj);
 	if (rc)
 		goto err_2;
+
+	/* They key is the same for the first instance of the pattern */
+	rc = sos_index_insert(last_seen_idx, ts_key, ptn_obj);
+	if (rc)
+		goto err_3;
 
 	*ref = sos_obj_ref(ptn_obj);
 	sos_obj_put(ptn_obj);
 	return SOS_VISIT_ADD;
 
+ err_3:
+	sos_key_join(ts_key, ctxt->bss->first_seen_attr,
+		     ptn_value->first_seen, ptn_value->ptn_id);
+	sos_index_remove(first_seen_idx, ts_key, ptn_obj);
  err_2:
-	sos_index_remove(sos_attr_index(ctxt->bss->ptn_id_attr),
-							id_key, ptn_obj);
+	sos_index_remove(ptn_id_idx, id_key, ptn_obj);
  err_1:
 	sos_obj_delete(ptn_obj);
 	sos_obj_put(ptn_obj);
