@@ -433,8 +433,8 @@ struct sos_schema_template token_value_schema = {
 
 typedef struct sptn_value_s {
 	uint64_t ptn_id;
-	struct sos_timestamp_s first_seen;
-	struct sos_timestamp_s last_seen;
+	union sos_timestamp_u first_seen;
+	union sos_timestamp_u last_seen;
 	uint64_t count;
 	uint64_t tkn_count;
 	union sos_obj_ref_s tkn_type_ids;
@@ -3772,10 +3772,10 @@ ptn_exist:
 
 	/* check if the new `first_seen` is earlier than the previous one ...
 	 * if so we need an index update */
-	if (ptn->first_seen.tv_sec > ptn_val->first_seen.secs)
+	if (ptn->first_seen.tv_sec > ptn_val->first_seen.tv.tv_sec)
 		goto no_first_seen_update;
-	if (ptn->first_seen.tv_sec == ptn_val->first_seen.secs &&
-			ptn->first_seen.tv_usec >= ptn_val->first_seen.usecs)
+	if (ptn->first_seen.tv_sec == ptn_val->first_seen.tv.tv_sec &&
+			ptn->first_seen.tv_usec >= ptn_val->first_seen.tv.tv_usec)
 		goto no_first_seen_update;
 	/* remove old index */
 	sos_key_set(ts_key, &ptn_val->first_seen, sizeof(ptn_val->first_seen));
@@ -3783,18 +3783,18 @@ ptn_exist:
 				ts_key, ptn_obj);
 	assert(rc == 0);
 	/* add new index */
-	ptn_val->first_seen.secs = ptn->first_seen.tv_sec;
-	ptn_val->first_seen.usecs = ptn->first_seen.tv_usec;
+	ptn_val->first_seen.tv.tv_sec = ptn->first_seen.tv_sec;
+	ptn_val->first_seen.tv.tv_usec = ptn->first_seen.tv_usec;
 	sos_key_set(ts_key, &ptn_val->first_seen, sizeof(ptn_val->first_seen));
 	rc = sos_index_insert(sos_attr_index(ctxt->bsa->ptn_first_seen_attr),
 				ts_key, ptn_obj);
 	assert(rc == 0);
 no_first_seen_update:
 	/* copy-out all stats */
-	ptn->first_seen.tv_sec = ptn_val->first_seen.secs;
-	ptn->first_seen.tv_usec = ptn_val->first_seen.usecs;
-	ptn->last_seen.tv_sec = ptn_val->last_seen.secs;
-	ptn->last_seen.tv_usec = ptn_val->last_seen.usecs;
+	ptn->first_seen.tv_sec = ptn_val->first_seen.tv.tv_sec;
+	ptn->first_seen.tv_usec = ptn_val->first_seen.tv.tv_usec;
+	ptn->last_seen.tv_sec = ptn_val->last_seen.tv.tv_sec;
+	ptn->last_seen.tv_usec = ptn_val->last_seen.tv.tv_usec;
 	ptn->count = ptn_val->count;
 	ptn->tkn_count = ptn_val->tkn_count;
 	sos_obj_put(ptn_obj);
@@ -3817,8 +3817,8 @@ new_ptn:
 
 	ptn->ptn_id = ptn_val->ptn_id = ptn_id = __bsa_alloc_ptn_id(bsa);
 	ptn_val->tkn_count = ptn->tkn_count;
-	ptn_val->first_seen.secs = ptn->first_seen.tv_sec;
-	ptn_val->first_seen.usecs = ptn->first_seen.tv_usec;
+	ptn_val->first_seen.tv.tv_sec = ptn->first_seen.tv_sec;
+	ptn_val->first_seen.tv.tv_usec = ptn->first_seen.tv_usec;
 
 	sos_key_set(id_key, &ptn_id, sizeof(ptn_id));
 	rc = sos_index_insert(sos_attr_index(ctxt->bsa->ptn_id_attr), id_key, ptn_obj);
@@ -4159,8 +4159,8 @@ static int __matching_ptn(bsa_ptn_iter_t itr, int fwd)
 	for (;0 == rc; rc = iter_step(itr->sitr)) {
 		obj = sos_iter_obj(itr->sitr);
 		ptn = sos_obj_ptr(obj);
-		tv.tv_sec = ptn->first_seen.secs;
-		tv.tv_usec = ptn->first_seen.usecs;
+		tv.tv_sec = ptn->first_seen.tv.tv_sec;
+		tv.tv_usec = ptn->first_seen.tv.tv_usec;
 		if (timercmp(&itr->filter.tv_begin, &tv, <=)) {
 			sos_obj_put(obj);
 			break;
