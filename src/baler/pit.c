@@ -41,7 +41,8 @@ void usage(int argc, char **argv)
 {
 	printf("usage: %s -p <plugin_path> [ -f <input> ]\n"
 	       "       -p <plugin_path> Mandatory path to the plugin\n"
-	       "       -f <input>       Optional input file, defaults to stdin.\n",
+	       "       -f <input>       Optional input file, defaults to stdin.\n"
+	       "       -v               Show detail token information.\n",
 	       argv[0]);
 	exit(1);
 }
@@ -106,14 +107,18 @@ int main(int argc, char **argv)
 			if (wqe->data.in.hostname)
 				printf("%s ", wqe->data.in.hostname->cstr);
 			TAILQ_FOREACH(e, &(wqe->data.in.tkn_q), link) {
-				const char *type_str = ptn_type_strs[btkn_first_type(e->tkn)];
+				const char *type_str;
+				btkn_type_t t = btkn_first_type(e->tkn);
+				if (t > 0 && t < sizeof(ptn_type_strs) / sizeof(ptn_type_strs[0]))
+					type_str = ptn_type_strs[t];
+				else
+					type_str = NULL;
 				if (type_str)
 					printf("    %-8s : '%s'\n",
 					       type_str,
 					       e->tkn->tkn_str->cstr);
 				else
-					printf("    %-8lu : '%s'\n",
-					       btkn_first_type(e->tkn),
+					printf("    %-8lu : '%s'\n", t,
 					       e->tkn->tkn_str->cstr);
 			}
 		}

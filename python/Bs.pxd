@@ -34,6 +34,7 @@ cdef extern from "baler/btkn_types.h":
     cdef int BTKN_TYPE_ETH_ADDR
     cdef int BTKN_TYPE_HEX_INT
     cdef int BTKN_TYPE_DEC_INT
+    cdef int BTKN_TYPE_NUMBER
     cdef int BTKN_TYPE_SEPARATOR
     cdef int BTKN_TYPE_FLOAT
     cdef int BTKN_TYPE_PATH

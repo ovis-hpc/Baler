@@ -112,6 +112,11 @@ enum btkn_type {
 	 */
 	BTKN_TYPE_FLOAT,
 	/**
+	 * Number - used by parsers that want to collapse numeric values
+	 * into a single type
+	 */
+	BTKN_TYPE_NUMBER,
+	/**
 	 * Unix filesystem path
 	 */
 	BTKN_TYPE_PATH,

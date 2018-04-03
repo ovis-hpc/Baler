@@ -331,7 +331,16 @@ struct bwq_entry *yy_wqe = NULL;
 %token DEC_LIST_TKN
 %token HEX_DUMP_TKN
 %token CHAR_DUMP_TKN
-
+%token NID_LIST_TKN
+%token HASH_LIST_TKN
+%token CRAY_SLOT_TKN
+%token CRAY_NID_TKN
+%token CRAY_HOST_TKN
+%token CRAY_RTR_LINK_TKN
+%token CRAY_RTR_NODE_TKN
+%token CRAY_SLOT_LIST_TKN
+%token CRAY_HOST_LIST_TKN
+%token CRAY_RTR_LIST_TKN
 %%
 
 log_msg:	msg_header
@@ -372,7 +381,7 @@ prio_vers:	PRIORITY_TKN DEC_INT_TKN WHITESPACE_TKN
 		}
 		;
 
-hostname:	TEXT_TKN | IP4_ADDR_TKN | IP6_ADDR_TKN
+hostname:	TEXT_TKN | IP4_ADDR_TKN | IP6_ADDR_TKN | CRAY_HOST_TKN | CRAY_NID_TKN | CRAY_RTR_LINK_TKN | HOSTNAME_TKN
 		;
 
 encap_host:	| SEPARATOR_TKN hostname SEPARATOR_TKN
@@ -512,9 +521,9 @@ msg_token:	TEXT_TKN	{ enqueue_token(yy_wqe, $1, BTKN_TYPE_TEXT); }
 	|	IP4_ADDR_TKN	{ enqueue_token(yy_wqe, $1, BTKN_TYPE_IP4_ADDR); }
 	|	IP6_ADDR_TKN	{ enqueue_token(yy_wqe, $1, BTKN_TYPE_IP6_ADDR); }
 	|	ETH_ADDR_TKN	{ enqueue_token(yy_wqe, $1, BTKN_TYPE_ETH_ADDR); }
-	|	HEX_INT_TKN	{ enqueue_token(yy_wqe, $1, BTKN_TYPE_HEX_INT); }
-	|	DEC_INT_TKN	{ enqueue_token(yy_wqe, $1, BTKN_TYPE_DEC_INT); }
-	|	FLOAT_TKN	{ enqueue_token(yy_wqe, $1, BTKN_TYPE_FLOAT); }
+	|	HEX_INT_TKN	{ enqueue_token(yy_wqe, $1, BTKN_TYPE_NUMBER); }
+	|	DEC_INT_TKN	{ enqueue_token(yy_wqe, $1, BTKN_TYPE_NUMBER); }
+	|	FLOAT_TKN	{ enqueue_token(yy_wqe, $1, BTKN_TYPE_NUMBER); }
 	|	URL_TKN		{ enqueue_token(yy_wqe, $1, BTKN_TYPE_URL); }
 	|	PATH_TKN	{ enqueue_token(yy_wqe, $1, BTKN_TYPE_PATH); }
 	|	SEPARATOR_TKN	{ enqueue_token(yy_wqe, $1, BTKN_TYPE_SEPARATOR); }
@@ -522,6 +531,16 @@ msg_token:	TEXT_TKN	{ enqueue_token(yy_wqe, $1, BTKN_TYPE_TEXT); }
 	|	DEC_LIST_TKN	{ enqueue_token(yy_wqe, $1, BTKN_TYPE_DEC_LIST); }
 	|	HEX_DUMP_TKN	{ enqueue_token(yy_wqe, $1, BTKN_TYPE_HEX_DUMP); }
 	|	CHAR_DUMP_TKN	{ enqueue_token(yy_wqe, $1, BTKN_TYPE_CHAR_DUMP); }
+	|	NID_LIST_TKN	{ enqueue_token(yy_wqe, $1, BTKN_TYPE_NID_LIST); }
+	|	HASH_LIST_TKN	{ enqueue_token(yy_wqe, $1, BTKN_TYPE_HASH_LIST); }
+	|	CRAY_RTR_LINK_TKN	{ enqueue_token(yy_wqe, $1, BTKN_TYPE_ASIC_RTR_LINK); }
+	|	CRAY_RTR_NODE_TKN	{ enqueue_token(yy_wqe, $1, BTKN_TYPE_ASIC_RTR_NODE); }
+	|	CRAY_HOST_TKN	{ enqueue_token(yy_wqe, $1, BTKN_TYPE_HOSTNAME); }
+	|	CRAY_SLOT_TKN	{ enqueue_token(yy_wqe, $1, BTKN_TYPE_SLOT); }
+	|	CRAY_NID_TKN	{ enqueue_token(yy_wqe, $1, BTKN_TYPE_HOSTNAME); }
+	|	CRAY_SLOT_LIST_TKN	{ enqueue_token(yy_wqe, $1, BTKN_TYPE_SLOT_LIST); }
+	|	CRAY_HOST_LIST_TKN	{ enqueue_token(yy_wqe, $1, BTKN_TYPE_HOST_LIST); }
+	|	CRAY_RTR_LIST_TKN	{ enqueue_token(yy_wqe, $1, BTKN_TYPE_RTR_LIST); }
 	;
 
 %%
@@ -535,7 +554,7 @@ void enqueue_token(struct bwq_entry *wqe, btkn_t tkn, btkn_type_t typ)
 	e = malloc(sizeof *e);
 	assert(e);
 	e->tkn = tkn;
-
+#if 0
 	if (typ == BTKN_TYPE_HOSTNAME) {
 		/* See if this is really a RTR ASIC message */
 		memset(match, 0, sizeof(match));
@@ -549,7 +568,7 @@ void enqueue_token(struct bwq_entry *wqe, btkn_t tkn, btkn_type_t typ)
 				typ = BTKN_TYPE_ASIC_RTR_LINK;
 		}
 	}
-
+#endif
 	tkn->tkn_type_mask = BTKN_TYPE_MASK(typ);
 	TAILQ_INSERT_TAIL(&wqe->data.in.tkn_q, e, link);
 	wqe->data.in.tkn_count++;

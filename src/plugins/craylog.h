@@ -29,5 +29,10 @@ typedef struct craylog_parser {
 #define BTKN_TYPE_DEC_LIST	34
 #define BTKN_TYPE_HEX_DUMP	35
 #define BTKN_TYPE_CHAR_DUMP	36
-
+#define BTKN_TYPE_NID_LIST	37
+#define BTKN_TYPE_HASH_LIST	38
+#define BTKN_TYPE_HOST_LIST	39
+#define BTKN_TYPE_SLOT		40
+#define BTKN_TYPE_SLOT_LIST	41
+#define BTKN_TYPE_RTR_LIST	42
 #endif

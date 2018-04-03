@@ -98,6 +98,7 @@ static const char *ptn_type_strs[] = {
 	[BTKN_TYPE_DEC_INT] = "<dec>",
 	[BTKN_TYPE_SEPARATOR] = "<sep>",
 	[BTKN_TYPE_FLOAT] = "<float>",
+	[BTKN_TYPE_NUMBER] = "<num>",
 	[BTKN_TYPE_PATH] = "<path>",
 	[BTKN_TYPE_URL] = "<url>",
 	[BTKN_TYPE_WORD] = "<word>",

@@ -25,9 +25,22 @@ int token_alloc(int type_id, const char *yytext, size_t yyleng, YYSTYPE *lvalp)
 BSD_SVC			"["[A-Za-z_\-]+("."[A-Za-z_\-]+)*":"[A-Za-z_\-]+"]"
 PATH			(\/[[:alnum:]_\-~.]+)+
 /* Text may contain embedded '.', '-', and '_', but will not match trailing '.' */
+CRAY_RTR_LINK		c[[:digit:]]+\-[[:digit:]]+c[[:digit:]]+s[[:digit:]]+[ag][[:digit:]]+l[[:digit:]]+
+CRAY_RTR_NODE		(c[[:digit:]]+-[[:digit:]]+)(c[[:digit:]]+){1}(s[[:digit:]]+){1}(ag][[:digit:]]+[n][[:digit:]]+){1}
+CRAY_HOST		(c[[:digit:]]+-[[:digit:]]+)(c[[:digit:]]+){1}(s[[:digit:]]+){1}(n[[:digit:]]+)
+CRAY_SLOT		(c[[:digit:]]+-[[:digit:]]+)(c[[:digit:]]+){1}(s[[:digit:]]+){1}
+CRAY_NID		(nid[[:digit:]]{2})([[:digit:]]+)
 TEXT			([[:alpha:]]+)|([[:alpha:]_]+([[:alnum:]\-_.]+)?([[:alnum:]\-_]+))
 IP4_ADDR		[[:digit:]]{1,3}\056[[:digit:]]{1,3}\056[[:digit:]]{1,3}\056[[:digit:]]{1,3}("/"[0-9]{1,2})?
 IP6_ADDR		([[:xdigit:]]{1,4})?:([[:xdigit:]]{1,4})?:([[:xdigit:]]{1,4})?:([[:xdigit:]]{1,4})?:([[:xdigit:]]{1,4})?:[[:xdigit:]]{1,4}("/"[0-9]{1,3})?
+CRAY_SLOT_LIST		{CRAY_SLOT}([ ,]{CRAY_SLOT})+
+CRAY_HOST_LIST		{CRAY_HOST}([ ,]{CRAY_HOST})+
+CRAY_RTR_LIST		({CRAY_RTR_NODE}|{CRAY_RTR_LINK})([ ,]({CRAY_RTR_NODE}|{CRAY_RTR_LINK}))+
+NID_LIST		[[:alpha:]]{2}([[:space:]]+[[:digit:]]+":")([[:space:]]*[[:digit:]]+":")+
+HASH_LIST		("#"[[:digit:]]{3})("#"[[:digit:]]{3})+
+DEC_LIST		(({DEC_INT})|({DEC_INT}"-"{DEC_INT}))(","(({DEC_INT})|({DEC_INT}"-"{DEC_INT})))+
+HEX_DUMP		[[:xdigit:]]{2}((" ")+[[:xdigit:]]{2})+
+CHAR_DUMP		"*"[^[:space:]]{2}[^[:space:]]+"*"
 MAC_ADDR		[[:xdigit:]]{2}:[[:xdigit:]]{2}:[[:xdigit:]]{2}:[[:xdigit:]]{2}:[[:xdigit:]]{2}:[[:xdigit:]]{2}
 HEX_INT			(0[xX])?[[:xdigit:]]+
 DEC_INT			[[:digit:]]+
@@ -36,9 +49,6 @@ TIMESTAMP		[[:digit:]]{4}"-"[[:digit:]]{2}"-"[[:digit:]]{2}"T"[[:digit:]]{2}":"[
 TIMESTAMP2		(("Jan"|"Feb"|"Mar"|"Apr"|"May"|"Jun"|"Jul"|"Aug"|"Sep"|"Oct"|"Nov"|"Dec")(" ")+[[:digit:]]{1,2}(",")?(" ")+([[:digit:]]{4}(" ")+)?[[:digit:]]{2}":"[[:digit:]]{2}":"[[:digit:]]{2})
 TIMESTAMP3		[[:digit:]]{4}"-"[[:digit:]]{2}"-"[[:digit:]]{2}" "[[:digit:]]{2}":"[[:digit:]]{2}":"[[:digit:]]{2}
 HTTP			[hH][tT]{2}[pP]([sS])?:\/\/
-DEC_LIST		(({DEC_INT})|({DEC_INT}"-"{DEC_INT}))(","(({DEC_INT})|({DEC_INT}"-"{DEC_INT})))+
-HEX_DUMP		[[:xdigit:]]{2}((" ")+[[:xdigit:]]{2})+
-CHAR_DUMP		"*"[^[:space:]]{2}[^[:space:]]+"*"
 
 %%
 	if (!parser->buffer_state) {
@@ -55,6 +65,46 @@ CHAR_DUMP		"*"[^[:space:]]{2}[^[:space:]]+"*"
 	}
 
 [\n]	{ printf("Newline in input string!\n"); return 0; }
+
+{CRAY_HOST} {
+	return token_alloc(HOSTNAME_TKN, yytext, yyleng, lvalp);
+	}
+
+{CRAY_HOST_LIST} {
+	return token_alloc(CRAY_HOST_LIST_TKN, yytext, yyleng, lvalp);
+	}
+
+{CRAY_NID} {
+	return token_alloc(CRAY_NID_TKN, yytext, yyleng, lvalp);
+	}
+
+{CRAY_SLOT} {
+	return token_alloc(CRAY_SLOT_TKN, yytext, yyleng, lvalp);
+}
+
+{CRAY_SLOT_LIST} {
+	return token_alloc(CRAY_SLOT_LIST_TKN, yytext, yyleng, lvalp);
+}
+
+{CRAY_RTR_NODE} {
+	return token_alloc(CRAY_RTR_NODE_TKN, yytext, yyleng, lvalp);
+	}
+
+{CRAY_RTR_LINK} {
+	return token_alloc(CRAY_RTR_LINK_TKN, yytext, yyleng, lvalp);
+	}
+
+{CRAY_RTR_LIST} {
+	return token_alloc(CRAY_RTR_LIST_TKN, yytext, yyleng, lvalp);
+	}
+
+{NID_LIST} {
+	return token_alloc(NID_LIST_TKN, yytext, yyleng, lvalp);
+	}
+
+{HASH_LIST} {
+	return token_alloc(HASH_LIST_TKN, yytext, yyleng, lvalp);
+	}
 
 {CHAR_DUMP} {
 	return token_alloc(CHAR_DUMP_TKN, yytext, yyleng, lvalp);
@@ -73,10 +123,6 @@ CHAR_DUMP		"*"[^[:space:]]{2}[^[:space:]]+"*"
 	}
 ^\<[[:digit:]]+\> {
 	return token_alloc(PRIORITY_TKN, yytext, yyleng, lvalp);
-	}
-
-{TEXT} {
-	return token_alloc(TEXT_TKN, yytext, yyleng, lvalp);
 	}
 {IP4_ADDR} {
 	return token_alloc(IP4_ADDR_TKN, yytext, yyleng, lvalp);
@@ -111,6 +157,10 @@ CHAR_DUMP		"*"[^[:space:]]{2}[^[:space:]]+"*"
 
 {BSD_SVC} {
 	return token_alloc(BSD_SVC_TKN, yytext, yyleng, lvalp);
+	}
+
+{TEXT} {
+	return token_alloc(TEXT_TKN, yytext, yyleng, lvalp);
 	}
 
 [[^:alnum:]]|[[:punct:]] {

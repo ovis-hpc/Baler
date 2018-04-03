@@ -3,6 +3,7 @@ lib_LTLIBRARIES =
 AM_CFLAGS = -I@top_srcdir@/src/ -D_GNU_SOURCE
 
 AM_YFLAGS = -d
+AM_LFLAGS = -F
 libsyslog_parser_la_SOURCES = syslog_parser.y syslog_lexer.l syslog.h
 libsyslog_parser_la_CFLAGS = $(AM_CFLAGS)
 libsyslog_parser_la_LIBADD = ../baler/libbaler.la -ly -ll -lc
