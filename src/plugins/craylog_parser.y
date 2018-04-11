@@ -554,21 +554,6 @@ void enqueue_token(struct bwq_entry *wqe, btkn_t tkn, btkn_type_t typ)
 	e = malloc(sizeof *e);
 	assert(e);
 	e->tkn = tkn;
-#if 0
-	if (typ == BTKN_TYPE_HOSTNAME) {
-		/* See if this is really a RTR ASIC message */
-		memset(match, 0, sizeof(match));
-		rc = regexec(&host_regex, tkn->tkn_str->cstr,
-			     sizeof(match) / sizeof(match[0]), &match[0],
-			     0);
-		if (!rc) {
-			if (tkn->tkn_str->cstr[match[4].rm_so+2] == 'n')
-				typ = BTKN_TYPE_ASIC_RTR_NODE;
-			else
-				typ = BTKN_TYPE_ASIC_RTR_LINK;
-		}
-	}
-#endif
 	tkn->tkn_type_mask = BTKN_TYPE_MASK(typ);
 	TAILQ_INSERT_TAIL(&wqe->data.in.tkn_q, e, link);
 	wqe->data.in.tkn_count++;

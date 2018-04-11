@@ -40,8 +40,17 @@ HTTP			[hH][tT]{2}[pP]([sS])?:\/\/
 %%
 
 	if (!parser->buffer_state) {
+		int i;
+		msg_buf->cstr[msg_buf->blen] = '\0';
 		if (msg_buf->cstr[msg_buf->blen-1] == '\n')
 			msg_buf->cstr[msg_buf->blen-1] = '\0';
+		for (i = 0; i < msg_buf->blen; i++) {
+			if (msg_buf->cstr[i] == '\0')
+				break;
+			if (!isprint(msg_buf->cstr[i])
+			    || ((unsigned char)msg_buf->cstr[i] > 0x7f))
+				msg_buf->cstr[i] = 'X';
+		}
 		parser->buffer_state = yy_scan_string(msg_buf->cstr);
 		parser->cpos = 0;
 	}

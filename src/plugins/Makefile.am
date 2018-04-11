@@ -6,13 +6,13 @@ AM_YFLAGS = -d
 AM_LFLAGS = -F
 libsyslog_parser_la_SOURCES = syslog_parser.y syslog_lexer.l syslog.h
 libsyslog_parser_la_CFLAGS = $(AM_CFLAGS)
-libsyslog_parser_la_LIBADD = ../baler/libbaler.la -ly -ll -lc
+libsyslog_parser_la_LIBADD = ../baler/libbaler.la
 # libsyslog_parser_la_LDFLAGS = -g -O0
 lib_LTLIBRARIES += libsyslog_parser.la
 
 libcraylog_parser_la_SOURCES = craylog_parser.y craylog_lexer.l craylog.h
 libcraylog_parser_la_CFLAGS = $(AM_CFLAGS)
-libcraylog_parser_la_LIBADD = ../baler/libbaler.la -ly -ll -lc
+libcraylog_parser_la_LIBADD = ../baler/libbaler.la
 lib_LTLIBRARIES += libcraylog_parser.la
 
 libbstore_sos_la_SOURCES = bstore_sos.c

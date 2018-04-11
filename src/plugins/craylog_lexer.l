@@ -36,7 +36,7 @@ IP6_ADDR		([[:xdigit:]]{1,4})?:([[:xdigit:]]{1,4})?:([[:xdigit:]]{1,4})?:([[:xdi
 CRAY_SLOT_LIST		{CRAY_SLOT}([ ,]{CRAY_SLOT})+
 CRAY_HOST_LIST		{CRAY_HOST}([ ,]{CRAY_HOST})+
 CRAY_RTR_LIST		({CRAY_RTR_NODE}|{CRAY_RTR_LINK})([ ,]({CRAY_RTR_NODE}|{CRAY_RTR_LINK}))+
-NID_LIST		[[:alpha:]]{2}([[:space:]]+[[:digit:]]+":")([[:space:]]*[[:digit:]]+":")+
+NID_LIST		([[:space:]]+[[:digit:]]+":")([[:space:]]*[[:digit:]]+":")+
 HASH_LIST		("#"[[:digit:]]{3})("#"[[:digit:]]{3})+
 DEC_LIST		(({DEC_INT})|({DEC_INT}"-"{DEC_INT}))(","(({DEC_INT})|({DEC_INT}"-"{DEC_INT})))+
 HEX_DUMP		[[:xdigit:]]{2}((" ")+[[:xdigit:]]{2})+
@@ -50,10 +50,21 @@ TIMESTAMP2		(("Jan"|"Feb"|"Mar"|"Apr"|"May"|"Jun"|"Jul"|"Aug"|"Sep"|"Oct"|"Nov"|
 TIMESTAMP3		[[:digit:]]{4}"-"[[:digit:]]{2}"-"[[:digit:]]{2}" "[[:digit:]]{2}":"[[:digit:]]{2}":"[[:digit:]]{2}
 HTTP			[hH][tT]{2}[pP]([sS])?:\/\/
 
+%option noyywrap
+
 %%
 	if (!parser->buffer_state) {
+		int i;
+		msg_buf->cstr[msg_buf->blen] = '\0';
 		if (msg_buf->cstr[msg_buf->blen-1] == '\n')
 			msg_buf->cstr[msg_buf->blen-1] = '\0';
+		for (i = 0; i < msg_buf->blen; i++) {
+			if (msg_buf->cstr[i] == '\0')
+				break;
+			if (!isprint(msg_buf->cstr[i])
+			    || ((unsigned char)msg_buf->cstr[i] > 0x7f))
+				msg_buf->cstr[i] = 'X';
+		}
 		parser->buffer_state = yy_scan_string(msg_buf->cstr);
 		parser->cpos = 0;
 	}
@@ -63,8 +74,6 @@ HTTP			[hH][tT]{2}[pP]([sS])?:\/\/
 	parser->buffer_state = NULL;
 	return 0;
 	}
-
-[\n]	{ printf("Newline in input string!\n"); return 0; }
 
 {CRAY_HOST} {
 	return token_alloc(HOSTNAME_TKN, yytext, yyleng, lvalp);
