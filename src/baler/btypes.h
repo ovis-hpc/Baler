@@ -222,20 +222,21 @@ void bstr_set_cstr(struct bstr *bstr, const char *cstr, int len)
 		len = strlen(cstr);
 	memcpy(bstr->cstr, cstr, len);
 	bstr->blen = len;
+	bstr->cstr[len] = 0;
 }
 
 static inline
 void bstr_cpy(struct bstr *dest, const struct bstr *src)
 {
 	dest->blen = src->blen;
-	memcpy(dest->cstr, src->cstr, src->blen);
+	memcpy(dest->cstr, src->cstr, src->blen + 1);
 }
 
 /**
  * Convenient allocation function for ::bstr.
  * \param blen The byte length of the string.
  */
-#define bstr_alloc(blen) ((struct bstr*) malloc(sizeof(struct bstr)+blen))
+#define bstr_alloc(blen) ((struct bstr*) malloc(sizeof(struct bstr)+blen+1))
 
 static inline
 struct bstr* bstr_alloc_init_cstr(const char *cstr)
@@ -246,6 +247,7 @@ struct bstr* bstr_alloc_init_cstr(const char *cstr)
 		return NULL;
 	bs->blen = len;
 	memcpy(bs->cstr, cstr, len);
+	bs->cstr[len] = 0; /* null terminated */
 	return bs;
 }
 
@@ -264,9 +266,9 @@ int bstr_cmp(const struct bstr *b0, const struct bstr *b1)
 }
 
 static inline
-uint32_t bstr_len(const struct bstr *s)
+uint32_t bstr_sz(const struct bstr *s)
 {
-	return sizeof(*s) + s->blen;
+	return sizeof(*s) + s->blen + 1;
 }
 
 static inline
@@ -275,7 +277,7 @@ struct bstr *bstr_dup(const struct bstr *b)
 	struct bstr *out = bstr_alloc(b->blen);
 	if (!out)
 		return NULL;
-	memcpy(out, b, sizeof(struct bstr)+b->blen);
+	memcpy(out, b, bstr_sz(b));
 	return out;
 }
 
@@ -446,7 +448,7 @@ void btkn_tailq_free(struct btkn_tailq_head *head)
 static inline
 struct bstr_list_entry* bstr_list_entry_alloc(int str_blen)
 {
-	struct bstr_list_entry *e = (typeof(e)) malloc(sizeof(*e) + str_blen);
+	struct bstr_list_entry *e = (typeof(e)) malloc(sizeof(*e) + str_blen + 1);
 	if (!e)
 		return NULL;
 	e->str.blen = str_blen;
@@ -461,11 +463,12 @@ struct bstr_list_entry* bstr_list_entry_alloc(int str_blen)
 static inline
 struct bstr_list_entry* bstr_list_entry_alloci(int str_blen, const char *s)
 {
-	struct bstr_list_entry *e = (typeof(e)) malloc(sizeof(*e) + str_blen);
+	struct bstr_list_entry *e = (typeof(e)) malloc(sizeof(*e) + str_blen + 1);
 	if (!e)
 		return NULL;
 	e->str.blen = str_blen;
 	memcpy(e->str.cstr, s, str_blen);
+	e->str.cstr[str_blen] = 0;
 	return e;
 }
 
