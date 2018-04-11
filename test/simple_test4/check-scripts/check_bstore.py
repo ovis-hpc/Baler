@@ -557,7 +557,10 @@ class TestBS(object):
             set1 = set(e.ptn_tkn)
             for tkn_pos in range(0, len(ptn.tkn_list)):
                 for ptn_tkn in PtnTknIter(self.bs, ptn.ptn_id, tkn_pos):
-                    key = (tkn_pos, ptn_tkn.ptn_text())
+                    txt = ptn_tkn.ptn_text()
+                    if not txt.strip(): # if txt is plain empty spaces
+                        continue
+                    key = (tkn_pos, txt)
                     set0.add(key)
                     count = e.ptn_tkn[key]
                     self.assertEqual(count, ptn_tkn.tkn_count)
