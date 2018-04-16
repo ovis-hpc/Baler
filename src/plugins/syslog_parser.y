@@ -210,6 +210,7 @@ static int parse_timestamp(char *time_str, struct timeval *tv)
 				bwarn("Date-time parse error for message: %s", str);
 				return 0;
 			}
+			tm.tm_isdst = -1;
 			t = mktime(&tm);
 			tv->tv_sec = t;
 			tv->tv_usec = 0;
@@ -230,6 +231,7 @@ static int parse_timestamp(char *time_str, struct timeval *tv)
 			bwarn("Date-time parse error for message: %s", str);
 			return 0;
 		}
+		tm.tm_isdst = -1;
 		t = mktime(&tm);
 		tv->tv_sec = t;
 		tv->tv_usec = 0;
