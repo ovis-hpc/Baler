@@ -37,6 +37,8 @@ TIMESTAMP2		(("Jan"|"Feb"|"Mar"|"Apr"|"May"|"Jun"|"Jul"|"Aug"|"Sep"|"Oct"|"Nov"|
 TIMESTAMP3		[[:digit:]]{4}"-"[[:digit:]]{2}"-"[[:digit:]]{2}" "[[:digit:]]{2}":"[[:digit:]]{2}":"[[:digit:]]{2}
 HTTP			[hH][tT]{2}[pP]([sS])?:\/\/
 
+%option noyywrap
+
 %%
 
 	if (!parser->buffer_state) {
