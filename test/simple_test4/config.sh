@@ -48,6 +48,7 @@ source env.sh
 get_btest_config() {
 	cat <<EOF
 tokens type=HOSTNAME path=$BTEST_HOST_LIST
+tokens type=HOSTNAME path=$BTEST_HOST_LIST
 tokens type=WORD path=$BTEST_ENG_DICT
 plugin name=bout_store_msg
 plugin name=bout_store_hist \
