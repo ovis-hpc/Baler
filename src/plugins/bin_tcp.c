@@ -509,20 +509,24 @@ int plugin_config(struct bplugin *this, struct bpair_str_head *arg_head)
 			if (msg)
 				berr("dlopen: '%s'\n", msg);
 			rc = ENOENT;
+			goto out;
 		}
 		get_parser = dlsym(lib, "binp_get_parser");
 		if (!get_parser) {
 			berr("The library '%s' does not implement a Baler parser.\n",
 			     libname);
 			rc = EINVAL;
+			goto out;
 		}
 		ctxt->parser = get_parser(lib);
 		if (!ctxt->parser) {
 			berr("Insufficient resources available to load '%s'.\n",
 			     libname);
 			rc = ENOMEM;
+			goto out;
 		}
 	}
+out:
 	return rc;
 }
 
