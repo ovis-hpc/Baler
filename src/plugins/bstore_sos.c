@@ -2749,7 +2749,7 @@ static int bs_msg_add(bstore_t bs, struct timeval *tv, bmsg_t msg)
 		/* otherwise, skip */
 	}
 
-	assert(wc < msg->argc);
+	assert(wc <= msg->argc);
 	msg->argc = wc;
 
 	msg_value->tkn_count = msg->argc;
