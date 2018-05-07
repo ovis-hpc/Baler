@@ -160,6 +160,8 @@ static int parse_timestamp(char *time_str, struct timeval *tv)
 	int TZM = 0;
 	int n, len;
 	char p;
+	struct tm tm;
+	char *s;
 
 	/* There are 3 formats currently supported. By example:
 	 * 2015-03-29T18:40:01-06:00
@@ -204,13 +206,15 @@ static int parse_timestamp(char *time_str, struct timeval *tv)
 			break;
 		case ' ':
 			/* TZ is not present */
-			n = sscanf(str, "%d:%d:%d%n", &HH, &MM, &SS, &len);
-			if (n != 3) {
-				bwarn("Missing or incorrectly formatted time %s.", str);
+			s = strptime(time_str, "%F %T", &tm);
+			if (!s) {
+				bwarn("Date-time parse error for message: %s", str);
+				return 0;
 			}
-			TZH = timezone / 3600;
-			TZM = (timezone - (TZH * 3600)) / 60;
-			break;
+			tm.tm_isdst = -1;
+			tv->tv_sec = mktime(&tm);
+			tv->tv_usec = 0;
+			return 0;
 		default:
 			goto err;
 		}
