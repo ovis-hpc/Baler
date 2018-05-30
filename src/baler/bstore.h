@@ -29,6 +29,7 @@ typedef enum bstore_iter_type {
 	BPTN_HIST_ITER,
 	BCOMP_HIST_ITER,
 	BPTN_ATTR_ITER,
+	BATTR_ITER,
 } bstore_iter_type_t;
 
 typedef struct bstore_iter_s {
@@ -45,7 +46,6 @@ typedef bstore_iter_t bptn_hist_iter_t;
 typedef bstore_iter_t btkn_hist_iter_t;
 typedef bstore_iter_t battr_iter_t;
 typedef bstore_iter_t bptn_attr_iter_t;
-typedef bstore_iter_t battr_ptn_iter_t;
 
 typedef uint64_t bstore_iter_pos_t;
 
@@ -832,8 +832,6 @@ typedef struct bstore_plugin_s {
 	/* attr iterator */
 	battr_iter_t (*attr_iter_new)(bstore_t bs);
 	void (*attr_iter_free)(battr_iter_t iter);
-	int (*attr_iter_filter_set)(battr_iter_t iter,
-					 bstore_iter_filter_t filter);
 	char *(*attr_iter_obj)(battr_iter_t iter);
 	int (*attr_iter_find)(battr_iter_t iter, const char *attr_type);
 	int (*attr_iter_first)(battr_iter_t iter);
@@ -1148,6 +1146,61 @@ int bstore_attr_new(bstore_t bs, const char *attr_type);
  * \retval ENOENT if it is not found
  */
 int bstore_attr_find(bstore_t bs, const char *attr_type);
+
+/**
+ * \brief Create a new iterator for iterating over attribute types.
+ * \retval itr  the iterator handle.
+ * \retval NULL if failed. In this case, \c errno is also set to identify the
+ *              error.
+ */
+battr_iter_t bstore_attr_iter_new(bstore_t bs);
+
+/**
+ * \brief Free the iterator resource.
+ */
+void bstore_attr_iter_free(battr_iter_t iter);
+
+/**
+ * \brief Obtain the current object (attribute type) from the iterator.
+ * \retval str  The attribute type.
+ * \retval NULL If error.
+ */
+char *bstore_attr_iter_obj(battr_iter_t iter);
+
+/**
+ * \brief Find and move the iterator position to the given \c attr_type.
+ * \retval 0     If success.
+ * \retval errno If error.
+ */
+int bstore_attr_iter_find(battr_iter_t iter, const char *attr_type);
+
+/**
+ * \brief Position the iterator to the first attribute type.
+ * \retval 0     If success.
+ * \retval errno If error.
+ */
+int bstore_attr_iter_first(battr_iter_t iter);
+
+/**
+ * \brief Advance the iterator position to the next entry.
+ * \retval 0     If success.
+ * \retval errno If error.
+ */
+int bstore_attr_iter_next(battr_iter_t iter);
+
+/**
+ * \brief Move the iterator position to the previous entry.
+ * \retval 0     If success.
+ * \retval errno If error.
+ */
+int bstore_attr_iter_prev(battr_iter_t iter);
+
+/**
+ * \brief Move the iterator position to the last entry.
+ * \retval 0     If success.
+ * \retval errno If error.
+ */
+int bstore_attr_iter_last(battr_iter_t iter);
 
 /**
  * \brief Set attribute-value to a pattern.

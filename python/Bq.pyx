@@ -740,6 +740,38 @@ cdef class Bptn_iter(Biter):
         return Bs.bstore_ptn_iter_filter_set(self.c_iter, f)
 
 
+cdef class Battr_iter(Biter):
+    def __init__(self, Bstore store):
+        Biter.__init__(self, store)
+
+    cdef Bs.bstore_iter_t iterNew(self):
+        return Bs.bstore_attr_iter_new(self.store.c_store)
+
+    cdef void iterDel(self):
+        Bs.bstore_attr_iter_free(self.c_iter)
+
+    cpdef unsigned long card(self):
+        return -1
+
+    cdef object obj_wrap(self, void *c_obj):
+        return <char*>c_obj
+
+    cdef void *iterObj(self):
+        return Bs.bstore_attr_iter_obj(self.c_iter)
+
+    cdef int iterFirst(self):
+        return Bs.bstore_attr_iter_first(self.c_iter)
+
+    cdef int iterNext(self):
+        return Bs.bstore_attr_iter_next(self.c_iter)
+
+    cdef int iterPrev(self):
+        return Bs.bstore_attr_iter_prev(self.c_iter)
+
+    cdef int iterLast(self):
+        return Bs.bstore_attr_iter_last(self.c_iter)
+
+
 cdef class Bptn_attr_iter(Biter):
     def __init__(self, Bstore store):
         Biter.__init__(self, store)

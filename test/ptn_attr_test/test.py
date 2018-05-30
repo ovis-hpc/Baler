@@ -117,6 +117,8 @@ class TestAttr(unittest.TestCase):
         # Create TAG
         self = cls
         bs.attr_new("TAG")
+        bs.attr_new("ATTR0")
+        bs.attr_new("ATTR1")
         pitr = bq.Bptn_iter(bs)
         self.odd_group = odd_group = set()
         self.even_group = even_group = set()
@@ -156,6 +158,42 @@ class TestAttr(unittest.TestCase):
         self.assertEqual(len(result), len(lst))
         self.assertEqual(result, set(lst))
         del aitr
+
+    def test_attr_iter(self):
+        bs = bq.Bstore()
+        bs.open(STORE_PATH)
+        ai = bq.Battr_iter(bs)
+        attr_types = [ x for x in ai ]
+        attr_types.sort()
+        expect = ["TAG", "ATTR0", "ATTR1"]
+        expect.sort()
+        self.assertEqual(attr_types, expect)
+        log.info("attr types: %s" % str(attr_types))
+        del ai
+        bs.close()
+
+    def test_attr_iter_pos(self):
+        bs = bq.Bstore()
+        bs.open(STORE_PATH)
+        ai0 = bq.Battr_iter(bs)
+        ai1 = bq.Battr_iter(bs)
+        attr_types = []
+        ai0.first()
+        attr_types.append(ai0.obj())
+        ai0.next()
+        attr_types.append(ai0.obj())
+        pos = ai0.get_pos()
+        ai1.set_pos(pos)
+        self.assertEqual(ai0.obj(), ai1.obj())
+        ai1.next()
+        attr_types.append(ai1.obj())
+        attr_types.sort()
+        expect = ["TAG", "ATTR0", "ATTR1"]
+        expect.sort()
+        self.assertEqual(attr_types, expect)
+        del ai0
+        del ai1
+        bs.close()
 
     def test_query_even_tag(self):
         # Get all `even` patterns

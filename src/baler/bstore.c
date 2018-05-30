@@ -786,6 +786,46 @@ int bstore_ptn_attr_iter_last(bptn_attr_iter_t iter)
 	return iter->bs->plugin->ptn_attr_iter_last(iter);
 }
 
+battr_iter_t bstore_attr_iter_new(bstore_t bs)
+{
+	return bs->plugin->attr_iter_new(bs);
+}
+
+void bstore_attr_iter_free(battr_iter_t iter)
+{
+	return iter->bs->plugin->attr_iter_free(iter);
+}
+
+char *bstore_attr_iter_obj(battr_iter_t iter)
+{
+	return iter->bs->plugin->attr_iter_obj(iter);
+}
+
+int bstore_attr_iter_find(battr_iter_t iter, const char *attr_type)
+{
+	return iter->bs->plugin->attr_iter_find(iter, attr_type);
+}
+
+int bstore_attr_iter_first(battr_iter_t iter)
+{
+	return iter->bs->plugin->attr_iter_first(iter);
+}
+
+int bstore_attr_iter_next(battr_iter_t iter)
+{
+	return iter->bs->plugin->attr_iter_next(iter);
+}
+
+int bstore_attr_iter_prev(battr_iter_t iter)
+{
+	return iter->bs->plugin->attr_iter_prev(iter);
+}
+
+int bstore_attr_iter_last(battr_iter_t iter)
+{
+	return iter->bs->plugin->attr_iter_last(iter);
+}
+
 static void __attribute__ ((destructor)) bstore_term(void)
 {
 	struct plugin_entry *pe;

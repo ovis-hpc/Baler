@@ -1344,6 +1344,8 @@ static btkn_type_t bs_tkn_type_get(bstore_t bs, const char *typ_name, size_t nam
 #define PTN_ATTR_ITER_TP	0x72
 #define PTN_ATTR_ITER_TV	0x73
 
+#define ATTR_ITER		0X81
+
 typedef struct bsos_iter_s {
 	bstore_t bs;
 	bstore_iter_type_t biter_type; /* bstore iter type */
@@ -4369,7 +4371,67 @@ static int bs_ptn_attr_iter_find_rev(bptn_attr_iter_t iter,
 				     const char *attr_type,
 				     const char *attr_value)
 {
-	return ENOSYS;
+	bsos_iter_t pai = (bsos_iter_t)iter;
+	bstore_sos_t bss = (bstore_sos_t)pai->bs;
+	const char *max = "\xFF";
+	if (!attr_type)
+		attr_type = max;
+	if (!attr_value)
+		attr_value = max;
+	int attr_type_len = strlen(attr_type);
+	int attr_value_len = strlen(attr_value);
+	int rc = 0;
+	size_t key_sz = sos_key_join_size(bss->pa_ptv_attr, 0, ATTR_TYPE_MAX + 1, NULL, ATTR_VALUE_MAX + 1, NULL);
+	sos_key_t key = sos_key_new(key_sz);
+
+	if (!key)
+		return ENOMEM;
+
+	/* check filter condition */
+	if (pai->filter.ptn_id && ptn_id && pai->filter.ptn_id != ptn_id) {
+		rc = ENOENT;
+		goto err_0;
+	}
+
+	if (pai->filter.attr_type && attr_type &&
+			0 != strcmp(pai->filter.attr_type, attr_type)) {
+		rc = ENOENT;
+		goto err_0;
+	}
+
+	if (attr_type_len + 1 > ATTR_TYPE_MAX) {
+		rc = ENAMETOOLONG;
+		goto err_0;
+	}
+
+	switch (pai->iter_type) {
+	case PTN_ATTR_ITER_PTV:
+		sos_key_join(key, bss->pa_ptv_attr, ptn_id,
+			     attr_type_len + 1, attr_type,
+			     attr_value_len + 1, attr_value);
+		break;
+	case PTN_ATTR_ITER_TV:
+		sos_key_join(key, bss->pa_tv_attr,
+			     attr_type_len + 1, attr_type,
+			     attr_value_len + 1, attr_value);
+		break;
+	case PTN_ATTR_ITER_TP:
+		sos_key_join(key, bss->pa_tp_attr,
+			     attr_type_len + 1, attr_type,
+			     ptn_id);
+		break;
+	default:
+		rc = EINVAL;
+		goto err_0;
+	}
+	rc = sos_iter_inf(pai->iter, key);
+	if (rc)
+		goto err_0;
+	sos_key_put(key);
+	return __bs_ptn_attr_iter_verify(iter);
+ err_0:
+	sos_key_put(key);
+	return rc;
 }
 
 static int bs_ptn_attr_iter_first(bptn_attr_iter_t iter)
@@ -4392,72 +4454,118 @@ static int bs_ptn_attr_iter_next(bptn_attr_iter_t iter)
 
 static int bs_ptn_attr_iter_prev(bptn_attr_iter_t iter)
 {
-	return ENOSYS;
+	bsos_iter_t pai = (bsos_iter_t)iter;
+	int rc;
+	rc = sos_iter_prev(pai->iter);
+	if (rc)
+		return rc;
+	return __bs_ptn_attr_iter_verify(iter);
 }
 
 static int bs_ptn_attr_iter_last(bptn_attr_iter_t iter)
 {
-	return ENOSYS;
+	bsos_iter_t pai = (bsos_iter_t)iter;
+	return bs_ptn_attr_iter_find_rev(iter, pai->filter.ptn_id,
+					       pai->filter.attr_type,
+					       pai->filter.attr_value);
 }
 
-
-static battr_ptn_iter_t bs_attr_ptn_iter_new(bstore_t bs)
+static battr_iter_t bs_attr_iter_new(bstore_t bs)
 {
-	errno = ENOSYS;
+	bstore_sos_t bss = (bstore_sos_t)bs;
+	bsos_iter_t ai = calloc(1, sizeof(*ai));
+	if (ai) {
+		ai->bs = bs;
+		ai->biter_type = BATTR_ITER;
+		ai->iter_type = ATTR_ITER;
+		ai->iter = sos_attr_iter_new(bss->attr_type_attr);
+		if (!ai->iter)
+			goto err;
+		sos_iter_flags_set(ai->iter, SOS_ITER_F_INF_LAST_DUP);
+	}
+	return (bptn_attr_iter_t)ai;
+ err:
+	free(ai);
 	return NULL;
 }
 
-static void bs_attr_ptn_iter_free(bstore_t bs, battr_ptn_iter_t iter)
+static void bs_attr_iter_free(battr_iter_t iter)
 {
-	errno = ENOSYS;
+	bsos_iter_t ai = (bsos_iter_t)iter;
+	if (ai->iter)
+		sos_iter_free(ai->iter);
+	free(iter);
 }
 
-static int bs_attr_ptn_iter_filter_set(battr_ptn_iter_t iter,
-				 bstore_iter_filter_t filter)
+static char *bs_attr_iter_obj(battr_iter_t iter)
 {
-	return ENOSYS;
-}
+	bsos_iter_t ai = (bsos_iter_t)iter;
+	bstore_sos_t bss = (bstore_sos_t)ai->bs;
+	sos_obj_t obj;
+	SOS_VALUE(v);
+	char *ret;
 
-static char *bs_attr_ptn_iter_obj(battr_ptn_iter_t iter)
-{
-	errno = ENOSYS;
+	obj = sos_iter_obj(ai->iter);
+	if (!obj)
+		goto err_0;
+	v = sos_value_init(v, obj, bss->attr_type_attr);
+	if (!v)
+		goto err_1;
+
+	ret = strdup(v->data->array.data.char_);
+	/* clean up */
+	sos_value_put(v);
+	sos_obj_put(obj);
+	return ret;
+
+ err_1:
+ 	sos_obj_put(obj);
+ err_0:
 	return NULL;
 }
 
-static int bs_attr_ptn_iter_find_fwd(battr_ptn_iter_t iter,
-			      const char *attr_type,
-			      const char *attr_value)
+static int bs_attr_iter_first(battr_iter_t iter)
 {
-	return ENOSYS;
+	bsos_iter_t ai = (bsos_iter_t)iter;
+	return sos_iter_begin(ai->iter);
 }
 
-static int bs_attr_ptn_iter_find_rev(battr_ptn_iter_t iter,
-			      const char *attr_type,
-			      const char *attr_value)
+static int bs_attr_iter_next(battr_iter_t iter)
 {
-	return ENOSYS;
+	bsos_iter_t ai = (bsos_iter_t)iter;
+	return sos_iter_next(ai->iter);
 }
 
-static int bs_attr_ptn_iter_first(battr_ptn_iter_t iter)
+static int bs_attr_iter_prev(battr_iter_t iter)
 {
-	return ENOSYS;
+	bsos_iter_t ai = (bsos_iter_t)iter;
+	return sos_iter_prev(ai->iter);
 }
 
-static int bs_attr_ptn_iter_next(battr_ptn_iter_t iter)
+static int bs_attr_iter_last(battr_iter_t iter)
 {
-	return ENOSYS;
+	bsos_iter_t ai = (bsos_iter_t)iter;
+	return sos_iter_end(ai->iter);
 }
 
-static int bs_attr_ptn_iter_prev(battr_ptn_iter_t iter)
+static int bs_attr_iter_find(battr_iter_t iter, const char *attr_type)
 {
-	return ENOSYS;
-}
+	int rc = 0;
+	bsos_iter_t ai = (bsos_iter_t)iter;
+	bstore_sos_t bss = (bstore_sos_t)ai->bs;
+	sos_key_t k;
 
-static int bs_attr_ptn_iter_last(battr_ptn_iter_t iter)
-{
-	return ENOSYS;
+	k = sos_key_for_attr(NULL, bss->attr_type_attr, strlen(attr_type) + 1,
+			     attr_type);
+	if (!k) {
+		rc = errno;
+		goto out;
+	}
+	rc = sos_iter_find(ai->iter, k);
+	sos_key_put(k);
+ out:
+	return rc;
 }
-
 
 static struct bstore_plugin_s plugin = {
 	.open = bs_open,
@@ -4566,6 +4674,15 @@ static struct bstore_plugin_s plugin = {
 	.ptn_attr_value_rm = bs_ptn_attr_value_rm,
 	.ptn_attr_unset = bs_ptn_attr_unset,
 	.ptn_attr_get = bs_ptn_attr_get,
+
+	.attr_iter_new = bs_attr_iter_new,
+	.attr_iter_free = bs_attr_iter_free,
+	.attr_iter_obj = bs_attr_iter_obj,
+	.attr_iter_find = bs_attr_iter_find,
+	.attr_iter_first = bs_attr_iter_first,
+	.attr_iter_next = bs_attr_iter_next,
+	.attr_iter_prev = bs_attr_iter_prev,
+	.attr_iter_last = bs_attr_iter_last,
 
 	.ptn_attr_iter_new = bs_ptn_attr_iter_new,
 	.ptn_attr_iter_free = bs_ptn_attr_iter_free,

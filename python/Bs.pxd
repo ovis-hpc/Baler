@@ -284,6 +284,16 @@ cdef extern from "baler/bstore.h":
     int bstore_ptn_attr_iter_prev(bptn_attr_iter_t iter)
     int bstore_ptn_attr_iter_last(bptn_attr_iter_t iter)
 
+    ctypedef bstore_iter_t battr_iter_t
+    battr_iter_t bstore_attr_iter_new(bstore_t bs)
+    void bstore_attr_iter_free(battr_iter_t iter)
+    char *bstore_attr_iter_obj(battr_iter_t iter)
+    int bstore_attr_iter_find(battr_iter_t iter, const char *attr_type)
+    int bstore_attr_iter_first(battr_iter_t iter)
+    int bstore_attr_iter_next(battr_iter_t iter)
+    int bstore_attr_iter_prev(battr_iter_t iter)
+    int bstore_attr_iter_last(battr_iter_t iter)
+
 #### -- end of "baler/bstore.h" import -- ####
 
 
