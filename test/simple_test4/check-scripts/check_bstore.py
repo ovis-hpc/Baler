@@ -1040,8 +1040,10 @@ class TestBSS(TestBS, unittest.TestCase):
     def setUpClass(cls):
         cls.bs = BStore.open("bstore_sos", BSTORE, os.O_RDWR, 0)
         cls.tag_base = []
-        cls.bs.attrNew("TAG")
-        cls.bs.attrNew("HEX")
+        if not cls.bs.attrFind("TAG"):
+            cls.bs.attrNew("TAG")
+        if not cls.bs.attrFind("HEX"):
+            cls.bs.attrNew("HEX")
         for ptn in PtnIter(cls.bs):
             cls.bs.ptnAttrValueSet(ptn.ptn_id, "HEX", hex(ptn.ptn_id))
             if ptn.ptn_id % 2:
@@ -1051,7 +1053,10 @@ class TestBSS(TestBS, unittest.TestCase):
             if ptn.ptn_id % 3 == 0:
                 cls.tag_base.append( (ptn.ptn_id, "TAG", "triple") )
         for (ptn_id, attr_type, attr_value) in cls.tag_base:
-            cls.bs.ptnAttrValueAdd(ptn_id, attr_type, attr_value)
+            try:
+                cls.bs.ptnAttrValueAdd(ptn_id, attr_type, attr_value)
+            except:
+                pass
 
     @classmethod
     def tearDownClass(cls):
