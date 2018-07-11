@@ -71,6 +71,7 @@ typedef struct bstore_sos_s {
 	sos_attr_t tkn_hist_key_attr;
 	sos_attr_t ptn_hist_key_attr;
 	sos_attr_t comp_hist_key_attr;
+	sos_attr_t comp_hist_key2_attr;
 
 	sos_attr_t attr_type_attr;
 
@@ -342,6 +343,7 @@ struct sos_schema_template pattern_hist_schema = {
 };
 
 const char *comp_hist_key[] = { "bin_width", "epoch", "comp_id", "ptn_id" };
+const char *comp_hist_key2[] = { "bin_width", "comp_id", "ptn_id", "epoch" };
 struct sos_schema_template component_hist_schema = {
 	.name = "ComponentHist",
 	.attrs = {
@@ -366,6 +368,15 @@ struct sos_schema_template component_hist_schema = {
 			.type = SOS_TYPE_JOIN,
 			.size = 4,
 			.join_list = comp_hist_key,
+			.indexed = 1,
+			.idx_type = "H2BXT",
+			.idx_args = HIST_IDX_ARGS
+		},
+		{
+			.name = "comp_hist_key2",
+			.type = SOS_TYPE_JOIN,
+			.size = 4,
+			.join_list = comp_hist_key2,
 			.indexed = 1,
 			.idx_type = "H2BXT",
 			.idx_args = HIST_IDX_ARGS
@@ -817,6 +828,13 @@ static bstore_t bs_open(bstore_plugin_t plugin, const char *path, int flags, int
 		goto err_8;
 	sos_index_rt_opt_set(sos_attr_index(bs->comp_hist_key_attr), SOS_INDEX_RT_OPT_MP_UNSAFE);
 	sos_index_rt_opt_set(sos_attr_index(bs->comp_hist_key_attr), SOS_INDEX_RT_OPT_VISIT_ASYNC);
+
+	bs->comp_hist_key2_attr =
+		sos_schema_attr_by_name(bs->component_hist_schema, "comp_hist_key2");
+	if (!bs->comp_hist_key2_attr)
+		goto err_8;
+	sos_index_rt_opt_set(sos_attr_index(bs->comp_hist_key2_attr), SOS_INDEX_RT_OPT_MP_UNSAFE);
+	sos_index_rt_opt_set(sos_attr_index(bs->comp_hist_key2_attr), SOS_INDEX_RT_OPT_VISIT_ASYNC);
 
 	sprintf(cpath, "%s/Attribute", path);
 	bs->attr_sos = sos_container_open(cpath, SOS_PERM_RW);
@@ -1339,6 +1357,7 @@ static btkn_type_t bs_tkn_type_get(bstore_t bs, const char *typ_name, size_t nam
 #define TKN_HIST_ITER		0x41
 #define PTN_HIST_ITER		0x51
 #define COMP_HIST_ITER		0x61
+#define COMP_HIST_ITER_BIN_COMPT_PTN_TIME	0x62
 
 #define PTN_ATTR_ITER_PTV	0x71
 #define PTN_ATTR_ITER_TP	0x72
@@ -1433,9 +1452,12 @@ static int __iter_init(bsos_iter_t iter, int type)
 		attr = bss->ptn_hist_key_attr;
 		break;
 	case BCOMP_HIST_ITER:
-		if (type != COMP_HIST_ITER)
+		if (type != iter->iter_type)
 			return EINVAL;
-		attr = bss->comp_hist_key_attr;
+		if (type == COMP_HIST_ITER_BIN_COMPT_PTN_TIME)
+			attr = bss->comp_hist_key2_attr;
+		else
+			attr = bss->comp_hist_key_attr;
 		break;
 	default:
 		return EINVAL;
@@ -2692,6 +2714,12 @@ static int bs_ptn_hist_update(bstore_t bs,
 	rc = sos_index_visit(idx, ch_key, hist_cb, NULL);
 	if (rc && rc != EINPROGRESS)
 		goto err_0;
+	sos_key_join(ch_key, bss->comp_hist_key2_attr,
+		     bin_width, comp_id, ptn_id, secs);
+	idx = sos_attr_index(bss->comp_hist_key2_attr);
+	rc = sos_index_visit(idx, ch_key, hist_cb, NULL);
+	if (rc && rc != EINPROGRESS)
+		goto err_0;
 
 	return 0;
  err_0:
@@ -3358,6 +3386,71 @@ static void bs_comp_hist_iter_free(bcomp_hist_iter_t i)
 	free(i);
 }
 
+static int __comp_hist_next_check(bsos_iter_t i, sos_key_t key_o)
+{
+	uint32_t bin_width, time_s;
+	uint64_t comp_id, ptn_id;
+	time_t start_time = i->filter.tv_begin.tv_sec;
+	time_t end_time = i->filter.tv_end.tv_sec;
+
+	sos_key_split(key_o, sos_iter_attr(i->iter),
+			&bin_width, &time_s, &comp_id, &ptn_id);
+
+	if (i->filter.bin_width && (i->filter.bin_width != bin_width))
+		/* Bin width is primary order, no more matches */
+		return -1;
+
+	if ((start_time && time_s < start_time)
+			|| (end_time && end_time < time_s))
+		/* Time doesn't match and is secondary, no more matches */
+		return -1;
+
+	if (i->filter.comp_id && (i->filter.comp_id != comp_id))
+		/* comp id doesn't match */
+		return 1;
+
+	if (i->filter.ptn_id && (i->filter.ptn_id != ptn_id))
+		return 1;
+
+	/* Everything matches, return it */
+	return 0;
+}
+
+static int __comp_hist_next_check2(bsos_iter_t i, sos_key_t key_o)
+{
+	uint32_t bin_width, time_s;
+	uint64_t comp_id, ptn_id;
+	time_t start_time = i->filter.tv_begin.tv_sec;
+	time_t end_time = i->filter.tv_end.tv_sec;
+
+	sos_key_split(key_o, sos_iter_attr(i->iter),
+			&bin_width, &comp_id, &ptn_id, &time_s);
+
+	if (i->filter.bin_width && (i->filter.bin_width != bin_width))
+		/* Bin width is primary order, no more matches */
+		return -1;
+
+	if (i->filter.comp_id && (i->filter.comp_id != comp_id))
+		/* comp id doesn't match */
+		return -1;
+
+	if (i->filter.ptn_id && (i->filter.ptn_id != ptn_id)) {
+		if (i->filter.comp_id)
+			return -1; /* can break */
+		return 1; /* skip */
+	}
+
+	if ((start_time && time_s < start_time)
+			|| (end_time && end_time < time_s)) {
+		if (i->filter.comp_id && i->filter.ptn_id)
+			return -1; /* can break */
+		return 1; /* skip */
+	}
+
+	/* Everything matches, return it */
+	return 0;
+}
+
 /*
  * The index is ordered as follows:
  *   - bin width
@@ -3368,70 +3461,107 @@ static void bs_comp_hist_iter_free(bcomp_hist_iter_t i)
 static int __comp_hist_next(bsos_iter_t i)
 {
 	int rc = 0;
-	uint32_t bin_width, time_s;
-	uint64_t comp_id, ptn_id;
-	sos_key_t key_o = sos_iter_key(i->iter);
-	time_t start_time = i->filter.tv_begin.tv_sec;
-	time_t end_time = i->filter.tv_end.tv_sec;
-	for ( ; 0 == rc;
-	      key_o = (0 == (rc = sos_iter_next(i->iter))?sos_iter_key(i->iter):NULL)) {
-		sos_key_split(key_o, sos_iter_attr(i->iter),
-			      &bin_width, &time_s, &comp_id, &ptn_id);
+	sos_key_t key_o;
+	int (*check)(bsos_iter_t, sos_key_t);
+	if (i->iter_type == COMP_HIST_ITER_BIN_COMPT_PTN_TIME)
+		check = __comp_hist_next_check2;
+	else
+		check = __comp_hist_next_check;
+	for ( ; 0 == rc; rc = sos_iter_next(i->iter)) {
+		key_o = sos_iter_key(i->iter);
+		rc = check(i, key_o);
 		sos_key_put(key_o);
-
-		if (i->filter.bin_width && (i->filter.bin_width != bin_width))
-			/* Bin width is primary order, no more matches */
+		if (rc < 0)
 			break;
-
-		if ((start_time && time_s < start_time)
-		    || (end_time && end_time < time_s))
-			/* Time doesn't match and is secondary, no more matches */
-			break;
-
-		if (i->filter.comp_id && (i->filter.comp_id != comp_id))
-			/* comp id doesn't match */
+		if (rc > 0)
 			continue;
-
-		if (i->filter.ptn_id && (i->filter.ptn_id != ptn_id))
-			continue;
-
-		/* Everything matches, return it */
 		return 0;
 	}
 	return ENOENT;
 }
 
+static int __comp_hist_prev_check(bsos_iter_t i, sos_key_t key_o)
+{
+	uint32_t bin_width, time_s;
+	uint64_t comp_id, ptn_id;
+	time_t start_time = i->filter.tv_begin.tv_sec;
+	time_t end_time = i->filter.tv_end.tv_sec;
+
+	sos_key_split(key_o, sos_iter_attr(i->iter),
+			&bin_width, &time_s, &comp_id, &ptn_id);
+
+	if (i->filter.bin_width && (i->filter.bin_width != bin_width))
+		/* Bin width is primary order, no more matches */
+		return -1;
+
+	if ((start_time && time_s < start_time)
+			|| (end_time && end_time < time_s))
+		/* Time doesn't match and is secondar, no more matches */
+		return -1;
+
+	if (i->filter.comp_id && (i->filter.comp_id != comp_id))
+		/* comp id doesn't match */
+		return 1;
+
+	if (i->filter.ptn_id && (i->filter.ptn_id != ptn_id))
+		return 1;
+
+	/* Everything matches */
+	return 0;
+}
+
+static int __comp_hist_prev_check2(bsos_iter_t i, sos_key_t key_o)
+{
+	uint32_t bin_width, time_s;
+	uint64_t comp_id, ptn_id;
+	time_t start_time = i->filter.tv_begin.tv_sec;
+	time_t end_time = i->filter.tv_end.tv_sec;
+
+	sos_key_split(key_o, sos_iter_attr(i->iter),
+			&bin_width, &comp_id, &ptn_id, &time_s);
+
+	if (i->filter.bin_width && (i->filter.bin_width != bin_width))
+		/* Bin width is primary order, no more matches */
+		return -1;
+
+	if (i->filter.comp_id && (i->filter.comp_id != comp_id))
+		/* comp id doesn't match */
+		return -1;
+
+	if (i->filter.ptn_id && (i->filter.ptn_id != ptn_id)) {
+		if (i->filter.comp_id)
+			return -1; /* can break */
+		return 1; /* skip */
+	}
+
+	if ((start_time && time_s < start_time)
+			|| (end_time && end_time < time_s)) {
+		if (i->filter.comp_id && i->filter.ptn_id)
+			return -1; /* can break */
+		return 1; /* skip */
+	}
+
+	/* Everything matches, return it */
+	return 0;
+}
+
 static int __comp_hist_prev(bsos_iter_t i)
 {
 	int rc = 0;
-	uint32_t bin_width, time_s;
-	uint64_t comp_id, ptn_id;
-	sos_key_t key_o = sos_iter_key(i->iter);
-	time_t start_time = i->filter.tv_begin.tv_sec;
-	time_t end_time = i->filter.tv_end.tv_sec;
-	for ( ; 0 == rc;
-	      key_o = (0 == (rc = sos_iter_prev(i->iter))?sos_iter_key(i->iter):NULL)) {
-		sos_key_split(key_o, sos_iter_attr(i->iter),
-			      &bin_width, &time_s, &comp_id, &ptn_id);
+	sos_key_t key_o;
+	int (*check)(bsos_iter_t, sos_key_t);
+	if (i->iter_type == COMP_HIST_ITER_BIN_COMPT_PTN_TIME)
+		check = __comp_hist_prev_check2;
+	else
+		check = __comp_hist_prev_check;
+	for ( ; 0 == rc; rc = sos_iter_prev(i->iter)) {
+		key_o = sos_iter_key(i->iter);
+		rc = check(i, key_o);
 		sos_key_put(key_o);
-
-		if (i->filter.bin_width && (i->filter.bin_width != bin_width))
-			/* Bin width is primary order, no more matches */
+		if (rc < 0)
 			break;
-
-		if ((start_time && time_s < start_time)
-		    || (end_time && end_time < time_s))
-			/* Time doesn't match and is secondar, no more matches */
-			break;
-
-		if (i->filter.comp_id && (i->filter.comp_id != comp_id))
-			/* comp id doesn't match */
+		if (rc > 0)
 			continue;
-
-		if (i->filter.ptn_id && (i->filter.ptn_id != ptn_id))
-			continue;
-
-		/* Everything matches, return it */
 		return 0;
 	}
 	return ENOENT;
@@ -3467,9 +3597,15 @@ __bs_comp_hist_iter_find(bcomp_hist_iter_t iter, int fwd, bcomp_hist_t comp_h)
 		if (!comp_h->bin_width)
 			comp_h->bin_width = -1;
 	}
-	sos_key_join(key, sos_iter_attr(i->iter),
-		     comp_h->bin_width, comp_h->time,
-		     comp_h->comp_id, comp_h->ptn_id);
+	if (i->iter_type == COMP_HIST_ITER_BIN_COMPT_PTN_TIME) {
+		sos_key_join(key, sos_iter_attr(i->iter),
+			     comp_h->bin_width, comp_h->comp_id,
+			     comp_h->ptn_id, comp_h->time);
+	} else {
+		sos_key_join(key, sos_iter_attr(i->iter),
+			     comp_h->bin_width, comp_h->time,
+			     comp_h->comp_id, comp_h->ptn_id);
+	}
 
 	rc = fwd ? sos_iter_sup(i->iter, key) : sos_iter_inf(i->iter, key);
 	if (rc)
@@ -3524,9 +3660,14 @@ static bcomp_hist_t bs_comp_hist_iter_obj(bcomp_hist_iter_t iter,
 	if (!key_o)
 		return NULL;
 
-	sos_key_split(key_o, sos_iter_attr(i->iter),
-		      &comp_h->bin_width, &comp_h->time,
-		      &comp_h->comp_id, &comp_h->ptn_id);
+	if (i->iter_type == COMP_HIST_ITER_BIN_COMPT_PTN_TIME)
+		sos_key_split(key_o, sos_iter_attr(i->iter),
+			      &comp_h->bin_width, &comp_h->comp_id,
+			      &comp_h->ptn_id, &comp_h->time);
+	else
+		sos_key_split(key_o, sos_iter_attr(i->iter),
+			      &comp_h->bin_width, &comp_h->time,
+			      &comp_h->comp_id, &comp_h->ptn_id);
 	sos_key_put(key_o);
 
 	ref = sos_iter_ref(i->iter);
@@ -3562,7 +3703,24 @@ static int bs_iter_filter_set(btkn_hist_iter_t iter,
 					bstore_iter_filter_t filter)
 {
 	bsos_iter_t i = (bsos_iter_t)iter;
+	sos_iter_t old_sos_iter;
+	bstore_sos_t bss = (void*)i->bs;
 	i->filter = *filter;
+	if (i->iter_type == COMP_HIST_ITER) {
+		/* check if we need to upgrade the iter */
+		if (filter->bin_width && filter->comp_id && filter->ptn_id) {
+			old_sos_iter = i->iter;
+			i->iter = sos_attr_iter_new(bss->comp_hist_key2_attr);
+			if (!i->iter) {
+				/* undo & return error */
+				i->iter = old_sos_iter;
+				return errno;
+			}
+			i->iter_type = COMP_HIST_ITER_BIN_COMPT_PTN_TIME;
+			sos_iter_flags_set(i->iter, SOS_ITER_F_INF_LAST_DUP);
+			sos_iter_free(old_sos_iter);
+		}
+	}
 	return 0;
 }
 
