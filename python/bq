@@ -686,12 +686,54 @@ def fmt_tkn_str(tkn, args):
         tkn_str += RESET
     return tkn_str
 
+def get_ptn_attr_from_args(args):
+    s = args.ptn_attr
+    if not s:
+        return None
+    # expecting TYPE=VALUE
+    r = re.compile("^(.*)=(.*)$")
+    m = r.match(s)
+    if not m:
+        return None
+    g = m.groups()
+    return dict(attr_type=g[0], attr_value=g[1])
+
+def show_matching_ptns_by_ptn_attr(bs, args):
+    attr = get_ptn_attr_from_args(args)
+    if not attr:
+        raise ValueError("The --tkn_id, --tkn_str, or --ptn_attr arguments " \
+                         "must be specified with --match")
+    start, end = get_times_from_args(args)
+    id_set = util.IDSet(args.ptn_ids) if args.ptn_ids else None
+    do_header("{0:12} {1:12} {2:20} {3:20} {4}".format(
+        "Ptn Id", "Msg Count", "First Seen", "Last Seen", "Pattern"), args)
+    hf = "{0} {1} {2} {3} {4}".format(
+        '-'.ljust(12, '-'), '-'.ljust(12, '-'), '-'.ljust(20, '-'),
+        '-'.ljust(20, '-'), '-'.ljust(32, '-'))
+    do_header(hf, args)
+
+    itr = Bq.Bptn_attr_iter(bs)
+    itr.set_filter(**attr)
+    ptn_count = 0
+    msg_count = 0
+    for ent in itr:
+        p = bs.ptn_by_id(ent.ptn_id())
+        if end > 0 and p.first_seen() > end:
+            continue
+        if id_set and p.ptn_id() not in id_set:
+            continue
+        ptn_count += 1
+        print_ptn(p, args)
+        msg_count += p.msg_count()
+    do_footer(hf, args)
+    do_footer("{0} Patterns(s) {1} Messages(s)".format(ptn_count, msg_count), args)
+
 def show_matching_ptns(bs, args):
     tkn_id = tkn_id_from_args(args)
     if not tkn_id:
-        raise ValueError("The --tkn_id or --tkn_str arguments must be " \
-                         "specified with --match")
+        return show_matching_ptns_by_ptn_attr(bs, args)
     match_tkn = bs.tkn_by_id(tkn_id)
+    attr = get_ptn_attr_from_args(args)
 
     pi = Bq.Bptn_iter(bs)
     start, end = get_times_from_args(args)
@@ -708,6 +750,9 @@ def show_matching_ptns(bs, args):
     for p in pi:
         if end > 0 and p.first_seen() > end:
             break
+
+        if attr and not bs.ptn_attr_value_find(p.ptn_id(), **attr):
+            continue
 
         # For each position in the pattern.
         #   If the type in that position doesn't match any of the token's types,
@@ -766,9 +811,16 @@ def show_matching_ptns(bs, args):
             for col in matches:
                 print("^".rjust(col, " "), end='')
             print("")
+        if args.ptn_attr_list:
+            print_ptn_attrs(p, args)
 
     do_footer(hf, args)
     do_footer("{0} Record(s)".format(ptn_count), args)
+
+def print_ptn_attrs(p, args):
+    print("ATTRIBUTES: ", end='')
+    attrs = p.attr_values()
+    print([ '='.join(x) for x in attrs ])
 
 def print_ptn(p, args):
     print("{0:12} {1:12} {2:20} {3:20}". \
@@ -779,6 +831,8 @@ def print_ptn(p, args):
         tkn_str = fmt_tkn_str(tkn, args)
         print("{0}".format(tkn_str), end='')
     print("")
+    if args.ptn_attr_list:
+        print_ptn_attrs(p, args)
 
 def show_ptns(bs, args):
     pi = Bq.Bptn_iter(bs)
@@ -1051,6 +1105,78 @@ def generate_named_2d_array(bs, args):
     # flush the last count
     n2da.append(ts, comp_id, count)
 
+def ptn_attr_file(path):
+    r = re.compile(r'^(\w+)\s+(\w+)\s+(.+)$')
+    f = open(path)
+    for line in f:
+        m = r.match(line.strip())
+        (ptn_id, attr_type, attr_value) = m.groups()
+        yield (int(ptn_id), attr_type, attr_value)
+
+def ptn_attr_add_by_file(bs, args):
+    """Add attribute to patterns by file"""
+    f = ptn_attr_file(args.ptn_attr_file)
+    for (ptn_id, attr_type, attr_value) in f:
+        bs.ptn_attr_value_add(ptn_id, attr_type, attr_value, create=1)
+
+def ptn_attr_add_by_id(bs, args):
+    """Add attribute to a pattern"""
+    r = re.compile(r"^(.*)=(.*)$")
+    m = r.match(args.ptn_attr)
+    if not m:
+        raise ValueError("Bad --ptn_attr format. Expecting TYPE=VALUE.")
+    ptn_id = int(args.ptn_id)
+    (attr_type, attr_value) = m.groups()
+    bs.ptn_attr_value_add(ptn_id, attr_type, attr_value, create=1)
+
+def ptn_attr_add(bs, args):
+    """Add attribute(s) to pattern(s)"""
+    need_arguments = 1
+    if args.ptn_attr_file:
+        need_arguments = 0
+        ptn_attr_add_by_file(bs, args)
+    if args.ptn_id and args.ptn_attr:
+        need_arguments = 0
+        ptn_attr_add_by_id(bs, args)
+    if need_arguments:
+        raise ValueError("--ptn_attr_add requires --ptn_attr_file, or "
+                         "a pair of --ptn_id and --ptn_attr.")
+
+def ptn_attr_rm_by_file(bs, args):
+    """Remove attribute to patterns by file"""
+    f = ptn_attr_file(args.ptn_attr_file)
+    for (ptn_id, attr_type, attr_value) in f:
+        try:
+            bs.ptn_attr_value_rm(ptn_id, attr_type, attr_value)
+        except:
+            pass
+
+def ptn_attr_rm_by_id(bs, args):
+    """Remove attribute to a pattern"""
+    r = re.compile(r"^(.*)=(.*)$")
+    m = r.match(args.ptn_attr)
+    if not m:
+        raise ValueError("Bad --ptn_attr format. Expecting TYPE=VALUE.")
+    ptn_id = int(args.ptn_id)
+    (attr_type, attr_value) = m.groups()
+    try:
+        bs.ptn_attr_value_rm(ptn_id, attr_type, attr_value)
+    except:
+        pass
+
+def ptn_attr_rm(bs, args):
+    """Remove attribute(s) from pattern(s)"""
+    need_arguments = 1
+    if args.ptn_attr_file:
+        need_arguments = 0
+        ptn_attr_rm_by_file(bs, args)
+    if args.ptn_id and args.ptn_attr:
+        need_arguments = 0
+        ptn_attr_rm_by_id(bs, args)
+    if need_arguments:
+        raise ValueError("--ptn_attr_add requires --ptn_attr_file, or "
+                         "a pair of --ptn_id and --ptn_attr.")
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Query Baler data")
     parser.add_argument("-p", "--path", required=True,
@@ -1100,11 +1226,30 @@ if __name__ == "__main__":
     parser.add_argument("--tkn_str",
                         help="Specifies the string value of a token.")
     parser.add_argument("--match", action="store_true",
-                        help="Show the patterns that contain a token")
+                        help="Show the patterns that contain a token, " \
+                             "or matching a pattern attribute")
     parser.add_argument("--hist", action="store_true",
                         help="Query the occurance histogram for --tkn, --ptn, and --comp")
     parser.add_argument("--dist", action="store_true",
                         help="Query the disrtribution --tkn, --ptn, and --comp")
+    parser.add_argument("--ptn_attr",
+                        help="'TYPE=VALUE' for pattern attribute matching")
+    parser.add_argument("--ptn_attr_list", action="store_true",
+                        help="Also list pattern attributes")
+    parser.add_argument("--ptn_attr_add", action="store_true",
+                        help="'Adding attribute(s) to the pattern(s). "
+                             "This requires --ptn_attr_file for batch "
+                             "processing, or --ptn_id and --ptn_attr to add "
+                             "attribute-value for a specific pattern.")
+    parser.add_argument("--ptn_attr_rm", action="store_true",
+                        help="'Removing attribute(s) from the pattern(s). "
+                             "This requires --ptn_attr_file for batch "
+                             "processing, or --ptn_id and --ptn_attr to remove "
+                             "attribute-value from a specific pattern.")
+    parser.add_argument("--ptn_attr_file",
+                        help="Pattern attribute input file. The each line of "
+                             "the file is expected to be a space-separated "
+                             "list of PTN_ID ATTR_TYPE ATTR_VALUE")
     parser.add_argument("--ptn_tkn", action="store_true",
                         help="Query the tokens that appear in a pattern")
     parser.add_argument("--ptn_id", type=int,
@@ -1215,3 +1360,9 @@ if __name__ == "__main__":
 
     if args.msg:
         show_msgs(bs, args)
+
+    if args.ptn_attr_add:
+        ptn_attr_add(bs, args)
+
+    if args.ptn_attr_rm:
+        ptn_attr_rm(bs, args)

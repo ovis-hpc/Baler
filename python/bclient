@@ -173,6 +173,88 @@ class FakeIterator():
         self.current = pos
 
 
+class PtnAttrListFormatter(object):
+    def __init__(self, fmt = None, color = True):
+        if not fmt:
+            fmt = "%(ptn_id)s %(text)s"
+        self.ptn_fmt = PtnFormatter(fmt = fmt, color = color)
+
+    def __call__(self, obj):
+        if type(obj) == Bq.Bptn:
+            return self.ptn_fmt(obj)
+        return str(obj)
+
+
+class PtnAttrListPageIter(object):
+    def __init__(self, store, id_set = None):
+        self.ents = []
+        self.store = store
+        if not id_set:
+            ptn_itr = Bq.Bptn_iter(store)
+        else:
+            ptn_itr = [ store.ptn_by_id(_id) for _id in id_set ]
+        for ptn in ptn_itr:
+            ent = (ptn.ptn_id(), None, None)
+            self.ents.append(ent)
+            for av in ptn.attr_values():
+                ent = (ptn.ptn_id(), av[0], av[1])
+                self.ents.append(ent)
+        self.pos = None
+
+    def __iter__(self):
+        for obj in self.ents:
+            yield self._obj(obj)
+
+    def first(self):
+        self.pos = 0
+        return True
+
+    def last(self):
+        self.pos = len(self.ents) - 1
+        return True
+
+    def next(self):
+        if self.pos == None:
+            return False
+        self.pos += 1
+        if self.pos >= len(self.ents):
+            self.pos = None
+            return False
+        return True
+
+    def prev(self):
+        if self.pos == None:
+            return False
+        self.pos -= 1
+        if self.pos < 0:
+            self.pos = None
+            return False
+        return True
+
+    def get_pos(self):
+        return self.pos
+
+    def set_pos(self, pos):
+        if pos < 0 or pos >= len(self.ents):
+            raise ValueError("Invalid position value")
+        self.pos = pos
+        return True
+
+    def put_pos(self, pos):
+        pass # do nothing
+
+    def _obj(self, o):
+        ptn_id, _type, _value = o
+        if _type != None:
+            return "    %s=%s" % (_type, _value)
+        return self.store.ptn_by_id(ptn_id)
+
+    def obj(self):
+        if self.pos == None:
+            return None
+        return self._obj(self.ents[self.pos])
+
+
 class PageDisplay(object):
     def __init__(self, itr, formatter=str):
         self.itr = itr
@@ -415,6 +497,32 @@ TKN_TYPE_COLORS = {
 }
 
 
+class PtnAttr(object):
+    __slots__ = [ 'type', 'value' ]
+    RE = re.compile(r'^(\w+)=(.+)$')
+
+    def __init__(self, _str = None, _type = None, _value = None):
+        if _str:
+            m = self.RE.match(_str)
+            if not m:
+                raise ValueError("Bad TYPE=VALUE format")
+            self.type, self.value = m.groups()
+        elif _type and _value:
+            self.type = _type
+            self.value = _value
+        else:
+            raise ValueError("_str, or _type and _value is needed.")
+
+    def __str__(self):
+        return '%s=%s' % (self.type, self.value)
+
+    def as_list(self):
+        return [ self.type, self.value ]
+
+    def as_tuple(self):
+        return ( self.type, self.value )
+
+
 def tkn_text(tkn, color=False):
     _type = tkn.first_type()
     if _type == Bq.BTKN_TYPE_TYPE:
@@ -474,7 +582,12 @@ class MsgFormatter(object):
 class ServiceCmd(cmd.Cmd):
     def __init__(self):
         cmd.Cmd.__init__(self)
-        self.prompt = "bclient> "
+        self.cmdin = sys.stdin
+        self.cmdout = sys.stdout
+        if self.is_tty():
+            self.prompt = "bclient> "
+        else:
+            self.prompt = ""
         self.parsers = {}
 
     def get_parser(self, cmd):
@@ -491,6 +604,9 @@ class ServiceCmd(cmd.Cmd):
                 return p
             except Exception, e:
                 logger.debug(e)
+
+    def is_tty(self):
+        return self.cmdin.isatty() and self.cmdout.isatty()
 
     def parser_open(self):
         return CmdArgumentParser(
@@ -512,12 +628,14 @@ class ServiceCmd(cmd.Cmd):
         return CmdArgumentParser(
             ("text", str, "REGEX", 0, None),
             ("ids", str, "RANGES", 0, None),
+            ("attr", str, "TYPE=VALUE", 0, None),
             ("format", str, "FMT", 0, None),
             ("order", str, "COMPARATOR", 0, "ptn_id_asc"),
         )
 
     def do_ptn_query(self, arg):
         """ptn_query [text=REGEX] [ids=RANGES] [format=FMT] [order=KEY_ORDER]
+                     [attr=TYPE=VALUE] [attr_list=1]
                      [>OUTPUT_FILE]
 
         Query the store for patterns that match all of the given
@@ -529,6 +647,10 @@ class ServiceCmd(cmd.Cmd):
 
             ids=RANGES is the comma-separated ranges to match IDs (e.g.
             "1,3-5,11").
+
+            attr=TYPE=VALUE to specify attr_type and attr_value to match.
+
+            attr_list=1 to also list pattern attribute type-value
 
         Optional options:
             format=FMT chooses what to print. The format is a python string, in
@@ -567,29 +689,49 @@ class ServiceCmd(cmd.Cmd):
         """
         global store
         (kwargs, args) = (self.kwargs, self.args)
-        text = kwargs["text"]
-        ids = kwargs["ids"]
-        fmt = kwargs["format"]
-        order = kwargs["order"]
+        text = kwargs.get("text")
+        ids = kwargs.get("ids")
+        attr = kwargs.get("attr")
+        fmt = kwargs.get("format")
+        order = kwargs.get("order")
+        attr_type = None
+        attr_value = None
         if text:
             text = re.compile(text)
         if ids:
             ids = util.IDSet(ids)
+        if attr:
+            r = re.compile(r'^(\w+)=(.+)$')
+            m = r.match(attr)
+            if not m:
+                raise CmdException("Bad `attr` format, expecting TYPE=VALUE, "
+                                   "but got: " + attr)
+            (attr_type, attr_value) = m.groups()
         result = []
-        itr = Bq.Bptn_iter(store)
-        for ptn in itr:
-            if ids and ptn.ptn_id() not in ids:
-                continue
-            if text and not text.match(str(ptn)):
-                continue
-            result.append(ptn)
+        if attr:
+            itr = Bq.Bptn_attr_iter(store)
+            itr.set_filter(attr_type=attr_type, attr_value=attr_value)
+            for ent in itr:
+                ptn = store.ptn_by_id(ent.ptn_id())
+                if ids and ptn.ptn_id() not in ids:
+                    continue
+                if text and not text.match(str(ptn)):
+                    continue
+                result.append(ptn)
+        else:
+            itr = Bq.Bptn_iter(store)
+            for ptn in itr:
+                if ids and ptn.ptn_id() not in ids:
+                    continue
+                if text and not text.match(str(ptn)):
+                    continue
+                result.append(ptn)
         if order:
             _cmp = util.get_ptn_cmp_by_name(order)
             if not _cmp:
                 raise CmdException("Comparator not found: \"%s\"" % order)
             result.sort(_cmp)
-        color = True if self.cmdout.isatty() else False
-        if self.cmdout.isatty():
+        if self.is_tty():
             # use paging
             formatter = PtnFormatter(fmt, True)
             pager = PageDisplay(util.ListIter(result), formatter)
@@ -598,6 +740,128 @@ class ServiceCmd(cmd.Cmd):
             formatter = PtnFormatter(fmt, False)
             for ptn in result:
                 print >>self.cmdout, formatter(ptn)
+
+    def parser_ptn_attr_add(self):
+        return CmdArgumentParser(
+            ("ids", str, "RANGES", 1, None),
+            ("attr", PtnAttr, "TYPE=VALUE", 1, None),
+        )
+
+    def do_ptn_attr_add(self, arg):
+        """ptn_attr_add ids=RANGES attr=TYPE=VALUE
+
+        Add attribute-value to the patterns in the `ids` list.
+
+        Parameters:
+            ids - The comma-separated list of ranges of pattern IDs
+                  (e.g 1,3-5,7-10)
+            attr - The `TYPE=VALUE` attribute type-value pair to add to the
+                   patterns.
+        """
+        global store
+        (kwargs, args) = (self.kwargs, self.args)
+        ids = util.IDSet(kwargs["ids"])
+        attr = kwargs["attr"]
+        for _id in ids:
+            try:
+                store.ptn_attr_value_add(_id, attr.type, attr.value, 1)
+            except ValueError:
+                # OK if it exists
+                pass
+
+    def parser_ptn_attr_rm(self):
+        return CmdArgumentParser(
+            ("ids", str, "RANGES", 1, None),
+            ("attr", PtnAttr, "TYPE=VALUE", 1, None),
+        )
+
+    def do_ptn_attr_rm(self, arg):
+        """ptn_attr_rm ids=RANGES attr=TYPE=VALUE
+
+        Remove attribute-value from the patterns in the `ids` list.
+
+        Parameters:
+            ids - The comma-separated list of ranges of pattern IDs
+                  (e.g 1,3-5,7-10)
+            attr - The `TYPE=VALUE` attribute type-value pair to remove from the
+                   patterns.
+        """
+        global store
+        (kwargs, args) = (self.kwargs, self.args)
+        ids = util.IDSet(kwargs["ids"])
+        attr = kwargs["attr"]
+        for _id in ids:
+            try:
+                store.ptn_attr_value_rm(_id, attr.type, attr.value)
+            except LookupError:
+                # OK if not existed
+                pass
+
+    def parser_ptn_attr_set(self):
+        return CmdArgumentParser(
+            ("ids", str, "RANGES", 1, None),
+            ("attr", PtnAttr, "TYPE=VALUE", 1, None),
+        )
+
+    def do_ptn_attr_set(self, arg):
+        """ptn_attr_set ids=RANGES attr=TYPE=VALUE
+
+        Set the attribute-value of the patterns in the `ids` list. The
+        difference from `ptn_attr_add` is that this operation replaces existing
+        values of the attribute type. For example, if the pattern 256 has
+        TAG=even and TAG=bad (an attribute type may have multiple values),
+        calling `ptn_attr_set ids=256 attr=TAG=new` results in the removal of
+        TAG=even and TAG=bad. Only TAG=new remains with pattern 256.
+
+        Parameters:
+            ids - The comma-separated list of ranges of pattern IDs
+                  (e.g 1,3-5,7-10)
+            attr - The `TYPE=VALUE` attribute type-value pair to set to the
+                   patterns.
+        """
+        global store
+        (kwargs, args) = (self.kwargs, self.args)
+        ids = util.IDSet(kwargs["ids"])
+        attr = kwargs["attr"]
+        for _id in ids:
+            try:
+                store.ptn_attr_value_set(_id, attr.type, attr.value)
+            except LookupError:
+                # OK if not existed
+                pass
+
+    def parser_ptn_attr_list(self):
+        return CmdArgumentParser(
+            ("ids", str, "RANGES", 0, None),
+        )
+
+    def do_ptn_attr_list(self, arg):
+        """ptn_attr_list [ids=RANGES]
+
+        List patterns and their attribute-values.
+
+        Filter conditions:
+            ids - comma-separated ranges to match the pattern IDs
+                  (e.g. "1,3-5,11").
+
+        Optional output redirection:
+            ptn_attr_list command can redirect the query results into a file
+            (overwrite). Simply add `>OUTPUT_PATH` at the end of the command
+            (OUTPUT_PATH is the path to the file), and the query results will be
+            redirected there.
+        """
+        global store
+        (kwargs, args) = (self.kwargs, self.args)
+        ids = util.IDSet(kwargs["ids"])
+        itr = PtnAttrListPageIter(store, ids)
+        if self.is_tty():
+            formatter = PtnAttrListFormatter(color = True)
+            pager = PageDisplay(itr, formatter)
+            pager.loop()
+        else:
+            formatter = PtnAttrListFormatter(color = False)
+            for obj in itr:
+                print >>self.cmdout, formatter(obj)
 
     def parser_comp_query(self):
         return CmdArgumentParser(
@@ -712,7 +976,7 @@ class ServiceCmd(cmd.Cmd):
                         tv_end = ts1,
                         ptn_id = ptn_id,
                         comp_id = comp_id )
-        if self.cmdout.isatty():
+        if self.is_tty():
             # use paging
             pager = PageDisplay(itr, MsgFormatter())
             pager.loop()
@@ -845,6 +1109,7 @@ class ServiceCmd(cmd.Cmd):
     def precmd(self, line):
         """Apply our parser and store results in self.kwargs, self.args."""
         (self.kwargs, self.args) = ({}, [])
+        self.cmdin = sys.stdin
         self.cmdout = sys.stdout
         if not line:
             return line
@@ -901,6 +1166,10 @@ if __name__ == "__main__":
     # Setup basic logging if this is a main service.
     LOGFMT = "%(asctime)s %(name)s %(levelname)s: %(message)s"
     logging.basicConfig(format=LOGFMT)
+
+    # Disable stdout/stderr buffering
+    sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', 0)
+    sys.stderr = os.fdopen(sys.stderr.fileno(), 'w', 0)
 
     import argparse
     ap = argparse.ArgumentParser(description="Baler Service Client.")

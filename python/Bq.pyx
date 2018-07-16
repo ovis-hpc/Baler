@@ -178,8 +178,11 @@ cdef class Bstore:
 
     cpdef ptn_attr_value_set(self, int ptn_id,
                                    const char *attr_type,
-                                   const char *attr_value):
+                                   const char *attr_value,
+                                   create = 0):
         cdef int rc
+        if create and not self.attr_find(attr_type):
+            self.attr_new(attr_type)
         rc = Bs.bstore_ptn_attr_value_set(self.c_store, ptn_id,
                                                      attr_type,
                                                      attr_value)
@@ -195,10 +198,22 @@ cdef class Bstore:
             raise RuntimeError("bstore_ptn_attr_get() errno: %d" % errno)
         return attr_value
 
+    cpdef ptn_attr_value_find(self, int ptn_id, const char *attr_type,
+                                                const char *attr_value):
+        """Returns `True` if the <ptn_id, attr_type, attr_value> is found"""
+        itr = Bptn_attr_iter(self)
+        itr.set_filter(ptn_id = ptn_id, attr_type = attr_type,
+                                        attr_value = attr_value)
+        return itr.first()
+
     cpdef ptn_attr_value_add(self, int ptn_id,
                                    const char *attr_type,
-                                   const char *attr_value):
+                                   const char *attr_value, create = 0):
         cdef int rc
+
+        if create and not self.attr_find(attr_type):
+            self.attr_new(attr_type)
+
         rc = Bs.bstore_ptn_attr_value_add(self.c_store, ptn_id,
                                                         attr_type,
                                                         attr_value)
@@ -646,6 +661,11 @@ cdef class Bptn:
             tkn = self.store.tkn_by_id(tkn_id)
             ptn_str += tkn.ptn_tkn_str()
         return ptn_str
+
+    def attr_values(self):
+        itr = Bptn_attr_iter(self.store)
+        itr.set_filter(ptn_id = self.c_ptn.ptn_id)
+        return [ (ent.attr_type(), ent.attr_value()) for ent in itr ]
 
 
 cdef class Bptn_attr:
