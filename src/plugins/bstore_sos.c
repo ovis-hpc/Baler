@@ -82,6 +82,7 @@ typedef struct bstore_sos_s {
 	sos_attr_t pa_tp_attr;
 
 	btkn_id_t next_tkn_id;
+	btkn_id_t next_host_id;
 	bptn_id_t next_ptn_id;
 
 	pthread_mutex_t dict_lock;
@@ -91,6 +92,7 @@ typedef struct bstore_sos_s {
 	pthread_mutex_t hist_lock;
 } *bstore_sos_t;
 
+#define TKN_ID_IDX_ARGS "ORDER=5 SIZE=5"
 struct sos_schema_template token_value_schema = {
 	.name = "TokenValue",
 	.attrs = {
@@ -98,7 +100,8 @@ struct sos_schema_template token_value_schema = {
 			.name = "tkn_id",
 			.type = SOS_TYPE_UINT64,
 			.indexed = 1,
-			.idx_type = "HTBL",
+			.idx_type = "H2BXT",
+			.idx_args = TKN_ID_IDX_ARGS,
 		},
 		{ /* one bit for each type seen for this text (0..63)*/
 			.name = "tkn_type_mask",
@@ -128,6 +131,10 @@ typedef struct tkn_value_s {
 	uint64_t tkn_count;
 	union sos_obj_ref_s tkn_text;
 } *tkn_value_t;
+
+#define HOST_ID_MIN 0x100
+#define HOST_ID_MAX 2000000
+#define TKN_ID_MIN  (HOST_ID_MAX + 1)
 
 #define MSG_IDX_TYPE "BXTREE"
 #define MSG_IDX_ARGS "ORDER=5 SIZE=7"
@@ -879,22 +886,43 @@ static bstore_t bs_open(bstore_plugin_t plugin, const char *path, int flags, int
 		goto err_9;
 
 
-	/* Compute the next token and pattern ids */
+	/* Compute the next token id */
 	sos_iter_t iter = sos_attr_iter_new(bs->tkn_id_attr);
 	if (!iter)
 		goto err_9;
 	rc = sos_iter_end(iter);
 	if (rc) {
-		bs->next_tkn_id = 0x0100;
+		bs->next_tkn_id = TKN_ID_MIN;
 	} else {
 		sos_obj_t last = sos_iter_obj(iter);
 		tkn_value_t tv = sos_obj_ptr(last);
-		bs->next_tkn_id = tv->tkn_id;
-		if (bs->next_tkn_id < 0x0100)
-			bs->next_tkn_id = 0x0100;
+		bs->next_tkn_id = tv->tkn_id + 1;
+		if (bs->next_tkn_id < TKN_ID_MIN)
+			bs->next_tkn_id = TKN_ID_MIN;
 		sos_obj_put(last);
 	}
 	sos_iter_free(iter);
+	/* Compute the next host id */
+	btkn_id_t host_id_max = HOST_ID_MAX;
+	SOS_KEY(host_id_max_key);
+	sos_key_set(host_id_max_key, &host_id_max, sizeof(host_id_max));
+	iter = sos_attr_iter_new(bs->tkn_id_attr);
+	if (!iter)
+		goto err_9;
+	rc = sos_iter_inf(iter, host_id_max_key);
+	if (rc) {
+		bs->next_host_id = HOST_ID_MIN;
+	} else {
+		sos_obj_t last = sos_iter_obj(iter);
+		tkn_value_t tv = sos_obj_ptr(last);
+		bs->next_host_id = tv->tkn_id + 1;
+		if (bs->next_host_id < HOST_ID_MIN)
+			bs->next_host_id = HOST_ID_MIN;
+		sos_obj_put(last);
+	}
+	sos_iter_free(iter);
+
+	/* Compute next pattern id */
 	iter = sos_attr_iter_new(bs->ptn_id_attr);
 	if (!iter)
 		goto err_9;
@@ -1025,6 +1053,33 @@ static btkn_id_t allocate_tkn_id(bstore_sos_t bss, btkn_id_t req_id)
 	return tkn_id;
 }
 
+static btkn_id_t allocate_host_id(bstore_sos_t bss, btkn_id_t req_id)
+{
+	btkn_id_t host_id;
+	if (req_id > HOST_ID_MAX) {
+		errno = EINVAL;
+		return 0;
+	}
+	if (!req_id) {
+		host_id = __sync_fetch_and_add(
+				&bss->next_host_id, 1);
+		if (host_id > HOST_ID_MAX) {
+			bss->next_host_id = HOST_ID_MAX + 1;
+			errno = ENOSPC;
+			return 0;
+		}
+	} else {
+		host_id = req_id;
+		while (bss->next_tkn_id <= req_id) {
+			__sync_val_compare_and_swap(
+				&bss->next_host_id,
+				bss->next_host_id,
+				req_id + 1);
+		}
+	}
+	return host_id;
+}
+
 static bptn_id_t allocate_ptn_id(bstore_sos_t bss)
 {
 	bptn_id_t ptn_id = __sync_fetch_and_add(&bss->next_ptn_id, 1);
@@ -1051,12 +1106,21 @@ static void encode_tkn_key(sos_key_t key, const char *text, size_t text_len)
 static int __add_tkn_with_id(bstore_sos_t bss, btkn_t tkn, uint64_t count)
 {
 	int rc;
+	btkn_id_t id;
 	tkn_value_t tkn_value;
 	struct sos_value_s v_, *v;
 	size_t sz;
 	sos_obj_t tkn_obj;
 
-	allocate_tkn_id(bss, tkn->tkn_id);
+	if (btkn_has_type(tkn, BTKN_TYPE_HOSTNAME)) {
+		id = allocate_host_id(bss, tkn->tkn_id);
+		if (!id) {
+			rc = errno;
+			goto err_0;
+		}
+	} else {
+		allocate_tkn_id(bss, tkn->tkn_id);
+	}
 
 	/* Allocate a new object */
 	tkn_obj = sos_obj_new(bss->token_value_schema);
@@ -1145,8 +1209,10 @@ static sos_visit_action_t tkn_add_cb(sos_index_t index,
 
 	sz = ctxt->tkn->tkn_str->blen+1;
 	v = sos_array_new(&v_, ctxt->bss->tkn_text_attr, tkn_obj, sz);
-	if (!v)
+	if (!v) {
+		assert(0 == "Failed to allocate array");
 		goto err_1;
+	}
 
 	memcpy(v->data->array.data.byte_, ctxt->tkn->tkn_str->cstr, sz-1);
 	v->data->array.data.byte_[ctxt->tkn->tkn_str->blen] = '\0';
@@ -1159,7 +1225,14 @@ static sos_visit_action_t tkn_add_cb(sos_index_t index,
 		ctxt->tkn->tkn_type_mask &= ~BTKN_TYPE_MASK(BTKN_TYPE_TEXT);
 	tkn_value->tkn_type_mask = ctxt->tkn->tkn_type_mask;
 	// pthread_mutex_lock(&ctxt->bss->lock);
-	tkn_id = allocate_tkn_id(ctxt->bss, 0);
+	if (btkn_has_type(ctxt->tkn, BTKN_TYPE_HOSTNAME)) {
+		tkn_id = allocate_host_id(ctxt->bss, 0);
+		if (!tkn_id) {
+			goto err_1;
+		}
+	} else {
+		tkn_id = allocate_tkn_id(ctxt->bss, 0);
+	}
 	// pthread_mutex_unlock(&ctxt->bss->lock);
 	ctxt->tkn->tkn_id = tkn_value->tkn_id = tkn_id;
 	sos_key_set(id_key, &tkn_id, sizeof(tkn_id));
@@ -1170,7 +1243,6 @@ static sos_visit_action_t tkn_add_cb(sos_index_t index,
 	sos_obj_put(tkn_obj);
 	return SOS_VISIT_ADD;
  err_1:
-	assert(0 == "Failed to allocate array");
 	sos_obj_delete(tkn_obj);
 	sos_obj_put(tkn_obj);
  err_0:
@@ -1188,6 +1260,7 @@ static btkn_id_t bs_tkn_add(bstore_t bs, btkn_t tkn)
 	if (bstore_lock)
 		pthread_mutex_lock(&bss->dict_lock);
 
+	ctxt.tkn->tkn_id = 0;
 	if (tkn->tkn_str->blen > 2048) {
 		text_key = sos_key_new(tkn->tkn_str->blen);
 		if (!text_key) {
@@ -1254,14 +1327,22 @@ static btkn_t bs_tkn_find_by_id(bstore_t bs, btkn_id_t tkn_id)
 	btkn_t token = NULL;
 	tkn_value_t tkn_value;
 	bstore_sos_t bss = (bstore_sos_t)bs;
-	sos_obj_t tkn_obj;
-	sos_value_t tkn_str;
+	sos_obj_t tkn_obj = NULL;
+	sos_value_t tkn_str = NULL;
+	sos_iter_t iter = NULL;
+	int rc;
 	SOS_KEY(id_key);
 
 	sos_key_set(id_key, &tkn_id, sizeof(tkn_id));
 	if (bstore_lock)
 		pthread_mutex_lock(&bss->dict_lock);
-	tkn_obj = sos_obj_find(bss->tkn_id_attr, id_key);
+	iter = sos_attr_iter_new(bss->tkn_id_attr);
+	rc = sos_iter_find_last(iter, id_key);
+	if (rc) {
+		errno = rc;
+		goto out_0;
+	}
+	tkn_obj = sos_iter_obj(iter);
 	if (!tkn_obj)
 		goto out_0;
 	tkn_value = sos_obj_ptr(tkn_obj);
@@ -1275,9 +1356,13 @@ static btkn_t bs_tkn_find_by_id(bstore_t bs, btkn_id_t tkn_id)
 		token->tkn_count = tkn_value->tkn_count;
 	else
 		errno = ENOMEM;
-	sos_value_put(tkn_str);
-	sos_obj_put(tkn_obj);
  out_0:
+	if (tkn_str)
+		sos_value_put(tkn_str);
+	if (tkn_obj)
+		sos_obj_put(tkn_obj);
+	if (iter)
+		sos_iter_free(iter);
 	if (bstore_lock)
 		pthread_mutex_unlock(&bss->dict_lock);
 	return token;
