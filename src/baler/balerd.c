@@ -1494,7 +1494,9 @@ int core_signals[] = {
 	SIGXCPU,
 	SIGXFSZ,
 	SIGIOT,
+#ifdef SIGUNUSED
 	SIGUNUSED,
+#endif
 	0
 };
 
