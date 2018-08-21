@@ -861,6 +861,10 @@ typedef struct bstore_plugin_s {
 	/**
 	 * \}
 	 */
+
+	btkn_id_t (*comp_id_min)(bstore_t bs);
+	btkn_id_t (*comp_id_max)(bstore_t bs);
+
 } *bstore_plugin_t;
 
 /**
@@ -1262,6 +1266,9 @@ int bstore_ptn_attr_iter_last(bptn_attr_iter_t iter);
 /**
  * \}
  */
+
+btkn_id_t bstore_comp_id_min(bstore_t bs);
+btkn_id_t bstore_comp_id_max(bstore_t bs);
 
 /**
  * \}

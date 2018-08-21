@@ -236,6 +236,12 @@ cdef class Bstore:
         if rc:
             raise RuntimeError("bstore_ptn_attr_value_add() rc: %d" % rc)
 
+    cpdef comp_id_min(self):
+        return Bs.bstore_comp_id_min(self.c_store)
+
+    cpdef comp_id_max(self):
+        return Bs.bstore_comp_id_max(self.c_store)
+
 
 cdef class Bmc:
     cdef Bs.bmc_id_t _meta_id
@@ -581,6 +587,12 @@ cdef class Btkn_iter(Biter):
 
     cdef int iterLast(self):
         return Bs.bstore_tkn_iter_last(self.c_iter)
+
+    def iterFindFwd(self, **kwargs):
+        raise NotImplementedError()
+
+    def iterFindRev(self, **kwargs):
+        raise NotImplementedError()
 
 cdef class Bptn:
     cpdef Bstore store

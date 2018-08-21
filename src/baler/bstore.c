@@ -826,6 +826,16 @@ int bstore_attr_iter_last(battr_iter_t iter)
 	return iter->bs->plugin->attr_iter_last(iter);
 }
 
+btkn_id_t bstore_comp_id_min(bstore_t bs)
+{
+	return bs->plugin->comp_id_min(bs);
+}
+
+btkn_id_t bstore_comp_id_max(bstore_t bs)
+{
+	return bs->plugin->comp_id_max(bs);
+}
+
 static void __attribute__ ((destructor)) bstore_term(void)
 {
 	struct plugin_entry *pe;

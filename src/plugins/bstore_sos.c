@@ -4810,6 +4810,42 @@ static int bs_attr_iter_find(battr_iter_t iter, const char *attr_type)
 	return rc;
 }
 
+static btkn_id_t bs_comp_id_min(bstore_t bs)
+{
+	bstore_sos_t bss = (void*)bs;
+	sos_index_t idx = sos_attr_index(bss->tkn_id_attr);
+	SOS_KEY(key);
+	sos_obj_t obj;
+	sos_value_data_t data;
+	btkn_id_t id = HOST_ID_MIN;
+	sos_key_set(key, &id, sizeof(id));
+	obj = sos_index_find_sup(idx, key);
+	if (!obj)
+		return 0;
+	data = sos_obj_attr_data(obj, bss->tkn_id_attr, NULL);
+	id = data->prim.uint64_;
+	sos_obj_put(obj);
+	return id;
+}
+
+static btkn_id_t bs_comp_id_max(bstore_t bs)
+{
+	bstore_sos_t bss = (void*)bs;
+	sos_index_t idx = sos_attr_index(bss->tkn_id_attr);
+	SOS_KEY(key);
+	sos_obj_t obj;
+	sos_value_data_t data;
+	btkn_id_t id = HOST_ID_MAX;
+	sos_key_set(key, &id, sizeof(id));
+	obj = sos_index_find_inf(idx, key);
+	if (!obj)
+		return 0;
+	data = sos_obj_attr_data(obj, bss->tkn_id_attr, NULL);
+	id = data->prim.uint64_;
+	sos_obj_put(obj);
+	return id;
+}
+
 static struct bstore_plugin_s plugin = {
 	.open = bs_open,
 	.close = bs_close,
@@ -4937,6 +4973,9 @@ static struct bstore_plugin_s plugin = {
 	.ptn_attr_iter_next = bs_ptn_attr_iter_next,
 	.ptn_attr_iter_prev = bs_ptn_attr_iter_prev,
 	.ptn_attr_iter_last = bs_ptn_attr_iter_last,
+
+	.comp_id_min = bs_comp_id_min,
+	.comp_id_max = bs_comp_id_max,
 };
 
 bstore_plugin_t get_plugin(void)

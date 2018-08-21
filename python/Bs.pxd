@@ -293,6 +293,8 @@ cdef extern from "baler/bstore.h":
     int bstore_attr_iter_next(battr_iter_t iter)
     int bstore_attr_iter_prev(battr_iter_t iter)
     int bstore_attr_iter_last(battr_iter_t iter)
+    btkn_id_t bstore_comp_id_min(bstore_t bs)
+    btkn_id_t bstore_comp_id_max(bstore_t bs)
 
 #### -- end of "baler/bstore.h" import -- ####
 
