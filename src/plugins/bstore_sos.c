@@ -2964,6 +2964,8 @@ static int bs_ptn_tkn_iter_first(bptn_tkn_iter_t iter)
 		     i->filter.ptn_id, i->filter.tkn_pos, 0L);
 
 	rc = sos_iter_sup(i->iter, key);
+	if (rc)
+		return rc;
 	return __ptn_tkn_iter_check(i);
 }
 
@@ -2988,6 +2990,8 @@ static int bs_ptn_tkn_iter_last(bptn_tkn_iter_t iter)
 		     i->filter.ptn_id, i->filter.tkn_pos, -1L);
 
 	rc = sos_iter_inf(i->iter, key);
+	if (rc)
+		return rc;
 	return __ptn_tkn_iter_check(i);
 }
 
