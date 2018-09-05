@@ -12,6 +12,8 @@
 #include <assert.h>
 #include <endian.h>
 #include <sos/sos.h>
+#include <sys/mman.h>
+#include <unistd.h>
 #include "baler/bstore.h"
 #include "baler/butils.h"
 
@@ -22,8 +24,12 @@
 #define __be32
 #endif
 
+#define BSTORE_SOS_VER "3.0"
+
 #define ATTR_TYPE_MAX 512
 #define ATTR_VALUE_MAX 512
+
+#define INFO_FILE "INFO"
 
 #define OOM()	berr("Out of memory at %s:%d\n", __func__, __LINE__)
 
@@ -33,6 +39,15 @@ time_t clamp_time_to_bin(time_t time_, uint32_t bin_width)
 {
 	return (time_ / bin_width) * bin_width;
 }
+
+typedef struct bstore_sos_info_s {
+	union {
+		char _[4096]; /* size 4K total, for future use */
+		struct {
+			char store_ver[64];
+		};
+	};
+} *bstore_sos_info_t;
 
 typedef struct bstore_sos_s {
 	struct bstore_s base;
@@ -90,6 +105,8 @@ typedef struct bstore_sos_s {
 	pthread_mutex_t ptn_lock;
 	pthread_mutex_t ptn_tkn_lock;
 	pthread_mutex_t hist_lock;
+
+	bstore_sos_info_t info;
 } *bstore_sos_t;
 
 #define TKN_ID_IDX_ARGS "ORDER=5 SIZE=5"
@@ -473,6 +490,71 @@ struct sos_schema_template pattern_attribute_schema = {
 	}
 };
 
+static
+bstore_sos_info_t bstore_sos_info_open(const char *path, int flags)
+{
+	int fd = -1;
+	int prot = 0;
+	bstore_sos_info_t info = NULL;
+
+	fd = open(path, flags);
+	switch (flags & O_ACCMODE) {
+	case O_RDONLY:
+		prot = PROT_READ;
+		break;
+	case O_WRONLY:
+		prot = PROT_WRITE;
+		break;
+	case O_RDWR:
+		prot = PROT_READ|PROT_WRITE;
+		break;
+	default:
+		errno = EINVAL;
+		goto out;
+	}
+	if (fd < 0)
+		goto out; /* errno has already been set */
+	info = mmap(NULL, sizeof(*info), prot, MAP_SHARED, fd, 0);
+	if (info == MAP_FAILED)
+		info = NULL; /* errno has already been set */
+
+ out:
+	if (fd >= 0)
+		close(fd);
+	return info;
+}
+
+void bstore_sos_info_close(bstore_sos_info_t info)
+{
+	munmap(info, sizeof(*info));
+}
+
+struct bstore_sos_info_s INFO_INIT = {
+	.store_ver = BSTORE_SOS_VER,
+};
+
+int bstore_sos_info_create(const char *path, mode_t mode)
+{
+	int fd = -1;
+	int rc = 0;
+	ssize_t sz;
+
+	fd = open(path, O_CREAT|O_RDWR, mode);
+	if (fd < 0) {
+		rc = errno;
+		goto out;
+	}
+	sz = write(fd, &INFO_INIT, sizeof(INFO_INIT));
+	if (sz < 0) {
+		rc = errno;
+		goto out;
+	}
+ out:
+	if (fd >= 0)
+		close(fd);
+	return rc;
+}
+
 static size_t encode_id(uint64_t id, uint8_t *s);
 static size_t encoded_id_len(uint64_t id);
 static size_t decode_ptn(bstr_t ptn, const uint8_t *tkn_str, size_t tkn_count);
@@ -601,6 +683,17 @@ static int create_store(const char *path, int o_mode)
 	if (rc)
 		goto err_7;
 
+	/*
+	 * INFO file.
+	 *
+	 * This is created last so that we won't accidentally create the new
+	 * INFO in the existing old store.
+	 */
+	sprintf(cpath, "%s/" INFO_FILE, path);
+	rc = bstore_sos_info_create(cpath, o_mode);
+	if (rc)
+		goto err_7;
+
 	free(cpath);
 	sos_container_close(attr, SOS_COMMIT_ASYNC);
 	sos_container_close(hist, SOS_COMMIT_ASYNC);
@@ -706,19 +799,17 @@ static bstore_t bs_open(bstore_plugin_t plugin, const char *path, int flags, int
 	if (!bs->base.path)
 		goto err_1;
 
-	/* Open the Root container */
 	cpath = malloc(PATH_MAX);
 	if (!cpath)
 		goto err_2;
 
-	/*
-	 * Open the BalerDict store containing the token definitions and tokens
-	 */
-	sprintf(cpath, "%s/Dictionary", path);
  reopen:
-	perm = (flags & O_RDWR ? SOS_PERM_RW : SOS_PERM_RO);
-	bs->dict_sos = sos_container_open(cpath, SOS_PERM_RW);
-	if (!bs->dict_sos) {
+	/*
+	 * Open INFO
+	 */
+	sprintf(cpath, "%s/" INFO_FILE, path);
+	bs->info = bstore_sos_info_open(cpath, flags & O_ACCMODE);
+	if (!bs->info) {
 		if (0 == (flags & O_CREAT))
 			goto err_3;
 		rc = create_store(path, o_mode);
@@ -729,6 +820,23 @@ static bstore_t bs_open(bstore_plugin_t plugin, const char *path, int flags, int
 		}
 		goto err_3;
 	}
+
+	/*
+	 * Check INFO for compatibility
+	 */
+	if (strcmp(BSTORE_SOS_VER, bs->info->store_ver)) {
+		errno = EINVAL;
+		goto err_3;
+	}
+
+	/*
+	 * Open the BalerDict store containing the token definitions and tokens
+	 */
+	sprintf(cpath, "%s/Dictionary", path);
+	perm = (flags & O_RDWR ? SOS_PERM_RW : SOS_PERM_RO);
+	bs->dict_sos = sos_container_open(cpath, SOS_PERM_RW);
+	if (!bs->dict_sos)
+		goto err_3;
 	bs->token_value_schema = sos_schema_by_name(bs->dict_sos, "TokenValue");
 	if (!bs->token_value_schema)
 		goto err_4;
@@ -991,6 +1099,8 @@ static bstore_t bs_open(bstore_plugin_t plugin, const char *path, int flags, int
  err_4:
 	sos_container_close(bs->dict_sos, SOS_COMMIT_ASYNC);
  err_3:
+	if (bs->info)
+		bstore_sos_info_close(bs->info);
 	free(cpath);
  err_2:
 	free(bs->base.path);
@@ -1006,6 +1116,8 @@ static void bs_close(bstore_t bs)
 	if (!bs)
 		return;
 	free(bs->path);
+	if (bss->info)
+		bstore_sos_info_close(bss->info);
 	sos_container_close(bss->attr_sos, SOS_COMMIT_ASYNC);
 	sos_container_close(bss->dict_sos, SOS_COMMIT_ASYNC);
 	sos_container_close(bss->ptn_sos, SOS_COMMIT_ASYNC);
