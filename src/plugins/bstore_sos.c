@@ -4766,7 +4766,7 @@ static char *bs_attr_iter_obj(battr_iter_t iter)
 	return ret;
 
  err_1:
- 	sos_obj_put(obj);
+	sos_obj_put(obj);
  err_0:
 	return NULL;
 }
