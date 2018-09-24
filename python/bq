@@ -1177,10 +1177,25 @@ def ptn_attr_rm(bs, args):
         raise ValueError("--ptn_attr_add requires --ptn_attr_file, or "
                          "a pair of --ptn_id and --ptn_attr.")
 
+def show_version(args):
+    print("bq")
+    print("  version: %s" % Bq.bversion())
+    print("  gitsha:  %s" % Bq.bgitsha())
+    ver = Bq.version_get(args.plugin, args.path)
+    print("plugin: %s" % args.plugin)
+    print("  version: %s" % ver['plugin']['version'])
+    print("  gitsha:  %s" % ver['plugin']['gitsha'])
+    if args.path:
+        print("store: %s" % args.path)
+        print("  version: %s" % ver['store']['version'])
+        print("  gitsha:  %s" % ver['store']['gitsha'])
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Query Baler data")
-    parser.add_argument("-p", "--path", required=True,
+    parser.add_argument("-p", "--path", default=None,
                         help="The path to the Baler store")
+    parser.add_argument("--plugin", default="bstore_sos",
+                        help="Plugin name")
     parser.add_argument("-q", "--named-query", type=str, required=False,
                         metavar='NAME', default=None,
                         help="Use the named query from `named-query-file`.")
@@ -1276,6 +1291,9 @@ if __name__ == "__main__":
                         help="Specify the bar label font size")
     parser.add_argument("--y_scale", default='linear',
                         help="Specify the y-scale as 'log' or 'linear'")
+    parser.add_argument("--version", "-V", action="store_true",
+                        help="Print plugin version and optionally store "
+                        "version (if `--path` is given)")
     header = parser.add_mutually_exclusive_group(required=False)
     header.add_argument("--header", dest="header", action="store_true",
                         help="Enable table headers")
@@ -1292,6 +1310,10 @@ if __name__ == "__main__":
     parser.set_defaults(header=True)
 
     args = parser.parse_args()
+
+    if args.version:
+        show_version(args)
+        sys.exit(0)
 
     # named query file handling
     if args.named_query_file != DEFAULT_NAMED_QUERY_FILE_PATH or \
@@ -1310,6 +1332,10 @@ if __name__ == "__main__":
         # append arguments and reparse
         new_argv = sys.argv[1:] + shlex.split(nq)
         args = parser.parse_args(new_argv)
+
+    if not args.path:
+        print("Error: `-p,--path STORE_PATH` option is required")
+        sys.exit(-1)
 
     bs = Bq.Bstore()
     bs.open(args.path)
