@@ -20,6 +20,11 @@ typedef struct bstore_s {
 	char *path;
 } *bstore_t;
 
+struct bstore_version_s {
+	char ver[64];
+	char gitsha[64]; /* strlen(gistha) is actually 40 */
+};
+
 typedef enum bstore_iter_type {
 	BTKN_ITER,
 	BMSG_ITER,
@@ -865,6 +870,13 @@ typedef struct bstore_plugin_s {
 	btkn_id_t (*comp_id_min)(bstore_t bs);
 	btkn_id_t (*comp_id_max)(bstore_t bs);
 
+	int (*plugin_version_get)(struct bstore_plugin_s *bs,
+				  struct bstore_version_s *ver);
+
+	int (*version_get)(bstore_t bs, struct bstore_version_s *ver);
+	int (*version_get_by_path)(const char *path,
+				   struct bstore_version_s *ver);
+
 } *bstore_plugin_t;
 
 /**
@@ -1269,6 +1281,26 @@ int bstore_ptn_attr_iter_last(bptn_attr_iter_t iter);
 
 btkn_id_t bstore_comp_id_min(bstore_t bs);
 btkn_id_t bstore_comp_id_max(bstore_t bs);
+
+/**
+ * Get plugin version, and (optionally) storage version (by path).
+ *
+ * NOTE1: The storage version is the plugin version that created the store.
+ * NOTE2: The fields \c ver and \c gitsha of \c plugin_ver and \c store_ver will
+ *        initialized to \c "UNKNOWN".
+ *
+ * \param plugin The plugin name.
+ * \param store  The path to the store (can be NULL).
+ * \param[out] plugin_ver The plugin version information.
+ * \param[out] store_ver  The store version information.
+ *
+ * \retval errno if there is an error.
+ * \retval 0     if there is no error.
+ *
+ */
+int bstore_version_get(const char *plugin, const char *store,
+		       struct bstore_version_s *plugin_ver,
+		       struct bstore_version_s *store_ver);
 
 /**
  * \}

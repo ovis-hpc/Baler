@@ -296,6 +296,14 @@ cdef extern from "baler/bstore.h":
     btkn_id_t bstore_comp_id_min(bstore_t bs)
     btkn_id_t bstore_comp_id_max(bstore_t bs)
 
+    cdef struct bstore_version_s:
+        char ver[64]
+        char gitsha[64]
+
+    int bstore_version_get(const char *plugin, const char *store,
+                           bstore_version_s *plugin_ver,
+                           bstore_version_s *store_ver)
+
 #### -- end of "baler/bstore.h" import -- ####
 
 
@@ -333,3 +341,7 @@ cdef extern from "baler/bmeta.h":
 
     bmc_list_t bmc_list_compute(bstore_t bs, bmc_params_t params)
     void bmc_list_free(bmc_list_t bmc_list)
+
+cdef extern from "baler/butils.h":
+    const char *bgitsha()
+    const char *bversion()

@@ -1485,3 +1485,44 @@ cdef class Btkn_hist_iter(Biter):
             rec_no += 1
             rc = Bs.bstore_tkn_hist_iter_next(self.c_iter)
         return (rec_no, x.as_ndarray(), y.as_ndarray())
+
+def version_get(plugin, path = None):
+    """Get the plugin version and store version (by path)
+
+    Parameters:
+        plugin - the plugin name
+        path   - the path to the store (can be `None`)
+
+    Returns:
+        ```
+        {
+            'plugin': { 'gitsha': PLUGIN_GITSHA, 'version': PLUGIN_VERSION },
+            'store':  { 'gitsha': STORE_GITSHA,  'version': STORE_VERSION  },
+        }
+        ```
+    """
+    cdef Bs.bstore_version_s plugin_ver
+    cdef Bs.bstore_version_s store_ver
+    cdef int rc
+    cdef const char *_path;
+    if path:
+        _path = path
+    else:
+        _path = NULL
+    Bs.bstore_version_get(plugin, _path, &plugin_ver, &store_ver)
+    return {
+        'plugin': {
+            'version': plugin_ver.ver,
+            'gitsha': plugin_ver.gitsha,
+        },
+        'store': {
+            'version': store_ver.ver,
+            'gitsha': store_ver.gitsha,
+        },
+    }
+
+def bversion():
+    return Bs.bversion()
+
+def bgitsha():
+    return Bs.bgitsha()

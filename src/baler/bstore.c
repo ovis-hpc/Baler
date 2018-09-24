@@ -836,6 +836,33 @@ btkn_id_t bstore_comp_id_max(bstore_t bs)
 	return bs->plugin->comp_id_max(bs);
 }
 
+
+int bstore_version_get(const char *plugin, const char *store,
+		       struct bstore_version_s *plugin_ver,
+		       struct bstore_version_s *store_ver)
+{
+	int rc;
+	bstore_plugin_t p;
+
+	snprintf(plugin_ver->ver, sizeof(plugin_ver->ver), "UNKNOWN");
+	snprintf(store_ver->ver, sizeof(store_ver->ver), "UNKNOWN");
+	snprintf(plugin_ver->gitsha, sizeof(plugin_ver->gitsha), "UNKNOWN");
+	snprintf(store_ver->gitsha, sizeof(store_ver->gitsha), "UNKNOWN");
+
+	p = __get_plugin(plugin);
+	if (!p) {
+		rc = errno;
+		goto out;
+	}
+	rc = p->plugin_version_get(p, plugin_ver);
+	if (rc)
+		goto out;
+	if (store)
+		rc = p->version_get_by_path(store, store_ver);
+out:
+	return rc;
+}
+
 static void __attribute__ ((destructor)) bstore_term(void)
 {
 	struct plugin_entry *pe;

@@ -45,6 +45,7 @@ typedef struct bstore_sos_info_s {
 		char _[4096]; /* size 4K total, for future use */
 		struct {
 			char store_ver[64];
+			char gitsha[64];
 		};
 	};
 } *bstore_sos_info_t;
@@ -4962,6 +4963,44 @@ static btkn_id_t bs_comp_id_max(bstore_t bs)
 	return id;
 }
 
+int bs_plugin_version_get(struct bstore_plugin_s *bs,
+			  struct bstore_version_s *ver)
+{
+	snprintf(ver->ver, sizeof(ver->ver), "%s", INFO_INIT.store_ver);
+	snprintf(ver->gitsha, sizeof(ver->gitsha), "%s", INFO_INIT.gitsha);
+	return 0;
+}
+
+int bs_version_get(bstore_t bs, struct bstore_version_s *ver)
+{
+	struct bstore_sos_s *bss = (void*)bs;
+	snprintf(ver->ver, sizeof(ver->ver), "%s", bss->info->store_ver);
+	snprintf(ver->gitsha, sizeof(ver->gitsha), "%s", bss->info->gitsha);
+	return 0;
+}
+
+int bs_version_get_by_path(const char *path, struct bstore_version_s *ver)
+{
+	int len = strlen(path) + strlen(INFO_FILE) + 4;
+	int rc = 0;
+	bstore_sos_info_t info;
+	char *info_path = malloc(len);
+	if (!info_path)
+		return ENOMEM;
+	snprintf(info_path, len, "%s/%s", path, INFO_FILE);
+	info = bstore_sos_info_open(info_path, O_RDONLY);
+	if (!info) {
+		rc = errno;
+		goto out;
+	}
+	snprintf(ver->ver, sizeof(ver->ver), "%s", info->store_ver);
+	snprintf(ver->gitsha, sizeof(ver->gitsha), "%s", info->gitsha);
+	bstore_sos_info_close(info);
+out:
+	free(info_path);
+	return rc;
+}
+
 static struct bstore_plugin_s plugin = {
 	.open = bs_open,
 	.close = bs_close,
@@ -5092,10 +5131,19 @@ static struct bstore_plugin_s plugin = {
 
 	.comp_id_min = bs_comp_id_min,
 	.comp_id_max = bs_comp_id_max,
+
+	.plugin_version_get = bs_plugin_version_get,
+	.version_get = bs_version_get,
+	.version_get_by_path = bs_version_get_by_path,
 };
 
 bstore_plugin_t get_plugin(void)
 {
+	static int once = 0;
+	if (!once) {
+		once = 1;
+		snprintf(INFO_INIT.gitsha, sizeof(INFO_INIT.gitsha),
+				"%s", bgitsha());
+	}
 	return &plugin;
 }
-

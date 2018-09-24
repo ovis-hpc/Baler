@@ -4858,6 +4858,25 @@ void bsa_iter_pos_free(bstore_iter_t _itr, bstore_iter_pos_t pos)
 	}
 }
 
+int bsa_plugin_version_get(struct bstore_plugin_s *bs,
+			   struct bstore_version_s *ver)
+{
+	snprintf(ver->ver, sizeof(ver->ver), "NOT_IMPLEMENTED");
+	return ENOSYS;
+}
+
+int bsa_version_get(bstore_t bs, struct bstore_version_s *ver)
+{
+	snprintf(ver->ver, sizeof(ver->ver), "NOT_IMPLEMENTED");
+	return ENOSYS;
+}
+
+int bsa_version_get_by_path(const char *path, struct bstore_version_s *ver)
+{
+	snprintf(ver->ver, sizeof(ver->ver), "NOT_IMPLEMENTED");
+	return ENOSYS;
+}
+
 static struct bstore_plugin_s plugin = {
 	.open = bsa_open,
 	.close = bsa_close,
@@ -4960,6 +4979,10 @@ static struct bstore_plugin_s plugin = {
 	.iter_pos_get = bsa_iter_pos_get,
 	.iter_pos_set = bsa_iter_pos_set,
 	.iter_pos_free = bsa_iter_pos_free,
+
+	.plugin_version_get = bsa_plugin_version_get,
+	.version_get = bsa_version_get,
+	.version_get_by_path = bsa_version_get_by_path,
 
 };
 
