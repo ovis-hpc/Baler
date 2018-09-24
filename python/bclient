@@ -1102,6 +1102,61 @@ class ServiceCmd(cmd.Cmd):
         """Stop the command intepreter."""
         return True
 
+    def parser_version(self):
+        return CmdArgumentParser(
+            ("plugin", str, "PLUGIN_NAME", 0, None),
+            ("path", str, "STORE_PATH", 0, None),
+        )
+
+    def do_version(self, arg):
+        """version [plugin=PLUGIN_NAME] [path=STORE_PATH]
+
+        Print bclient version, plugin version and optionally store version.
+
+        SYNOPSIS:
+        version
+        version plugin=PLUGIN_NAME
+        version plugin=PLUGIN_NAME path=STORE_PATH
+        version path=STORE_PATH
+
+        `version` prints bclient version, and if the `open` has been called
+        successfully, the plugin and data store version will be printed as well.
+
+        `version plugin=PLUGIN_NAME` only prints bclient version and plugin
+        version (identified by PLUGIN_NAME).
+
+        `version plugin=PLUGIN_NAME path=STORE_PATH` prints bclient version,
+        plugin version, and data store version.
+
+        `version path=STORE_PATH` is the same as `version plugin=PLUGIN_NAME
+        path=STORE_PATH`, but assuming `plugin=bstore_sos`.
+
+        """
+        global store
+        (kwargs, args) = (self.kwargs, self.args)
+        plugin = kwargs["plugin"]
+        path = kwargs["path"]
+        if path:
+            if not plugin:
+                plugin = "bstore_sos"
+        elif plugin:
+            pass
+        elif store:
+            plugin = store.get_plugin()
+            path = store.get_path()
+        print "bclient"
+        print "  version: %s" % Bq.bversion()
+        print "  gitsha:  %s" % Bq.bgitsha()
+        if plugin:
+            inf = Bq.version_get(plugin, path)
+            print "plugin: %s" % plugin
+            print "  version: %s" % inf["plugin"]["version"]
+            print "  gitsha:  %s" % inf["plugin"]["gitsha"]
+        if path:
+            print "store: %s" % path
+            print "  version: %s" % inf["store"]["version"]
+            print "  gitsha:  %s" % inf["store"]["gitsha"]
+
     def emptyline(self):
         """Do nothing on empty line."""
         pass
@@ -1185,8 +1240,16 @@ if __name__ == "__main__":
                     default="INFO", type=str,
                     help="Verbosity level (DEBUG, INFO, WARN, ERROR, CRITICAL)"
             )
+    ap.add_argument("-V", "--version", action="store_true",
+                    help="Print bclient version and exit")
     args = ap.parse_args()
     logger.setLevel(logging.getLevelName(args.verbose.upper()))
+
+    if args.version:
+        print "bclient"
+        print "  version: %s" % Bq.bversion()
+        print "  gitsha:  %s" % Bq.bgitsha()
+        sys.exit(0)
 
     if args.path:
         open_store(args.path, args.plugin)

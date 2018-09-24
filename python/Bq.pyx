@@ -95,6 +95,12 @@ cdef class Bstore:
         # has not already closed the store.
         self.close()
 
+    def get_plugin(self):
+        return self.plugin
+
+    def get_path(self):
+        return self.path
+
     cpdef tkn_by_id(self, tkn_id):
         cdef Bs.btkn_id_t id_ = <Bs.btkn_id_t>tkn_id
         cdef Bs.btkn_t btkn
