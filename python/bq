@@ -548,7 +548,6 @@ def show_msgs(bs, args):
     comp_id = tkn_id_from_args(args)
     if not comp_id:
         comp_id = 0
-    print("COMP_ID:", comp_id)
 
     start, end = get_times_from_args(args)
 
