@@ -779,7 +779,6 @@ def show_matching_ptns(bs, args):
                     cols.append(pos)
                     matching_cols[p.ptn_id()] = cols
                     ptn_match = True
-                    pos += 1
                 else:
                     matching_cols[p.ptn_id()].append(pos)
             pos += 1
