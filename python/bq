@@ -796,14 +796,15 @@ def show_matching_ptns(bs, args):
         cpos = 13 + 13 + 21 + 21
         matches = []
         for tkn in p:
+            _len = len(fmt_tkn_str(tkn, None))
             if pos in matching_cols[p.ptn_id()]:
                 tkn_str = UNDERLINE + fmt_tkn_str(tkn, args) + RESET
-                matches.append(cpos+len(fmt_tkn_str(tkn, None))/2)
-                cpos = 0
+                matches.append(cpos+(_len+1)/2)
+                cpos = _len - ((_len+1)/2)
             else:
                 tkn_str = fmt_tkn_str(tkn, args)
+                cpos += _len
             print("{0}".format(tkn_str), end='')
-            cpos += len(fmt_tkn_str(tkn, None))
             pos += 1
         print("")
         if args.loc:
