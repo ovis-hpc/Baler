@@ -1,0 +1,41 @@
+image: ovis-build-xenial:latest
+stages:
+  - build
+  - test
+
+build:
+  stage: build
+  artifacts:
+    paths: # only support files *within* the project dir
+      - opt/
+  script:
+    - OPTDIR=$PWD/opt
+    - echo $SHELL
+    - test -e $OPTDIR/baler/bin/balerd && exit -1 || true
+    - git submodule update --init sos
+    - pushd sos
+    - ./autogen.sh
+    - mkdir build
+    - pushd build
+    - ../configure --prefix=$OPTDIR/sos
+    - make
+    - make install
+    - popd # from build
+    - popd # from sos
+    - ./autogen.sh # in baler
+    - mkdir build
+    - pushd build
+    - ../configure --prefix=$OPTDIR/baler --with-sos=$OPTDIR/sos --enable-etc
+    - make
+    - make install
+
+test:
+  stage: test
+  dependencies:
+    - build
+  script:
+    - OPTDIR=$PWD/opt
+    - source $OPTDIR/baler/etc/baler/baler-env.sh
+    - balerd -V
+    - cd test
+    - ./test-all.sh
