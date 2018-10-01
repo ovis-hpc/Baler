@@ -1333,7 +1333,7 @@ cdef class Bcomp_hist_iter(Biter):
     def iterFindRev(self, **kwargs):
         return self._iterFind(self, 0, **kwargs)
 
-    def duration(self, comp_id, start=None):
+    def duration(self):
         cdef Bs.bcomp_hist_t h
         cdef int rc
 
