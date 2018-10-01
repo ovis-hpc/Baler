@@ -1,0 +1,3 @@
+[submodule "sos"]
+	path = sos
+	url = ../../tom/SOS
