@@ -877,14 +877,8 @@ def show_ptn_hist(bs, args):
         ptn_id = 0
     else:
         ptn_id = args.ptn_id
-    if args.bin_width:
-        bin_width = xlate_bin_width(args)
-    else:
-        bin_width = 3600        # hours
-
-    start, end = get_times_from_args(args)
-
     phi = Bq.Bptn_hist_iter(bs)
+    start, end, bin_width = get_hist_args(phi, ptn_id, args)
     phi.set_filter(ptn_id=ptn_id, bin_width=bin_width, tv_begin=(start,0))
 
     if not args.csv:
@@ -969,17 +963,11 @@ def show_comp_hist(bs, args):
         ptn_id = 0
     else:
         ptn_id = args.ptn_id
+    chi = Bq.Bcomp_hist_iter(bs)
+    start, end, bin_width = get_hist_args(chi, ptn_id, args)
     comp_id = tkn_id_from_args(args)
     if not comp_id:
         comp_id = 0
-        # raise ValueError("The --comp_id or --comp_str arguments must be " \
-        #                 "specified with --comp")
-    if args.bin_width:
-        bin_width = xlate_bin_width(args)
-    else:
-        bin_width = 3600        # hours
-
-    chi = Bq.Bcomp_hist_iter(bs)
     chi.set_filter(comp_id=comp_id, ptn_id=ptn_id, bin_width=bin_width,
                    tv_begin=(start, 0))
     if not args.csv:
