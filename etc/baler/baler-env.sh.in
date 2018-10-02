@@ -1,21 +1,22 @@
 #!/bin/bash
 
-function __contain() {
-	local HAY=$1
-	local NEEDLE=$2
-	[[ "$HAY" = *:$NEEDLE:* ]] || [[ "$HAY" = $NEEDLE:* ]] || [[ "$HAY" = *:$NEEDLE ]]
+__add() {
+	local VAR=$1
+	local ENT=$2
+	[[ :${!VAR}: == *:$ENT:* ]] || eval export $VAR=${!VAR}:$ENT
 }
 
-__contain "$PATH" "@bindir@" || export PATH="@bindir@:$PATH"
-__contain "$LD_LIBRARY_PATH" "@libdir@" || export LD_LIBRARY_PATH="@libdir@:$LD_LIBRARY_PATH"
-__contain "$PYTHONPATH" "@pythondir@" || export PYTHONPATH="@pythondir@:$PYTHONPATH"
+__add PATH "@bindir@"
+__add LD_LIBRARY_PATH "@libdir@"
+__add PYTHONPATH "@pythondir@"
+__add MANPATH "@mandir@"
 
 SOS_LIBDIR=@SOS_LIBDIR@
 SOS_LIB64DIR=@SOS_LIB64DIR@
 SOS_PYTHONPATH=$(echo @SOS_LIBDIR@/python2*/site-packages)
 
-__contain "$LD_LIBRARY_PATH" "$SOS_LIBDIR" || export LD_LIBRARY_PATH="$SOS_LIBDIR:$LD_LIBRARY_PATH"
-__contain "$LD_LIBRARY_PATH" "$SOS_LIB64DIR" || export LD_LIBRARY_PATH="$SOS_LIB64DIR:$LD_LIBRARY_PATH"
-__contain "$PYTHONPATH" "$SOS_PYTHONPATH" || export PYTHONPATH="$SOS_PYTHONPATH:$PYTHONPATH"
+__add LD_LIBRARY_PATH "$SOS_LIBDIR"
+__add LD_LIBRARY_PATH "$SOS_LIB64DIR"
+__add PYTHONPATH "$SOS_PYTHONPATH"
 
 export BSTORE_PLUGIN_PATH="@libdir@"

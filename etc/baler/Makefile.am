@@ -10,9 +10,10 @@ do_subst = sed -e 's,[@]datadir[@],$(datadir),g' \
 	   -e 's,[@]sbindir[@],$(sbindir),g' \
 	   -e 's,[@]bindir[@],$(bindir),g' \
 	   -e 's,[@]libdir[@],$(libdir),g' \
+	   -e 's,[@]mandir[@],$(mandir),g' \
 	   -e 's,[@]pythondir[@],$(pythondir),g' \
 	   -e 's,[@]SOS_LIBDIR[@],$(SOS_LIBDIR),g' \
-	   -e 's,[@]SOS_LIB64DIR[@],$(SOS_LIB64DIR),g' 
+	   -e 's,[@]SOS_LIB64DIR[@],$(SOS_LIB64DIR),g'
 
 EXTRA_DIST = balerd.conf.in \
 	     balerd.env.in \
@@ -23,7 +24,7 @@ ENV_FILES = balerd.env
 
 CONF_FILES = balerd.conf
 
-SH_FILES = baler-env.sh 
+SH_FILES = baler-env.sh
 
 # rules to generate env file
 %.env: $(srcdir)/%.env.in
