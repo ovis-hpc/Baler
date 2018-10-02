@@ -17,25 +17,11 @@ import unittest
 import subprocess
 
 from StringIO import StringIO
-from test_util.test_util import ts_text
+from test_util.test_util import ts_text, make_store
 
 from baler import Bq as bq
 
 STORE_PATH = "./store"
-BALERD_CFG_PATH = "./balerd.cfg"
-BIN_TCP_PORT = "10514"
-BALERD_HOST_LIST = "host.list"
-BALERD_CFG = """
-tokens type=WORD path=eng-dictionary
-tokens type=HOSTNAME path=%(host_list)s
-plugin name=bout_store_msg
-plugin name=bout_store_hist tkn=1 ptn=1 ptn_tkn=1
-plugin name=bin_tcp port=%(bin_tcp_port)s parser=syslog_parser
-""" % {
-    "bin_tcp_port": BIN_TCP_PORT,
-    "host_list": BALERD_HOST_LIST,
-}
-BALERD_LOG_PATH = "./balerd.log"
 TS_BEGIN = int(time.time()) / (24*3600) * (24*3600)
 TS_END = TS_BEGIN + 24*3600
 TS_INC = 600
@@ -46,10 +32,9 @@ def HOSTS():
     for num in range(0, HOST_NUM):
         yield "host%05d" % num
 
-# make host.list
-with open(BALERD_HOST_LIST, "w") as f:
-    for h, hid in zip(HOSTS(), range(0, HOST_NUM)):
-        print >>f, h, HOST_BASE + hid
+def HOST_ID_ENTRIES():
+    for num in range(0, HOST_NUM):
+        yield "host%05d %d" % (num, HOST_BASE + num)
 
 time.tzset()
 
@@ -185,74 +170,6 @@ class icmd(object):
     def __del__(self):
         self.term()
 
-
-class bclient(icmd):
-    """Interactive bclient"""
-    def __init__(self, path = None):
-        cmd = "bclient"
-        if path:
-            cmd += " -p="+path
-        super(bclient, self).__init__(cmd)
-
-
-def make_store():
-    log.info("------- making the store -------")
-    cfg = open(BALERD_CFG_PATH, "w")
-    print >>cfg, BALERD_CFG
-    cfg.close()
-
-    # clear blog
-    blog = open(BALERD_LOG_PATH, "w")
-    blog.close()
-
-    hosts = [ln.strip() for ln in open(BALERD_HOST_LIST)]
-
-    bcmd = "balerd -F -S bstore_sos -s %(store_path)s -C %(cfg_path)s \
-            -l %(log_path)s -v INFO" % {
-                "store_path": STORE_PATH,
-                "cfg_path": BALERD_CFG_PATH,
-                "log_path": BALERD_LOG_PATH,
-            }
-    log.info("balerd cmd: " + bcmd)
-    balerd = subprocess.Popen("exec " + bcmd, shell=True)
-    pos = 0
-    is_ready = False
-    ready_re = re.compile(".* Baler is ready..*")
-    # look for "Baler is ready" in the log
-    while True:
-        x = balerd.poll()
-        if balerd.returncode != None:
-            # balerd terminated
-            break
-        blog = open(BALERD_LOG_PATH, "r")
-        blog.seek(pos, 0)
-        ln = blog.readline()
-        if not ln:
-            pos = blog.tell()
-            blog.close()
-            time.sleep(0.1)
-            continue
-        m = ready_re.match(ln)
-        if m:
-            is_ready = True
-            blog.close()
-            break
-        pos = blog.tell()
-        blog.close()
-
-    if not is_ready:
-        raise Exception("Something bad happened to balerd")
-
-    # now, feed some data to the daemon
-    log.info("Feeding data to balerd")
-    sock = socket.create_connection(("localhost", BIN_TCP_PORT))
-    count = 0
-    for msg in MESSAGES(count = True):
-        sock.send(msg.sock_msg())
-    sock.close()
-    time.sleep(2)
-    log.info("Terminating balerd")
-    balerd.terminate()
 
 _bs = None
 def get_bstore():
@@ -509,7 +426,8 @@ class TestBq(unittest.TestCase):
         if not MAKE_STORE:
             return
         shutil.rmtree(STORE_PATH, ignore_errors = True)
-        make_store()
+        make_store(STORE_PATH, HOST_ID_ENTRIES(),
+                   [m.sock_msg() for m in MESSAGES(True)])
         log.info("------- setUpClass COMPLETED -------")
 
     @classmethod
