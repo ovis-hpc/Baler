@@ -11,6 +11,7 @@ import unittest
 import subprocess
 
 from baler import Bq as bq
+from test_util.test_util import ts_text
 
 STORE_PATH = "./store"
 BALERD_CFG_PATH = "./balerd.cfg"
@@ -55,21 +56,6 @@ DEBUG = Debug()
 def host_generator():
     for i in range(0,NUM_HOSTS):
         yield "node%05d" % i
-
-def ts_text(sec, usec = 0):
-    tm = time.localtime(sec)
-    tz = time.altzone if tm.tm_isdst else time.timezone
-    if tz < 0:
-        sign = '+'
-        tz = -tz
-    else:
-        sign = '-'
-    tz_hr = tz / 3600
-    tz_min = (tz % 3600) / 60
-    txt = time.strftime("%FT%T.", tm)
-    txt += "%06d" % usec
-    txt += "%s%02d:%02d"%(sign, tz_hr, tz_min)
-    return txt
 
 def msg_generator():
     count = 0
