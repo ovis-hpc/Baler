@@ -11,24 +11,10 @@ import unittest
 import subprocess
 
 from baler import Bq as bq
-from test_util.test_util import ts_text
+from test_util.test_util import ts_text, make_store
 
 STORE_PATH = "./store"
-BALERD_CFG_PATH = "./balerd.cfg"
-BIN_TCP_PORT = "10514"
-BALERD_HOST_LIST = "host.list"
 NUM_HOSTS = 16
-BALERD_CFG = """
-tokens type=HOSTNAME path=%(host_list)s
-tokens type=WORD path=../eng-dictionary
-plugin name=bout_store_msg
-plugin name=bout_store_hist tkn=1 ptn=1 ptn_tkn=1
-plugin name=bin_tcp port=%(bin_tcp_port)s parser=syslog_parser
-""" % {
-    "bin_tcp_port": BIN_TCP_PORT,
-    "host_list": BALERD_HOST_LIST,
-}
-BALERD_LOG_PATH = "./balerd.log"
 
 TEMPLATE = [
     "This is Pattern One:",
@@ -66,74 +52,16 @@ def msg_generator():
             msg = "%s %s %s %d" % ( ts_str, h, tmp, count )
             yield msg
 
-
-def make_store():
-    log.info("------- making the store -------")
-    cfg = open(BALERD_CFG_PATH, "w")
-    print >>cfg, BALERD_CFG
-    cfg.close()
-
-    # clear blog
-    blog = open(BALERD_LOG_PATH, "w")
-    blog.close()
-
-    hfile = open(BALERD_HOST_LIST, "w")
-    for h in host_generator():
-        print >>hfile, h
-    hfile.close()
-
-    bcmd = "balerd -F -S bstore_sos -s %(store_path)s -C %(cfg_path)s \
-            -l %(log_path)s -v INFO" % {
-                "store_path": STORE_PATH,
-                "cfg_path": BALERD_CFG_PATH,
-                "log_path": BALERD_LOG_PATH,
-            }
-    log.info("balerd cmd: " + bcmd)
-    balerd = subprocess.Popen("exec " + bcmd, shell=True)
-    pos = 0
-    is_ready = False
-    ready_re = re.compile(".* Baler is ready..*")
-    # look for "Baler is ready" in the log
-    while True:
-        x = balerd.poll()
-        if balerd.returncode != None:
-            # balerd terminated
-            break
-        blog = open(BALERD_LOG_PATH, "r")
-        blog.seek(pos, 0)
-        ln = blog.readline()
-        if not ln:
-            pos = blog.tell()
-            blog.close()
-            time.sleep(0.1)
-            continue
-        m = ready_re.match(ln)
-        if m:
-            is_ready = True
-            blog.close()
-            break
-        pos = blog.tell()
-        blog.close()
-
-    if not is_ready:
-        raise Exception("Something bad happened to balerd")
-
-    # now, feed some data to the daemon
-    log.info("Feeding data to balerd")
-    sock = socket.create_connection(("localhost", BIN_TCP_PORT))
+def RAW_MESSAGES():
     for msg in msg_generator():
-            sock.send("<1>1 " + msg + "\n")
-    sock.close()
-    time.sleep(1)
-    log.info("Terminating balerd")
-    balerd.terminate()
+        yield "<1>1 " + msg + "\n"
 
 class TestSpace(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         log.info("------- setUpClass -------")
         shutil.rmtree(STORE_PATH, ignore_errors = True)
-        make_store()
+        make_store(STORE_PATH, host_generator(), RAW_MESSAGES())
         cls.bs = bq.Bstore()
         cls.bs.open(STORE_PATH)
         log.info("------- setUpClass COMPLETED -------")
