@@ -10,9 +10,12 @@ def ts_text(sec, usec = 0):
     """Convert `sec`, `usec` into local time text"""
     tm = time.localtime(sec)
     tz_sec = -time.altzone if tm.tm_isdst else -time.timezone
-    tz_hr = tz_sec / 3600
-    tz_min = abs((tz_sec % 3600) / 60)
-    tz_text = "%+03d:%02d" % (tz_hr, tz_min)
+    if not tz_sec:
+        tz_text = "+00:00"
+    else:
+        tz_hr = tz_sec / 3600
+        tz_min = abs((tz_sec % 3600) / 60)
+        tz_text = "%+03d:%02d" % (tz_hr, tz_min)
     text = time.strftime("%FT%T", tm) + ( ".%06d" % usec ) + tz_text
     return text
 
