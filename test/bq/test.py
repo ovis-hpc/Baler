@@ -17,6 +17,7 @@ import unittest
 import subprocess
 
 from StringIO import StringIO
+from test_util.test_util import ts_text
 
 from baler import Bq as bq
 
@@ -59,20 +60,6 @@ def str_findall(needle, haystack):
         coll.append(pos)
         pos = haystack.find(needle, pos+1)
     return coll
-
-def ts_text(ts):
-    tm = time.localtime(ts)
-    tz = time.altzone if tm.tm_isdst else time.timezone
-    if tz < 0:
-        sign = '+'
-        tz = -tz
-    else:
-        sign = '-'
-    tz_hr = tz / 3600
-    tz_min = (tz % 3600) / 60
-    txt = time.strftime("%FT%T.000000", tm)
-    txt += "%s%02d:%02d"%(sign, tz_hr, tz_min)
-    return txt
 
 def TS_RANGE():
     for ts in range(TS_BEGIN, TS_END, TS_INC):
