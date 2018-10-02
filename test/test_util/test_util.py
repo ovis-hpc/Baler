@@ -1,6 +1,8 @@
 import os
 import re
+import pdb
 import time
+import socket
 import tempfile
 import subprocess
 
@@ -33,9 +35,11 @@ class BalerDaemon(object):
                        input_wkr = None, output_wkr = None,
                        queue_depth = None,
                        log_file = None,
-                       log_verbosity = "WARN",
+                       log_verbosity = "INFO",
                        gdb_port = None,
                        log_truncate = True):
+        self.rm_log = False
+        self.rm_config = False
         if config_file and config_text:
             raise AttributeError("`config_file` and `config_text` "
                                  "cannot be supplied at the same time.")
@@ -44,9 +48,15 @@ class BalerDaemon(object):
         if purge_store:
             shutil.rmtree(store_path, ignore_errors = True)
         self.proc = None
+        if not config_file:
+            # create config file from config_text
+            (fd, config_file) = tempfile.mkstemp()
+            self.rm_config = True
+            f = os.fdopen(fd, "w")
+            f.write(config_text)
+            f.close()
         self.config_text = config_text
         self.config_file = config_file
-        self.rm_log = False
         if not log_file:
             # If not log_file given, use tmpfile
             (fd, log_file) = tempfile.mkstemp()
@@ -74,6 +84,8 @@ class BalerDaemon(object):
         self.stop()
         if self.rm_log:
             os.unlink(self.log_file)
+        if self.rm_config:
+            os.unlink(self.config_file)
 
     def is_running(self):
         return self.proc and self.proc.returncode == None
@@ -114,12 +126,7 @@ class BalerDaemon(object):
             cmd = "exec balerd -F"
         for k, v in self.opts.iteritems():
             cmd += (' ' + k + ' ' + v)
-        if self.config_file:
-            cmd += ' -C ' + self.config_file
-        elif self.config_text:
-            self.tmp_file = tempfile.NamedTemporaryFile()
-            self.tmp_file.write(self.config_text)
-            cmd += ' -C ' + self.tmp_file.name
+        cmd += ' -C ' + self.config_file
         self.proc = subprocess.Popen(cmd, shell=True, close_fds = True)
         if self.gdb_port:
             raw_input("gdb port: %s ... please attach and press ENTER to continue" % str(self.gdb_port))
@@ -140,3 +147,49 @@ class BalerDaemon(object):
             a = b
             time.sleep(interval)
             b = proc_pid_ustime(pid)
+
+DICT_PATH = os.path.dirname(__file__) + "/eng-dictionary"
+
+def make_store(store_path, hosts, msgs):
+    """Make a store from list of hosts and msgs
+
+    Parameters:
+
+    store_path (str) - the path of the store to be generated
+
+    hosts (list(str)) - list of hosts (or "host host_id" entries)
+
+    msgs (list(str)) - list of raw messages to be sent (via socket) to balerd
+
+    """
+    host_path = None
+    global DICT_PATH
+    try:
+        (host_fd, host_path) = tempfile.mkstemp()
+        with os.fdopen(host_fd, "w") as hf:
+            for h in hosts:
+                print >>hf, h
+        config_text = """
+            tokens type=HOSTNAME path=%(host_path)s
+            tokens type=WORD path=%(dict_path)s
+            plugin name=bout_store_msg
+            plugin name=bout_store_hist tkn=1 ptn=1 ptn_tkn=1
+            plugin name=bin_tcp port=10514 parser=syslog_parser
+        """ % {
+            "host_path": host_path,
+            "dict_path": DICT_PATH,
+        }
+        balerd = BalerDaemon(store_path, config_text = config_text)
+        balerd.start()
+        try:
+            sock = socket.create_connection(("localhost", 10514))
+        except:
+            pdb.set_trace()
+        for m in msgs:
+            sock.send(m)
+        sock.close()
+        balerd.wait_idle()
+        balerd.stop()
+    finally:
+        if host_path:
+            os.unlink(host_path)
