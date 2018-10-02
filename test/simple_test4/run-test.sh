@@ -140,7 +140,12 @@ trap 'exit_hook' EXIT
 __info "starting balerd, cmd: $BALERD_CMD"
 $BALERD_CMD &
 
-sleep 1
+while true; do
+	if grep "Baler is ready." $BLOG >/dev/null 2>&1; then
+		break
+	fi
+	sleep 1
+done
 
 check_balerd
 
