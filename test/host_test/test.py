@@ -70,12 +70,11 @@ class TestRerun(unittest.TestCase):
                                          log_file = BALERD_LOG,
                                          log_verbosity = "INFO")
         balerd.start()
-        time.sleep(1)
         sock = socket.create_connection(("localhost", PORT))
         for msg in msg_iter1():
             sock.send(msg)
         sock.close()
-        time.sleep(1)
+        balerd.wait_idle()
         balerd.stop()
         bs = bq.Bstore()
         bs.open(STORE_PATH)
@@ -91,12 +90,11 @@ class TestRerun(unittest.TestCase):
                                          log_file = BALERD_LOG,
                                          log_verbosity = "INFO")
         balerd.start()
-        time.sleep(1)
         sock = socket.create_connection(("localhost", PORT))
         for msg in msg_iter2():
             sock.send(msg)
         sock.close()
-        time.sleep(1)
+        balerd.wait_idle()
         balerd.stop()
         bs = bq.Bstore()
         bs.open(STORE_PATH)
