@@ -1,4 +1,7 @@
+import os
+import re
 import time
+import tempfile
 import subprocess
 
 time.tzset()
@@ -13,6 +16,11 @@ def ts_text(sec, usec = 0):
     text = time.strftime("%FT%T", tm) + ( ".%06d" % usec ) + tz_text
     return text
 
+def proc_pid_ustime(pid):
+    f = open('/proc/%d/stat' % pid, 'r')
+    rec = f.readline().split(' ')
+    return map(int, rec[13:15])
+
 class BalerDaemon(object):
     """Start / stop baler daemon from Python subprocess"""
 
@@ -23,7 +31,8 @@ class BalerDaemon(object):
                        queue_depth = None,
                        log_file = None,
                        log_verbosity = "WARN",
-                       gdb_port = None):
+                       gdb_port = None,
+                       log_truncate = True):
         if config_file and config_text:
             raise AttributeError("`config_file` and `config_text` "
                                  "cannot be supplied at the same time.")
@@ -34,6 +43,19 @@ class BalerDaemon(object):
         self.proc = None
         self.config_text = config_text
         self.config_file = config_file
+        self.rm_log = False
+        if not log_file:
+            # If not log_file given, use tmpfile
+            (fd, log_file) = tempfile.mkstemp()
+            self.rm_log = True
+            os.close(fd)
+        if log_truncate:
+            f = open(log_file, "w")
+            f.close()
+        else:
+            f = open(log_file, "a")
+            f.close()
+        self.log_file = log_file
         opts =  {
                     '-s': store_path,
                     '-S': store_plugin,
@@ -47,9 +69,38 @@ class BalerDaemon(object):
 
     def __del__(self):
         self.stop()
+        if self.rm_log:
+            os.unlink(self.log_file)
 
     def is_running(self):
         return self.proc and self.proc.returncode == None
+
+    def _wait_ready(self):
+        pos = 0
+        ready_re = re.compile(".* Baler is ready..*")
+        is_ready = False
+        while True:
+            x = self.proc.poll()
+            if self.proc.returncode != None:
+                # balerd terminated
+                break
+            blog = open(self.log_file, "r")
+            blog.seek(pos, 0)
+            ln = blog.readline()
+            if not ln:
+                pos = blog.tell()
+                blog.close()
+                time.sleep(0.1)
+                continue
+            m = ready_re.match(ln)
+            if m:
+                is_ready = True
+                blog.close()
+                break
+            pos = blog.tell()
+            blog.close()
+        if not is_ready:
+            raise Exception("Something bad happened to balerd")
 
     def start(self):
         if self.is_running():
@@ -69,11 +120,20 @@ class BalerDaemon(object):
         self.proc = subprocess.Popen(cmd, shell=True, close_fds = True)
         if self.gdb_port:
             raw_input("gdb port: %s ... please attach and press ENTER to continue" % str(self.gdb_port))
-        else:
-            time.sleep(3) # to make sure that it is fully up
+        self._wait_ready()
 
     def stop(self):
         if not self.is_running():
             return
         self.proc.terminate()
         self.proc.wait()
+
+    def wait_idle(self, interval = 3.0):
+        """Blocking wait until `balerd` is not busy"""
+        pid = self.proc.pid
+        a = None
+        b = proc_pid_ustime(pid)
+        while a != b:
+            a = b
+            time.sleep(interval)
+            b = proc_pid_ustime(pid)
