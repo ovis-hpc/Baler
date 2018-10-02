@@ -46,6 +46,8 @@ PATTERNS = [
 
 log = logging.getLogger(__name__)
 
+time.tzset()
+
 class Debug(object): pass
 
 DEBUG = Debug()
@@ -54,15 +56,28 @@ def host_generator():
     for i in range(0,NUM_HOSTS):
         yield "node%05d" % i
 
+def ts_text(sec, usec = 0):
+    tm = time.localtime(sec)
+    tz = time.altzone if tm.tm_isdst else time.timezone
+    if tz < 0:
+        sign = '+'
+        tz = -tz
+    else:
+        sign = '-'
+    tz_hr = tz / 3600
+    tz_min = (tz % 3600) / 60
+    txt = time.strftime("%FT%T.", tm)
+    txt += "%06d" % usec
+    txt += "%s%02d:%02d"%(sign, tz_hr, tz_min)
+    return txt
 
 def msg_generator():
     count = 0
+    ts_str = ts_text(1483167723, 456789)
     for h in host_generator():
         for tmp in TEMPLATE:
             count += 1
-            msg = "2016-12-31T01:02:03.456789-06:00 %s %s %d" % (
-                        h, tmp, count
-                    )
+            msg = "%s %s %s %d" % ( ts_str, h, tmp, count )
             yield msg
 
 
