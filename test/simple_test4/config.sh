@@ -43,7 +43,7 @@ export BLOG_LEVEL=INFO
 
 export BTEST_TKN_TYPE_MASK="''"
 
-source env.sh
+# source env.sh
 
 get_btest_config() {
 	cat <<EOF

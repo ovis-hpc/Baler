@@ -56,6 +56,11 @@ EOF
 fi
 } > $BCONFIG
 
+which balerd >/dev/null 2>&1 || {
+	__err "balerd not in PATH"
+	exit -1
+}
+
 BALERD_OPTS="-S $BSTORE_PLUGIN -s $BSTORE -l $BLOG \
 	     -C $BCONFIG -v $BLOG_LEVEL \
 	     -I $BIN_THREADS -O $BOUT_THREADS"
