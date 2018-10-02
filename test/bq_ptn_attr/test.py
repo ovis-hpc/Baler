@@ -14,25 +14,12 @@ import unittest
 import subprocess
 
 from StringIO import StringIO
+from test_util.test_util import make_store
 
 from baler import Bq as bq
 
 STORE_PATH = "./store"
-BALERD_CFG_PATH = "./balerd.cfg"
-BIN_TCP_PORT = "10514"
-BALERD_HOST_LIST = "host.list"
-BALERD_CFG = """
-tokens type=WORD path=eng-dictionary
-tokens type=HOSTNAME path=%(host_list)s
-plugin name=bout_store_msg
-plugin name=bout_store_hist tkn=1 ptn=1 ptn_tkn=1
-plugin name=bin_tcp port=%(bin_tcp_port)s parser=syslog_parser
-""" % {
-    "bin_tcp_port": BIN_TCP_PORT,
-    "host_list": BALERD_HOST_LIST,
-}
-BALERD_LOG_PATH = "./balerd.log"
-
+HOSTS = [ "node%05d" % i for i in range(1, 17) ]
 MAKE_STORE = True
 
 PATTERNS = [
@@ -121,67 +108,12 @@ class bclient(icmd):
         super(bclient, self).__init__(cmd)
 
 
-def make_store():
-    log.info("------- making the store -------")
-    cfg = open(BALERD_CFG_PATH, "w")
-    print >>cfg, BALERD_CFG
-    cfg.close()
-
-    # clear blog
-    blog = open(BALERD_LOG_PATH, "w")
-    blog.close()
-
-    hosts = [ln.strip() for ln in open(BALERD_HOST_LIST)]
-
-    bcmd = "balerd -F -S bstore_sos -s %(store_path)s -C %(cfg_path)s \
-            -l %(log_path)s -v INFO" % {
-                "store_path": STORE_PATH,
-                "cfg_path": BALERD_CFG_PATH,
-                "log_path": BALERD_LOG_PATH,
-            }
-    log.info("balerd cmd: " + bcmd)
-    balerd = subprocess.Popen("exec " + bcmd, shell=True)
-    pos = 0
-    is_ready = False
-    ready_re = re.compile(".* Baler is ready..*")
-    # look for "Baler is ready" in the log
-    while True:
-        x = balerd.poll()
-        if balerd.returncode != None:
-            # balerd terminated
-            break
-        blog = open(BALERD_LOG_PATH, "r")
-        blog.seek(pos, 0)
-        ln = blog.readline()
-        if not ln:
-            pos = blog.tell()
-            blog.close()
-            time.sleep(0.1)
-            continue
-        m = ready_re.match(ln)
-        if m:
-            is_ready = True
-            blog.close()
-            break
-        pos = blog.tell()
-        blog.close()
-
-    if not is_ready:
-        raise Exception("Something bad happened to balerd")
-
-    # now, feed some data to the daemon
-    log.info("Feeding data to balerd")
-    sock = socket.create_connection(("localhost", BIN_TCP_PORT))
-    for h in hosts:
+def RAW_MESSAGES():
+    for h in HOSTS:
         for ptn in PATTERNS:
-            msg = "<1>1 2016-12-31T01:02:03.456789-06:00 %s %s\n" % (
-                        h, ptn
-                    )
-            sock.send(msg)
-    sock.close()
-    time.sleep(1)
-    log.info("Terminating balerd")
-    balerd.terminate()
+            msg = "<1>1 2016-12-31T01:02:03.456789-06:00 %s %s\n" % (h, ptn)
+            yield msg
+
 
 def cmd(*args):
     text = ' '.join(args)
@@ -223,7 +155,7 @@ class TestAttr(unittest.TestCase):
         if not MAKE_STORE:
             return
         shutil.rmtree(STORE_PATH, ignore_errors = True)
-        make_store()
+        make_store(STORE_PATH, HOSTS, RAW_MESSAGES())
         bs = bq.Bstore()
         bs.open(STORE_PATH)
         # Create TAG
