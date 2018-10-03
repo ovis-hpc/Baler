@@ -2,6 +2,7 @@
 import os
 import sys
 import re
+import time
 import unittest
 from dateutil import parser as ts_parser
 from test_util import util
@@ -29,10 +30,14 @@ RE_SYSLOG1 = re.compile(
 )
 RE_CRAY = re.compile("^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) (.*)$")
 
+EPOCH = ts_parser.parse("1970-01-01T00:00:00.000000-00:00")
+
 def parse_ts(s):
-    t = ts_parser.parse(s)
-    ts = float(t.strftime("%s")) + t.microsecond/1e6
-    return ts
+    ts = ts_parser.parse(s)
+    if ts.tzinfo:
+        dt = ts - EPOCH
+        return dt.total_seconds()
+    return time.mktime(ts.timetuple())
 
 class Msg(object):
     __slots__ = ["ts", "text"]
