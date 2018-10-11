@@ -18,7 +18,7 @@ def TYPE_MASK(_type):
 
 def get_btest_var_table():
     rex = re.compile("([^ ]+) (.*)")
-    cmd = "source config.sh; for X in BSTORE ${!BTEST_*}; do echo $X ${!X}; done"
+    cmd = "source config.sh >/dev/null 2>&1; for X in BSTORE ${!BTEST_*}; do echo $X ${!X}; done"
     out = subprocess.check_output(cmd, shell=True, executable="/bin/bash")
     sio = StringIO(out)
     table = {}
@@ -77,7 +77,7 @@ BTEST_TKN_TYPE_MASK = get_btest_var_map("BTEST_TKN_TYPE_MASK",
                                         Bq.btkn_type_mask_from_str, 0)
 
 BTEST_N_DAEMONS = get_btest_int("BTEST_N_DAEMONS")
-BSTORE = BTEST_VARS["BSTORE"]
+BSTORE = BTEST_VARS.get("BSTORE", "store")
 
 
 syslog_time_regex = re.compile("(\\d{4})-(\\d{2})-(\\d{2})T\
