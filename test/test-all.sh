@@ -2,7 +2,7 @@
 
 set -e
 LIST=(
-simple_test4
+simple_test
 bq
 bq_ptn_attr
 craylog_parser_test
