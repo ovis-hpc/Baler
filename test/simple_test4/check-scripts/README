@@ -1,2 +1,0 @@
-The scripts in this directory are called by `run-test.sh` from the parent
-directory. The parent directory is the working directory.
