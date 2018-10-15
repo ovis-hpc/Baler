@@ -1,19 +1,47 @@
 #!/usr/bin/env python
+
 import os
-import sys
 import re
+import sys
 import time
+import shutil
+import socket
+import logging
 import unittest
+
 from dateutil import parser as ts_parser
+from test_util.test_util import ts_text, BalerDaemon
 from test_util import util
 
-def input_iter():
-    for fname in os.listdir(util.BTEST_INPUT_DIR):
-        path = util.BTEST_INPUT_DIR + "/" + fname
-        f = open(path)
-        for l in f:
-            yield l.strip()
+from baler import Bq as bq
 
+log = logging.getLogger(__name__)
+
+PORT = "10514"
+CONFIG_TEXT = """
+tokens type=WORD path=eng-dictionary
+plugin name=bout_store_msg
+plugin name=bout_store_hist tkn=1 ptn=1 ptn_tkn=1
+plugin name=bin_tcp port=%(bin_tcp_port)s parser=syslog_parser
+""" % {
+    "bin_tcp_port": PORT,
+}
+STORE_PATH = "store"
+BALERD_LOG = "balerd.log"
+LOGFILES = [
+      "log/hwerr.txt",
+      "log/syslog1.txt",
+      "log/syslog2.txt",
+      "log/syslog3.txt",
+      "log/syslog4.txt",
+]
+MAKE_STORE = True
+
+def input_iter():
+    for name in LOGFILES:
+        with open(name, "r") as f:
+            for l in f:
+                yield l.strip()
 
 RE_SYSLOG0 = re.compile(
     "^(?:<\d+>)?(%(months)s +\d{1,2} +\d\d:\d\d:\d\d) (.*)$" % {
@@ -86,15 +114,51 @@ class Msg(object):
 
 #### end class Msg ####
 
-class TestMsgs(unittest.TestCase):
+
+class TestSyslogParser(unittest.TestCase):
+    """Test syslog parser"""
+
+    @classmethod
+    def _make_store(cls):
+        shutil.rmtree(STORE_PATH, True)
+        # start balerd
+        balerd = BalerDaemon(STORE_PATH, config_text = CONFIG_TEXT,
+                                         log_file = BALERD_LOG,
+                                         log_verbosity = "INFO")
+        balerd.start()
+        # feed data to balerd
+        for name in LOGFILES:
+            with open(name, "r") as f:
+                sock = socket.create_connection(("localhost", PORT))
+                for l in f:
+                    sock.send(l)
+                sock.close()
+        balerd.wait_idle()
+        balerd.stop()
+
+    @classmethod
+    def setUpClass(cls):
+        if MAKE_STORE:
+            cls._make_store()
+
+    @classmethod
+    def tearDownClass(cls):
+        pass
+
     def testMsgs(self):
         inp = [Msg.fromText(x) for x in input_iter()]
         inp.sort()
-        bs = util.BStore.open("bstore_sos", util.BSTORE, os.O_RDWR, 0)
+        bs = util.BStore.open("bstore_sos", STORE_PATH, os.O_RDWR, 0)
         itr = util.MsgIter(bs)
         outp = [Msg.fromUtilMsg(x) for x in itr]
         outp.sort()
         self.assertEqual(inp, outp)
 
 if __name__ == "__main__":
-    unittest.main()
+    LOGFMT = "%(asctime)s %(name)s %(levelname)s: %(message)s"
+    DATEFMT = "%F %T"
+    logging.basicConfig(format=LOGFMT, datefmt=DATEFMT)
+    log.setLevel(logging.INFO)
+    # unittest.TestLoader.testMethodPrefix = "test_"
+    MAKE_STORE = True
+    unittest.main(verbosity=2, failfast=1)
