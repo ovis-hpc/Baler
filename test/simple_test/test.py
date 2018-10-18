@@ -16,6 +16,8 @@ from baler import Bq as bq
 
 log = logging.getLogger(__name__)
 
+MAKE_STORE = True
+
 HOST_FILE = "host.list"
 HOST_NUM = 16
 HOST_ID_BASE = 1000
