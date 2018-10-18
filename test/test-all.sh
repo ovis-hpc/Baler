@@ -1,5 +1,7 @@
 #!/bin/bash
 
+XMLRUNNER=$1
+
 set -e
 LIST=(
 simple_test
@@ -47,7 +49,13 @@ for X in ${LIST[*]}; do
 	echo ""
 	header "BEGIN $X"
 	if [[ -e test.py ]]; then
-		./test.py -f -v
+		if [[ -z $XMLRUNNER ]]; then
+			./test.py -f -v
+		else
+			echo "xmlrunner"
+			rm -fr *.xml
+			python -m xmlrunner -v test
+		fi
 	else
 		./run-test.sh
 	fi
