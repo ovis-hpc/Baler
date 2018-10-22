@@ -25,6 +25,7 @@ STORE_PATH = "./store"
 TS_BEGIN = int(time.time()) / (24*3600) * (24*3600)
 TS_END = TS_BEGIN + 24*3600
 TS_INC = 600
+TS_LAST = None
 HOST_NUM = 8
 HOST_BASE = 1000
 
@@ -105,6 +106,7 @@ def ptn_last_seen(ptn_idx = None, ptn_key = None):
 def MESSAGES(count = False):
     global MSG_COUNT
     global PTN_COUNT
+    global TS_LAST
     msg_count = 0
     ts_count = int(TS_END - TS_BEGIN + TS_INC - 1) / TS_INC
     ptn_count = len(PATTERNS)
@@ -123,6 +125,7 @@ def MESSAGES(count = False):
                     PTN_COUNT[ptn] += 1
                     PTN_FIRST_SEEN[ptn] = min(PTN_FIRST_SEEN[ptn], ts)
                     PTN_LAST_SEEN[ptn]  = max(PTN_LAST_SEEN[ptn],  ts)
+                    TS_LAST = ts
 
 MAKE_STORE = True
 
@@ -1053,6 +1056,24 @@ class TestBq(unittest.TestCase):
                                        tv_end = (ts1, 0))
         self._bq_bs_hist_cmp(bqents, bsents)
 
+    def test_034_bq_summary(self):
+        """bq -p STORE --summary"""
+        lines = bq_cmd("-p", STORE_PATH, "--summary")
+        sio = StringIO(lines)
+        ents = {}
+        for l in sio.readlines():
+            (k, v) = l.split(':', 1)
+            k = k.strip()
+            v = v.strip()
+            ents[k] = v
+        self.assertEqual(int(ents['Pattern Count']), len(PATTERNS))
+        self.assertEqual(int(ents['Message Count']), MSG_COUNT)
+        self.assertEqual(int(ents['Messages per Pattern']),
+                         MSG_COUNT / len(PATTERNS))
+        ts0 = parse_bq_ts(ents['First Message'])
+        self.assertEqual(ts0, TS_BEGIN)
+        ts1 = parse_bq_ts(ents['Last Message'])
+        self.assertEqual(ts1, TS_LAST)
 
 if __name__ == "__main__":
     pystartup = os.getenv("PYTHONSTARTUP")
@@ -1062,6 +1083,6 @@ if __name__ == "__main__":
     DATEFMT = "%F %T"
     logging.basicConfig(format=LOGFMT, datefmt=DATEFMT)
     log.setLevel(logging.INFO)
-    unittest.TestLoader.testMethodPrefix = "test_"
+    unittest.TestLoader.testMethodPrefix = "test_034"
     MAKE_STORE = True
     unittest.main(verbosity = 2, failfast = True)
