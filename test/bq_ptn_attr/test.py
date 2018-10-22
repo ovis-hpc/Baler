@@ -359,6 +359,65 @@ class TestAttr(unittest.TestCase):
                                                      attr_value = 'new')])
         self.assertEqual(ptn_ids, set([257]))
 
+    def test_013_bq_ptn_attr_list(self):
+        """bq -p STORE --ptn_attr_list"""
+        lines = bq_cmd("--ptn_attr_list")
+        attrs = set(lines.splitlines())
+        bs = bq.Bstore()
+        bs.open(STORE_PATH)
+        itr = bq.Battr_iter(bs)
+        comp = set(str(x) for x in itr)
+        del itr
+        bs.close()
+        self.assertEqual(attrs, comp)
+
+    def test_014_bq_ptn_attr_list_v(self):
+        """bq -p STORE --ptn_attr_list -v"""
+        lines = bq_cmd("--ptn_attr_list", "-v")
+        sio = StringIO(lines)
+        ents = []
+        attr = None
+        for l in sio.readlines():
+            if l.startswith(' '):
+                # value
+                value = l.strip()
+                ents.append((attr, value))
+            else:
+                # attr type
+                attr = l.strip()[:-1] # remove the ':' suffix
+        bs = bq.Bstore()
+        bs.open(STORE_PATH)
+        itr = bq.Bptn_attr_iter(bs)
+        comp = set((x.attr_type(), x.attr_value()) for x in itr)
+        del itr
+        bs.close()
+        self.assertEqual(len(ents), len(comp))
+        self.assertEqual(set(ents), comp)
+
+    def test_015_bq_ptn_attr_list_attr(self):
+        """bq -p STORE --ptn_attr_list --ptn_attr TYPE"""
+        lines = bq_cmd("--ptn_attr_list", "--ptn_attr", "TAG")
+        sio = StringIO(lines)
+        ents = []
+        attr = None
+        for l in sio.readlines():
+            if l.startswith(' '):
+                # value
+                value = l.strip()
+                ents.append((attr, value))
+            else:
+                # attr type
+                attr = l.strip()[:-1] # remove the ':' suffix
+        bs = bq.Bstore()
+        bs.open(STORE_PATH)
+        itr = bq.Bptn_attr_iter(bs)
+        itr.set_filter(attr_type = "TAG")
+        comp = set((x.attr_type(), x.attr_value()) for x in itr)
+        del itr
+        bs.close()
+        self.assertEqual(len(ents), len(comp))
+        self.assertEqual(set(ents), comp)
+
 
 if __name__ == "__main__":
     LOGFMT = "%(asctime)s %(name)s %(levelname)s: %(message)s"
