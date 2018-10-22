@@ -335,34 +335,65 @@ def fmt_tstamp(ts, args):
     return t
 
 def show_summary(bs, args):
-    if not args.ptn_id:
-        ptn_id = 0
-    else:
+    fargs = {}
+    ptn_id = 1
+    if args.ptn_id:
         ptn_id = args.ptn_id
+    fargs['ptn_id'] = ptn_id
     comp_id = tkn_id_from_args(args)
-    if not comp_id:
-        comp_id = 0
+    if comp_id:
+        fargs['comp_id'] = comp_id
     start, end = get_times_from_args(args)
+    if start:
+        fargs['tv_begin'] = (start, 0)
+    if end:
+        fargs['tv_end'] = (end, 0)
+
+    msg_count = 0
+    ptn_count = 0
+    if len(fargs) > 1:
+        # more criteria than ptn_id
+        itr = Bq.Bcomp_hist_iter(bs)
+        itr.set_filter(bin_width = 3600, **fargs)
+        ptn_ids = set()
+        ok = itr.first()
+        while ok:
+            h = itr.obj()
+            ptn_ids.add(h.ptn_id())
+            msg_count += h.msg_count()
+            ok = itr.next()
+        ptn_count = len(ptn_ids)
+        del itr
+    else:
+        # just pattern ID
+        if ptn_id == 1:
+            del fargs['ptn_id']
+        pi = Bq.Bptn_iter(bs)
+        pi.set_filter(**fargs)
+        ok = pi.first()
+        while ok:
+            p = pi.obj()
+            msg_count += p.msg_count()
+            ptn_count += 1
+            ok = pi.next()
+        del pi
+    print("Pattern Count        : {0}".format(ptn_count))
+    print("Message Count        : {0}".format(msg_count))
+    print("Messages per Pattern : {0}".format(msg_count / ptn_count))
 
     mi = Bq.Bmsg_iter(bs)
-    pi = Bq.Bptn_iter(bs)
-    ptn_count = pi.count()
-    print("Pattern Count        : {0}".format(ptn_count))
-    msg_count = mi.count(1)
-    print("Message Count        : {0}".format(msg_count))
-    print("Messages per Pattern : 1/{0}".format(msg_count / ptn_count))
-    if mi.start(comp_id, ptn_id, start):
-        m = mi.next()
+    mi.set_filter(**fargs)
+    if mi.first():
+        m = mi.obj()
         print("First Message        : {0}".format(fmt_tstamp(m.tv_sec(), args)))
         if args.verbose:
             print_msg(bs, m, args)
-        mi.end()
-        m = mi.next()
+        mi.last()
+        m = mi.obj()
         print("Last Message         : {0}".format(fmt_tstamp(m.tv_sec(), args)))
         if args.verbose:
             print_msg(bs, m, args)
     del mi
-    del pi
 
 def skip_token(tkn):
     return False
