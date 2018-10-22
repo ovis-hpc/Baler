@@ -336,7 +336,7 @@ def fmt_tstamp(ts, args):
 
 def show_summary(bs, args):
     fargs = {}
-    ptn_id = 1
+    ptn_id = 0
     if args.ptn_id:
         ptn_id = args.ptn_id
     fargs['ptn_id'] = ptn_id
@@ -366,8 +366,6 @@ def show_summary(bs, args):
         del itr
     else:
         # just pattern ID
-        if ptn_id == 1:
-            del fargs['ptn_id']
         pi = Bq.Bptn_iter(bs)
         pi.set_filter(**fargs)
         ok = pi.first()
