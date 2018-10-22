@@ -1195,6 +1195,26 @@ def ptn_attr_rm(bs, args):
         raise ValueError("--ptn_attr_add requires --ptn_attr_file, or "
                          "a pair of --ptn_id and --ptn_attr.")
 
+def ptn_attr_list_value(bs, atype):
+    print("%s:" % atype)
+    vi = Bq.Bptn_attr_iter(bs)
+    vi.set_filter(attr_type = atype)
+    ss = set(value for (ptn_id,_type,value) in vi)
+    for v in ss:
+        print("    %s" % v)
+
+
+def ptn_attr_list(bs, args):
+    if args.ptn_attr:
+        ptn_attr_list_value(bs, args.ptn_attr)
+        return
+    ai = Bq.Battr_iter(bs)
+    for atype in ai:
+        if args.verbose:
+            ptn_attr_list_value(bs, atype)
+        else:
+            print("%s" % atype)
+
 def show_version(args):
     print("bq")
     print("  version: %s" % Bq.bversion())
@@ -1248,7 +1268,7 @@ if __name__ == "__main__":
                         default=None)
     parser.add_argument("--summary", action="store_true",
                         help="Show a summary of the database")
-    parser.add_argument("--verbose", action="store_true",
+    parser.add_argument("--verbose", "-v", action="store_true",
                         help="Show more detailed summary information")
     parser.add_argument("--tkn", action="store_true",
                         help="Query tokens")
@@ -1266,9 +1286,16 @@ if __name__ == "__main__":
     parser.add_argument("--dist", action="store_true",
                         help="Query the disrtribution --tkn, --ptn, and --comp")
     parser.add_argument("--ptn_attr",
-                        help="'TYPE=VALUE' for pattern attribute matching")
+                        help="'TYPE=VALUE' for pattern attribute matching when "
+                        "using with --match. TYPE when using with "
+                        "--ptn_attr_list to list values of the given TYPE.")
     parser.add_argument("--ptn_attr_list", action="store_true",
-                        help="Also list pattern attributes")
+                        help="List pattern attributes. If used alone, list "
+                        "available pattern attribute types. If used with -v, "
+                        "list all pattern attribute types with their values "
+                        "existed in the database. If used with --ptn, list "
+                        "the attribute-values for each pattern."
+                        )
     parser.add_argument("--ptn_attr_add", action="store_true",
                         help="'Adding attribute(s) to the pattern(s). "
                              "This requires --ptn_attr_file for batch "
@@ -1410,3 +1437,6 @@ if __name__ == "__main__":
 
     if args.ptn_attr_rm:
         ptn_attr_rm(bs, args)
+
+    if not args.ptn and args.ptn_attr_list:
+        ptn_attr_list(bs, args)
