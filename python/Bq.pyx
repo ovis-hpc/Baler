@@ -747,18 +747,6 @@ cdef class Bptn_iter(Biter):
         bptn.store = self.store
         return bptn
 
-    def iterFindFwd(self, **kwargs):
-        if "ptn_id" not in kwargs:
-            raise KeyError("'ptn_id' argument is required")
-        ptn_id = <int>kwargs["ptn_id"]
-        return Bs.bstore_ptn_iter_find_fwd(self.c_iter, ptn_id)
-
-    def iterFindRev(self, **kwargs):
-        if "ptn_id" not in kwargs:
-            raise KeyError("'ptn_id' argument is required")
-        ptn_id = <int>kwargs["ptn_id"]
-        return Bs.bstore_ptn_iter_find_rev(self.c_iter, ptn_id)
-
     cdef void *iterObj(self):
         return Bs.bstore_ptn_iter_obj(self.c_iter)
 
@@ -777,6 +765,32 @@ cdef class Bptn_iter(Biter):
     cdef int iterFilterSet(self, Bs.bstore_iter_filter_t f):
         return Bs.bstore_ptn_iter_filter_set(self.c_iter, f)
 
+    def _iterFind(self, fwd, **kwargs):
+        cdef Bs.timeval tval
+        cdef Bs.timeval *tv
+        try:
+            kw_tv = kwargs["tv_end"]
+            tval.tv_sec = kw_tv[0]
+            tval.tv_usec = kw_tv[1]
+            tv = &tval
+        except:
+            tv = NULL
+        if fwd:
+            return Bs.bstore_ptn_iter_find_fwd(self.c_iter, tv)
+        else:
+            return Bs.bstore_ptn_iter_find_rev(self.c_iter, tv)
+
+    def iterFindFwd(self, **kwargs):
+        """ Find pattern in a forward direction
+
+        Position the iterator at the message matching the given key (tv, ptn_id)
+        Keyword Parameters:
+        tv -- Tuple of (int,int) for (sec, usec)
+        """
+        return self._iterFind(1, **kwargs)
+
+    def iterFindRev(self, **kwargs):
+        return self._iterFind(0, **kwargs)
 
 cdef class Battr_iter(Biter):
     def __init__(self, Bstore store):

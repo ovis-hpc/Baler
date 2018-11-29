@@ -230,14 +230,14 @@ uint64_t bstore_ptn_iter_card(bptn_iter_t iter)
 	return iter->bs->plugin->ptn_iter_card(iter);
 }
 
-int bstore_ptn_iter_find_fwd(bptn_iter_t iter, bptn_id_t ptn_id)
+int bstore_ptn_iter_find_fwd(bptn_iter_t iter, const struct timeval *tv)
 {
-	return iter->bs->plugin->ptn_iter_find_fwd(iter, ptn_id);
+	return iter->bs->plugin->ptn_iter_find_fwd(iter, tv);
 }
 
-int bstore_ptn_iter_find_rev(bptn_iter_t iter, bptn_id_t ptn_id)
+int bstore_ptn_iter_find_rev(bptn_iter_t iter, const struct timeval *tv)
 {
-	return iter->bs->plugin->ptn_iter_find_rev(iter, ptn_id);
+	return iter->bs->plugin->ptn_iter_find_rev(iter, tv);
 }
 
 bptn_t bstore_ptn_iter_obj(bptn_iter_t iter)

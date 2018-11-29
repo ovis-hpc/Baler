@@ -208,17 +208,17 @@ class TestBS(object):
 
     def test_ptn_iter_find_fwd(self):
         itr = PtnIter(self.bs)
-        ptn_id = 260
-        self.assertTrue(itr.find_fwd(ptn_id = ptn_id))
+        ts = (0,0)
+        self.assertTrue(itr.find_fwd(tv_end = ts))
         ptn = itr.obj()
-        self.assertEqual(ptn.ptn_id, ptn_id)
+        self.assertGreaterEqual(ptn.last_seen, ts[0])
 
     def test_ptn_iter_find_rev(self):
         itr = PtnIter(self.bs)
-        ptn_id = 260
-        self.assertTrue(itr.find_rev(ptn_id = ptn_id))
+        ts = (int(time.time()),0)
+        self.assertTrue(itr.find_rev(tv_end = ts))
         ptn = itr.obj()
-        self.assertEqual(ptn.ptn_id, ptn_id)
+        self.assertLessEqual(ptn.last_seen, ts[0])
 
     def test_ptn_iter_filter(self):
         itr = PtnIter(self.bs)

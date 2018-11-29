@@ -535,12 +535,12 @@ typedef struct bstore_plugin_s {
 	/**
 	 * Return the first pattern
 	 */
-	int (*ptn_iter_find_fwd)(bptn_iter_t iter, bptn_id_t ptn_id);
+	int (*ptn_iter_find_fwd)(bptn_iter_t iter, const struct timeval *tv);
 
 	/**
 	 * Return the first pattern
 	 */
-	int (*ptn_iter_find_rev)(bptn_iter_t iter, bptn_id_t ptn_id);
+	int (*ptn_iter_find_rev)(bptn_iter_t iter, const struct timeval *tv);
 
 
 	/**
@@ -941,8 +941,8 @@ bptn_iter_t bstore_ptn_iter_new(bstore_t bs);
 void bstore_ptn_iter_free(bptn_iter_t iter);
 int bstore_ptn_iter_filter_set(bptn_iter_t iter, bstore_iter_filter_t filter);
 uint64_t bstore_ptn_iter_card(bptn_iter_t i);
-int bstore_ptn_iter_find_fwd(bptn_iter_t iter, bptn_id_t ptn_id);
-int bstore_ptn_iter_find_rev(bptn_iter_t iter, bptn_id_t ptn_id);
+int bstore_ptn_iter_find_fwd(bptn_iter_t iter, const struct timeval *tv);
+int bstore_ptn_iter_find_rev(bptn_iter_t iter, const struct timeval *tv);
 bptn_t bstore_ptn_iter_obj(bptn_iter_t iter);
 int bstore_ptn_iter_next(bptn_iter_t iter);
 int bstore_ptn_iter_prev(bptn_iter_t iter);

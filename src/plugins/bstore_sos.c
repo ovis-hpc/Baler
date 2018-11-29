@@ -1804,8 +1804,8 @@ static bptn_iter_t bs_ptn_iter_new(bstore_t bs)
 	if (pi)
 		pi->bs = bs;
 	pi->biter_type = BPTN_ITER;
-	pi->iter_type = PTN_ITER_ID;
-	pi->iter = sos_attr_iter_new(bss->ptn_id_attr);
+	pi->iter_type = PTN_ITER_LAST_SEEN;
+	pi->iter = sos_attr_iter_new(bss->last_seen_attr);
 	if (!pi->iter) {
 		free(pi);
 		return NULL;
@@ -1989,7 +1989,7 @@ static int __matching_ptn(bptn_iter_t iter, int fwd)
 	}
 	return rc;
 }
-
+/*
 static int __bs_ptn_iter_find(bptn_iter_t iter, int fwd, bptn_id_t ptn_id)
 {
 	SOS_KEY(key);
@@ -2009,25 +2009,64 @@ static int __bs_ptn_iter_find(bptn_iter_t iter, int fwd, bptn_id_t ptn_id)
  err:
 	return rc;
 }
-
-static int bs_ptn_iter_find_fwd(bptn_iter_t iter, bptn_id_t ptn_id)
+*/
+static int
+__bs_ptn_iter_find(bptn_iter_t iter, int fwd, const struct timeval *tv, bptn_id_t ptn_id)
 {
-	return __bs_ptn_iter_find(iter, 1, ptn_id);
+	int rc;
+	sos_obj_t obj = NULL;
+	SOS_KEY(key);
+	uint64_t usecs;
+	union sos_timestamp_u ts;
+
+	bsos_iter_t i = (bsos_iter_t)iter;
+	bstore_sos_t bss = (bstore_sos_t)i->bs;
+	
+	if (!i->iter) {
+		i->iter_type = PTN_ITER_LAST_SEEN;
+		i->iter = sos_attr_iter_new(bss->last_seen_attr);
+		if (!i->iter) {
+			rc = errno;
+			goto err;
+		}
+		sos_iter_flags_set(i->iter, SOS_ITER_F_INF_LAST_DUP);
+	}
+	tv = (tv)?(tv):((fwd)?(&i->filter.tv_begin):(&i->filter.tv_end));
+	ts.tv.tv_sec = tv->tv_sec;
+	ts.tv.tv_usec = tv->tv_usec;
+	if (!fwd) {
+		if (!ptn_id)
+			ptn_id = -1;
+		if (!ts.tv.tv_sec)
+			ts.tv.tv_sec = -1;
+	}
+	sos_key_join(key, bss->last_seen_attr, ts, ptn_id);
+	rc = (fwd)?(sos_iter_sup(i->iter, key)):(sos_iter_inf(i->iter, key));
+	if (rc)
+		goto err;
+	return __matching_ptn(iter, fwd);
+err:
+	return rc;
 }
 
-static int bs_ptn_iter_find_rev(bptn_iter_t iter, bptn_id_t ptn_id)
+static int bs_ptn_iter_find_fwd(bptn_iter_t iter, const struct timeval *tv)
 {
-	return __bs_ptn_iter_find(iter, 0, ptn_id);
+	return __bs_ptn_iter_find(iter, 1, tv, 0);
+}
+
+static int bs_ptn_iter_find_rev(bptn_iter_t iter, const struct timeval *tv)
+{
+	return __bs_ptn_iter_find(iter, 0, tv, 0);
 }
 
 static int bs_ptn_iter_first(bptn_iter_t iter)
 {
-	return __bs_ptn_iter_find(iter, 1, 0);
+	return __bs_ptn_iter_find(iter, 1, 0, 0);
 }
 
 static int bs_ptn_iter_last(bptn_iter_t iter)
 {
-	return __bs_ptn_iter_find(iter, 0, 0);
+	return __bs_ptn_iter_find(iter, 0, 0, 0);
 }
 
 static bptn_t bs_ptn_iter_obj(bptn_iter_t iter)
