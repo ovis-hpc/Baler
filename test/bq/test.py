@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 # This test file contains basic bq query test. For ptn_attr with bq command,
 # please see `test/bq_ptn_attr/test.py`.
@@ -16,13 +16,13 @@ import logging
 import unittest
 import subprocess
 
-from StringIO import StringIO
+from io import StringIO
 from test_util.test_util import ts_text, make_store
 
 from baler import Bq as bq
 
 STORE_PATH = "./store"
-TS_BEGIN = int(time.time()) / (24*3600) * (24*3600)
+TS_BEGIN = int(time.time()) // (24*3600) * (24*3600)
 TS_END = TS_BEGIN + 24*3600
 TS_INC = 600
 TS_LAST = None
@@ -108,7 +108,7 @@ def MESSAGES(count = False):
     global PTN_COUNT
     global TS_LAST
     msg_count = 0
-    ts_count = int(TS_END - TS_BEGIN + TS_INC - 1) / TS_INC
+    ts_count = int(TS_END - TS_BEGIN + TS_INC - 1) // TS_INC
     ptn_count = len(PATTERNS)
     for ts in range(TS_BEGIN, TS_END, TS_INC):
         _ts_text = ts_text(ts)
@@ -210,7 +210,7 @@ def cmd(*args):
 def bq_cmd(*args):
     _cmd = "bq " +  (" ".join(map(str, args)))
     out = cmd(_cmd)
-    return out
+    return out.decode()
 
 class SlotObj(object):
     def __str__(self):
@@ -490,7 +490,7 @@ class TestBq(unittest.TestCase):
 
     def _bq_ptn_process(self, lines):
         lines = StringIO(lines).readlines()
-        self.assertRegexpMatches(lines[0],
+        self.assertRegex(lines[0],
              r'Ptn Id\s+Msg Count\s+First Seen\s+Last Seen\s+Pattern\s*\n')
         self.assertRegexpMatches(lines[1], r'-+ -+ -+ -+ -+\n')
         self.assertEqual(lines[1], lines[-2])
@@ -697,19 +697,19 @@ class TestBq(unittest.TestCase):
         self.assertEqual(_ptn_text, str(ptn))
 
         hdr1 = sio.readline()
-        pos = map(int, re.findall('\d+', hdr1))
+        pos = list(map(int, re.findall('\d+', hdr1)))
         _len = len([ x for x in ptn ])
         self.assertEqual(set(pos), set(range(0, _len)))
 
         hdr2 = sio.readline()
         dashes = re.findall('-+', hdr2)
         self.assertEqual(len(dashes), _len)
-        cwidths = map(len, dashes)
+        cwidths = list(map(len, dashes))
 
         lines = sio.readlines()
         self.assertEqual(lines[-3].strip(), '')
         self.assertEqual(lines[-2], hdr2)
-        counts = map(int, re.findall(r'\d+', lines[-1]))
+        counts = list(map(int, re.findall(r'\d+', lines[-1])))
         self.assertTrue(len(counts), _len)
         del lines[-3:]
 
@@ -911,8 +911,8 @@ class TestBq(unittest.TestCase):
         lines = bq_cmd("-p", STORE_PATH, "--tkn", "--tkn_type", "HOSTNAME")
         (bqtkns, count) = self._bq_tkn_process(lines)
         bs = get_bstore()
-        tkns = filter(lambda t: t.has_type(bq.BTKN_TYPE_HOSTNAME) ,
-                      (t for t in bq.Btkn_iter(bs)))
+        tkns = list(filter(lambda t: t.has_type(bq.BTKN_TYPE_HOSTNAME) ,
+                      (t for t in bq.Btkn_iter(bs))))
         self.assertEqual(len(bqtkns), len(tkns))
         for q, s in zip(bqtkns, tkns):
             self.assertEqual(q.tkn_id, s.tkn_id())
@@ -1068,8 +1068,8 @@ class TestBq(unittest.TestCase):
             ents[k] = v
         self.assertEqual(int(ents['Pattern Count']), len(PATTERNS))
         self.assertEqual(int(ents['Message Count']), MSG_COUNT)
-        self.assertEqual(int(ents['Messages per Pattern']),
-                         MSG_COUNT / len(PATTERNS))
+        self.assertEqual(int(float(ents['Messages per Pattern'])),
+                         MSG_COUNT // len(PATTERNS))
         ts0 = parse_bq_ts(ents['First Message'])
         self.assertEqual(ts0, TS_BEGIN)
         ts1 = parse_bq_ts(ents['Last Message'])
@@ -1083,6 +1083,6 @@ if __name__ == "__main__":
     DATEFMT = "%F %T"
     logging.basicConfig(format=LOGFMT, datefmt=DATEFMT)
     log.setLevel(logging.INFO)
-    unittest.TestLoader.testMethodPrefix = "test_034"
+    #unittest.TestLoader.testMethodPrefix = "test_009"
     MAKE_STORE = True
     unittest.main(verbosity = 2, failfast = True)

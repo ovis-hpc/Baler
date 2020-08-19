@@ -23,6 +23,7 @@
 struct plugin_entry {
 	bstore_plugin_t plugin;
 	struct rbn rbn;
+	char *key;
 };
 
 pthread_mutex_t plugin_lock;
@@ -74,16 +75,21 @@ static bstore_plugin_t __get_plugin(const char *name)
 	pe = malloc(sizeof *pe);
 	if (!pe)
 		goto err_2;
+	pe->key = strdup(name);
+	if (!pe->key)
+		goto err_3;
 	plugin = get_plugin();
 	if (!plugin)
-		goto err_3;
+		goto err_4;
 	pe->plugin = plugin;
-	rbn_init(&pe->rbn, (char *)name);
+	rbn_init(&pe->rbn, pe->key);
 	rbt_ins(&plugin_tree, &pe->rbn);
 	free(plugin_path);
  out:
 	pthread_mutex_unlock(&plugin_lock);
 	return plugin;
+ err_4:
+	free(pe->key);
  err_3:
 	free(pe);
  err_2:

@@ -10,7 +10,7 @@ BCONFIG=./balerd.cfg
 BTEST_N_PATTERNS=128
 BTEST_ENG_DICT="../eng-dictionary"
 BTEST_HOST_LIST="./host.list" # the file will be automatically generated below
-BTEST_BIN_RSYSLOG_PORT=33333
+BTEST_BIN_RSYSLOG_PORT=20000
 BTEST_NODE_LEN=64
 BPROF=balerd.prof
 
@@ -54,7 +54,7 @@ for ((X=0; $X<$BTEST_N_DAEMONS; X++)); do
 	start_balerd $X
 done
 
-sleep 1
+sleep 10
 
 for ((X=0; $X<$BTEST_N_DAEMONS; X++)); do
 	check_balerd $X

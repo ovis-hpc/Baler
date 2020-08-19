@@ -8,13 +8,29 @@ from libc.errno cimport *
 from sosdb import Array
 import os
 
-import util
-from StringIO import StringIO
+from . import util
+from io import StringIO
 
 cimport Bs
 
-cpdef uint64_t btkn_type_mask_from_str(const char *_str):
-    return Bs.btkn_type_mask_from_str(_str)
+cdef str STR(obj):
+    if type(obj) == bytes:
+        return obj.decode()
+    if type(obj) == str:
+        return obj
+    return str(obj)
+
+cdef char * BYTES(obj):
+    if obj == None:
+        return NULL
+    if type(obj) == str:
+        return obj.encode()
+    if type(obj) == bytes:
+        return obj
+    return bytes(obj)
+
+cpdef uint64_t btkn_type_mask_from_str(_str):
+    return Bs.btkn_type_mask_from_str(BYTES(_str))
 
 BTKN_TYPE_TYPE = Bs.BTKN_TYPE_TYPE
 BTKN_TYPE_PRIORITY = Bs.BTKN_TYPE_PRIORITY
@@ -69,12 +85,13 @@ cdef class Bstore:
 
     def __cinit__(self, plugin='bstore_sos'):
         self.c_store = NULL
-        self.plugin = plugin
+        self.plugin = STR(plugin)
 
     def open(self, path, int flags=Bs.O_RDWR, int mode=0660):
         self.iters = []
-        self.path = path
-        self.c_store = Bs.bstore_open(self.plugin, self.path, flags, mode)
+        self.path = STR(path)
+        self.c_store = Bs.bstore_open(self.plugin.encode(), self.path.encode(),
+                                      flags, mode)
         if self.c_store is NULL:
             raise ValueError("Error {0} opening the baler database at '{1}'."
                              .format(errno, self.path))
@@ -115,7 +132,7 @@ cdef class Bstore:
     cpdef tkn_by_name(self, tkn_name):
         cdef Bs.btkn_t btkn
         cdef Btkn tkn
-        btkn = Bs.bstore_tkn_find_by_name(self.c_store, tkn_name, len(tkn_name))
+        btkn = Bs.bstore_tkn_find_by_name(self.c_store, BYTES(tkn_name), len(tkn_name))
         if btkn != NULL:
             tkn = Btkn()
             tkn.c_tkn = btkn
@@ -167,26 +184,28 @@ cdef class Bstore:
         Bs.bmc_list_free(bmc_list)
         return _list
 
-    cpdef attr_new(self, const char *attr_type):
+    cpdef attr_new(self, attr_type):
         cdef int rc
-        rc = Bs.bstore_attr_new(self.c_store, attr_type)
+        rc = Bs.bstore_attr_new(self.c_store, BYTES(attr_type))
         if rc == EEXIST:
             raise ValueError("attribute '%s' existed" % attr_type)
         if rc:
             raise RuntimeError("bstore_attr_new() return code: %d" % rc)
 
-    cpdef attr_find(self, const char *attr_type):
+    cpdef attr_find(self, attr_type):
         cdef int rc
-        rc = Bs.bstore_attr_find(self.c_store, attr_type)
+        rc = Bs.bstore_attr_find(self.c_store, BYTES(attr_type))
         if rc:
             return False
         return True
 
     cpdef ptn_attr_value_set(self, int ptn_id,
-                                   const char *attr_type,
-                                   const char *attr_value,
+                                   attr_type,
+                                   attr_value,
                                    create = 0):
         cdef int rc
+        attr_type = BYTES(attr_type)
+        attr_value = BYTES(attr_value)
         if create and not self.attr_find(attr_type):
             self.attr_new(attr_type)
         rc = Bs.bstore_ptn_attr_value_set(self.c_store, ptn_id,
@@ -195,31 +214,31 @@ cdef class Bstore:
         if rc:
             raise RuntimeError("bstore_ptn_attr_value_set() rc: %d" % rc)
 
-    cpdef ptn_attr_get(self, int ptn_id, const char *attr_type):
+    cpdef ptn_attr_get(self, int ptn_id, attr_type):
         cdef char *attr_value
+        attr_type = BYTES(attr_type)
         attr_value = Bs.bstore_ptn_attr_get(self.c_store, ptn_id, attr_type)
         if not attr_value:
             if errno == ENOENT:
                 raise KeyError("'%s' not found" % attr_type)
             raise RuntimeError("bstore_ptn_attr_get() errno: %d" % errno)
-        return attr_value
+        return STR(attr_value)
 
-    cpdef ptn_attr_value_find(self, int ptn_id, const char *attr_type,
-                                                const char *attr_value):
+    cpdef ptn_attr_value_find(self, int ptn_id, attr_type, attr_value):
         """Returns `True` if the <ptn_id, attr_type, attr_value> is found"""
         itr = Bptn_attr_iter(self)
+        attr_type = BYTES(attr_type)
+        attr_value = BYTES(attr_value)
         itr.set_filter(ptn_id = ptn_id, attr_type = attr_type,
-                                        attr_value = attr_value)
+                                        attr_value =attr_value)
         return itr.first()
 
-    cpdef ptn_attr_value_add(self, int ptn_id,
-                                   const char *attr_type,
-                                   const char *attr_value, create = 0):
+    cpdef ptn_attr_value_add(self, int ptn_id, attr_type, attr_value, create = 0):
         cdef int rc
-
         if create and not self.attr_find(attr_type):
             self.attr_new(attr_type)
-
+        attr_type = BYTES(attr_type)
+        attr_value = BYTES(attr_value)
         rc = Bs.bstore_ptn_attr_value_add(self.c_store, ptn_id,
                                                         attr_type,
                                                         attr_value)
@@ -229,10 +248,10 @@ cdef class Bstore:
         if rc:
             raise RuntimeError("bstore_ptn_attr_value_add() rc: %d" % rc)
 
-    cpdef ptn_attr_value_rm(self, int ptn_id,
-                                  const char *attr_type,
-                                  const char *attr_value):
+    cpdef ptn_attr_value_rm(self, int ptn_id, attr_type, attr_value):
         cdef int rc
+        attr_type = BYTES(attr_type)
+        attr_value = BYTES(attr_value)
         rc = Bs.bstore_ptn_attr_value_rm(self.c_store, ptn_id,
                                                        attr_type,
                                                        attr_value)
@@ -309,12 +328,12 @@ cdef class Btkn:
         return self.c_tkn.tkn_count
 
     cpdef tkn_str(self):
-        return self.c_tkn.tkn_str.cstr
+        return STR(self.c_tkn.tkn_str.cstr)
 
     cpdef ptn_tkn_str(self):
         if self.c_tkn.tkn_id in tkn_type_strs:
             return tkn_type_strs[self.c_tkn.tkn_id]
-        return self.c_tkn.tkn_str.cstr
+        return STR(self.c_tkn.tkn_str.cstr)
 
     cpdef has_type(self, Bs.btkn_type_t tkn_type):
         if Bs.btkn_has_type(self.c_tkn, tkn_type) != 0:
@@ -357,6 +376,10 @@ cdef class Biter:
     cdef object py_obj
     cdef int c_rc
     cdef Bs.bstore_iter_filter_s c_filter
+
+    # a placeholder for strings in c_filter
+    cdef bytes f_attr_type
+    cdef bytes f_attr_value
 
     def __init__(self, Bstore store):
         cdef Bs.bstore_iter_t c_it
@@ -424,9 +447,11 @@ cdef class Biter:
         if 'bin_width' in kwargs:
             self.c_filter.bin_width = kwargs['bin_width']
         if 'attr_type' in kwargs:
-            self.c_filter.attr_type = kwargs['attr_type']
+            self.f_attr_type = BYTES(kwargs['attr_type'])
+            self.c_filter.attr_type = self.f_attr_type
         if 'attr_value' in kwargs:
-            self.c_filter.attr_value = kwargs['attr_value']
+            self.f_attr_value = BYTES(kwargs['attr_value'])
+            self.c_filter.attr_value = self.f_attr_value
         self.iterFilterSet(&self.c_filter)
 
     cdef obj_update(self, void *ptr):
@@ -697,8 +722,8 @@ cdef class Bptn_attr:
 
     def __iter__(self):
         yield self.c_ptn_attr.ptn_id
-        yield self.c_ptn_attr.attr_type
-        yield self.c_ptn_attr.attr_value
+        yield bytes(self.c_ptn_attr.attr_type).decode()
+        yield bytes(self.c_ptn_attr.attr_value).decode()
 
     def as_list(self):
         return list(iter(self))
@@ -710,10 +735,10 @@ cdef class Bptn_attr:
         return self.c_ptn_attr.ptn_id
 
     def attr_type(self):
-        return self.c_ptn_attr.attr_type
+        return STR(self.c_ptn_attr.attr_type)
 
     def attr_value(self):
-        return self.c_ptn_attr.attr_value
+        return STR(self.c_ptn_attr.attr_value)
 
 
 
@@ -806,7 +831,7 @@ cdef class Battr_iter(Biter):
         return -1
 
     cdef object obj_wrap(self, void *c_obj):
-        return <char*>c_obj
+        return STR(<char*>c_obj)
 
     cdef void *iterObj(self):
         return Bs.bstore_attr_iter_obj(self.c_iter)
@@ -844,15 +869,15 @@ cdef class Bptn_attr_iter(Biter):
 
     def iterFindFwd(self, **kwargs):
         ptn_id = <int>kwargs["ptn_id"]
-        attr_type = <char*>kwargs["attr_type"]
-        attr_value = <char*>kwargs["attr_value"]
+        attr_type = BYTES(kwargs["attr_type"])
+        attr_value = BYTES(kwargs["attr_value"])
         return Bs.bstore_ptn_attr_iter_find_fwd(self.c_iter,
                                            ptn_id, attr_type, attr_value)
 
     def iterFindRev(self, **kwargs):
         ptn_id = <int>kwargs["ptn_id"]
-        attr_type = <char*>kwargs["attr_type"]
-        attr_value = <char*>kwargs["attr_value"]
+        attr_type = BYTES(kwargs["attr_type"])
+        attr_value = BYTES(kwargs["attr_value"])
         return Bs.bstore_ptn_attr_iter_find_rev(self.c_iter,
                                            ptn_id, attr_type, attr_value)
 
@@ -1524,25 +1549,22 @@ def version_get(plugin, path = None):
     cdef Bs.bstore_version_s plugin_ver
     cdef Bs.bstore_version_s store_ver
     cdef int rc
-    cdef const char *_path;
-    if path:
-        _path = path
-    else:
-        _path = NULL
-    Bs.bstore_version_get(plugin, _path, &plugin_ver, &store_ver)
+    cdef char *path_ptr = BYTES(path)
+    cdef char *plugin_ptr = BYTES(plugin)
+    Bs.bstore_version_get(plugin_ptr, path_ptr, &plugin_ver, &store_ver)
     return {
         'plugin': {
-            'version': plugin_ver.ver,
-            'gitsha': plugin_ver.gitsha,
+            'version': STR(plugin_ver.ver),
+            'gitsha': STR(plugin_ver.gitsha),
         },
         'store': {
-            'version': store_ver.ver,
-            'gitsha': store_ver.gitsha,
+            'version': STR(store_ver.ver),
+            'gitsha': STR(store_ver.gitsha),
         },
     }
 
 def bversion():
-    return Bs.bversion()
+    return STR(Bs.bversion())
 
 def bgitsha():
-    return Bs.bgitsha()
+    return STR(Bs.bgitsha())

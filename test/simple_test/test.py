@@ -1,4 +1,6 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
+
+from __future__ import print_function
 
 import os
 import re
@@ -84,7 +86,7 @@ def get_ptn_stats():
     for line in msg_iter():
         ptn = None
         (ts, comp) = parse_hdr(line)
-        for (k, e) in ptns.iteritems():
+        for (k, e) in ptns.items():
             m = e.regex.match(line)
             if m == None:
                 continue
@@ -105,7 +107,7 @@ def get_ptn_stats():
 
 PTN_STAT = get_ptn_stats()
 COMP_HIST_TABLE = {}
-for (k, e) in PTN_STAT.iteritems():
+for (k, e) in PTN_STAT.items():
     COMP_HIST_TABLE.update(e.comp_hist)
 
 def get_ptn_hist(bin_width, start = 0):
@@ -117,15 +119,15 @@ def get_ptn_hist(bin_width, start = 0):
         cond = lambda k: base(k) and gt(k)
     else:
         cond = base
-    for (k,e) in PTN_STAT.iteritems():
-        hist = { _k:_v for (_k,_v) in e.hist.iteritems() \
+    for (k,e) in PTN_STAT.items():
+        hist = { _k:_v for (_k,_v) in e.hist.items() \
                                                     if cond(_k)}
         ret[k] = hist
     return ret
 
 def KV_HEAD(_h, n=10):
-    for (k, v) in _h.iteritems():
-        print k, ":", v
+    for (k, v) in _h.items():
+        print(k, ":", v)
         n -= 1
         if not n:
             break
@@ -135,7 +137,7 @@ def get_tkn_hist(bin_width = 3600, ts_start = 0, tkn_text = None):
     tokenizer = re.compile("\\w+|\\W")
     for line in msg_iter():
         ts = parse_local_time(line)
-        ts = int(ts) / bin_width * bin_width
+        ts = int(ts) // bin_width * bin_width
         if ts_start:
             if ts < ts_start:
                 continue
@@ -157,6 +159,8 @@ def get_tkn_hist(bin_width = 3600, ts_start = 0, tkn_text = None):
 class TestSimple(unittest.TestCase):
     """Test baler daemon rerun"""
 
+    failureException = Exception
+
     @classmethod
     def _make_store(cls):
         shutil.rmtree(STORE_PATH, True)
@@ -165,7 +169,7 @@ class TestSimple(unittest.TestCase):
             for i in range(0, HOST_NUM):
                 _id = HOST_ID_BASE + i
                 name = "node%05d" % i
-                print >>f, name, _id
+                print(name, _id, file=f)
         # prep config file
         with open(CONFIG_FILE, 'w') as f:
             f.write(CONFIG_TEXT)
@@ -177,7 +181,7 @@ class TestSimple(unittest.TestCase):
         # feed data to balerd
         sock = socket.create_connection(("localhost", PORT))
         for msg in msg_iter(syslog=True):
-            sock.send(msg)
+            sock.send(msg.encode())
         sock.close()
         balerd.wait_idle()
         balerd.stop()
@@ -220,7 +224,9 @@ class TestSimple(unittest.TestCase):
         msgs.sort()
         comp = [ s for s in msg_iter() ]
         comp.sort()
-        self.assertEqual(msgs, comp)
+        # msgs and comp could be big and assertEqual will generate a huge diff
+        # that stalls the output.
+        self.assertTrue(msgs == comp)
 
     def test_tkn(self):
         """Check some token id<->str translation"""
@@ -350,7 +356,7 @@ class TestSimple(unittest.TestCase):
         ptn_list.reverse()
 
         count = 0
-        for p1, p2 in itertools.izip_longest(ptn_list, iter(itr1)):
+        for p1, p2 in itertools.zip_longest(ptn_list, iter(itr1)):
             self.assertEqual(p1, p2)
             count += 1
         self.assertTrue(count)
@@ -792,7 +798,7 @@ class TestSimple(unittest.TestCase):
         d0 = self.__tkn_hist_data(bin_width, ts, name)
         d1 = get_tkn_hist(bin_width, ts, name)
         self.assertGreater(len(d0), 0)
-        self.assertEqual(d0, d1)
+        self.assertTrue(d0 == d1)
 
     def test_tkn_hist_fwd_iter_60(self):
         self.__test_tkn_hist_fwd_iter(60, 0, None)
@@ -884,15 +890,15 @@ class TestSimple(unittest.TestCase):
         d1 = get_ptn_hist(bin_width, ts)
         if False:
             # Debug print
-            print "----------------------"
-            print "len(d0):", len(d0)
-            print "len(d1):", len(d1)
-            print "-------  D0  ---------"
+            print("----------------------")
+            print("len(d0):", len(d0))
+            print("len(d1):", len(d1))
+            print("-------  D0  ---------")
             KV_HEAD(d0)
-            print "----------------------"
-            print "-------  D1  ---------"
+            print("----------------------")
+            print("-------  D1  ---------")
             KV_HEAD(d1)
-            print "----------------------"
+            print("----------------------")
         self.assertEqual(d0, d1)
 
     def test_ptn_hist_fwd_iter_3600(self):
@@ -942,7 +948,7 @@ class TestSimple(unittest.TestCase):
         comp_id = self.bs.tknFindByName(comp_str).tkn_id if comp_str else 0
         ptn_str = str(self.bs.ptnFindById(ptn_id)) if ptn_id else None
         a = {}
-        for (k,v) in COMP_HIST_TABLE.iteritems():
+        for (k,v) in COMP_HIST_TABLE.items():
             if k[0] != bin_width:
                 continue
             if ts and k[1] < ts:
@@ -971,20 +977,19 @@ class TestSimple(unittest.TestCase):
                 self.assertTrue(k not in b)
                 b[k] = h.msg_count
             self.assertGreater(len(a), 0)
-            self.assertEqual(a, b)
+            self.assertTrue(a == b)
         except:
-            print ""
-            print "bin_width:", bin_width
-            print "ts:", ts
-            print "comp_id:", comp_id
-            print "ptn_id:", ptn_id
-            print "len(a):", len(a)
-            print "len(b):", len(b)
-            print "-- head a--"
+            print("")
+            print("bin_width:", bin_width)
+            print("ts:", ts)
+            print("comp_id:", comp_id)
+            print("ptn_id:", ptn_id)
+            print("len(a):", len(a))
+            print("len(b):", len(b))
+            print("-- head a--")
             KV_HEAD(a)
-            print "-- head b --"
+            print("-- head b --")
             KV_HEAD(b)
-            # print "b:", b
             raise
 
     def test_comp_hist_iter_3600(self):
@@ -1090,7 +1095,7 @@ class TestSimple(unittest.TestCase):
         tvs = [ (ent.attr_type, ent.attr_value) for ent in itr ]
         tvs.sort()
         self.assertEqual(tvs, [
-                            ("HEX", hex(long(258))),
+                            ("HEX", hex(258)),
                             ("TAG", "even"),
                             ("TAG", "triple"),
                         ])
@@ -1158,3 +1163,7 @@ if __name__ == "__main__":
     # unittest.TestLoader.testMethodPrefix = "test_"
     MAKE_STORE = True
     unittest.main(verbosity=2, failfast=1)
+    #unittest.TestLoader.testMethodPrefix = "test_tkn_hist"
+    #ldr = unittest.TestLoader()
+    #suite = ldr.loadTestsFromTestCase(TestSimple)
+    #suite.debug()

@@ -30,4 +30,5 @@ export BOUT_THREADS=1
 export BIN_THREADS=1
 export BLOG_LEVEL=INFO
 
-source ./env.sh
+#
+# source ./env.sh

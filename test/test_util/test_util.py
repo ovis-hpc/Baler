@@ -1,3 +1,4 @@
+from __future__ import print_function
 import os
 import re
 import pdb
@@ -24,7 +25,8 @@ def ts_text(sec, usec = 0):
 def proc_pid_ustime(pid):
     f = open('/proc/%d/stat' % pid, 'r')
     rec = f.readline().split(' ')
-    return map(int, rec[13:15])
+    f.close()
+    return list(map(int, rec[13:15]))
 
 class BalerDaemon(object):
     """Start / stop baler daemon from Python subprocess"""
@@ -78,7 +80,7 @@ class BalerDaemon(object):
                     '-l': log_file,
                     '-v': log_verbosity,
                 }
-        self.opts = { k:v for k,v in opts.iteritems() if v != None }
+        self.opts = { k:v for k,v in opts.items() if v != None }
 
     def __del__(self):
         self.stop()
@@ -124,7 +126,7 @@ class BalerDaemon(object):
             cmd = "exec gdbserver :%d balerd -F" % self.gdb_port
         else:
             cmd = "exec balerd -F"
-        for k, v in self.opts.iteritems():
+        for k, v in self.opts.items():
             cmd += (' ' + k + ' ' + v)
         cmd += ' -C ' + self.config_file
         self.proc = subprocess.Popen(cmd, shell=True, close_fds = True)
@@ -168,7 +170,7 @@ def make_store(store_path, hosts, msgs):
         (host_fd, host_path) = tempfile.mkstemp()
         with os.fdopen(host_fd, "w") as hf:
             for h in hosts:
-                print >>hf, h
+                print(h, file=hf)
         config_text = """
             tokens type=HOSTNAME path=%(host_path)s
             tokens type=WORD path=%(dict_path)s
@@ -186,7 +188,7 @@ def make_store(store_path, hosts, msgs):
         except:
             pdb.set_trace()
         for m in msgs:
-            sock.send(m)
+            sock.send(m.encode())
         sock.close()
         balerd.wait_idle()
         balerd.stop()

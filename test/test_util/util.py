@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import itertools
 import logging
@@ -7,7 +7,8 @@ import time
 import os
 import re
 import subprocess
-from StringIO import StringIO
+from functools import total_ordering
+from io import StringIO
 from baler import Bq
 
 logger = logging.getLogger(__name__)
@@ -15,12 +16,26 @@ logger = logging.getLogger(__name__)
 def TYPE_MASK(_type):
     return 1<<(_type-1)
 
+def STR(obj):
+    if type(obj) == bytes:
+        return obj.decode()
+    if type(obj) == str:
+        return obj
+    return str(obj)
+
+
+def BYTES(obj):
+    if type(obj) == bytes :
+        return obj
+    if type(obj) == str :
+        return obj.encode()
+    return bytes(obj)
 
 def get_btest_var_table():
     rex = re.compile("([^ ]+) (.*)")
     cmd = "source config.sh >/dev/null 2>&1; for X in BSTORE ${!BTEST_*}; do echo $X ${!X}; done"
     out = subprocess.check_output(cmd, shell=True, executable="/bin/bash")
-    sio = StringIO(out)
+    sio = StringIO(STR(out))
     table = {}
     for line in sio:
         line = line.rstrip()
@@ -93,7 +108,7 @@ def parse_local_time(_str):
     t.append(0)
     t.append(0)
     t.append(-1)
-    ts = time.mktime(t)
+    ts = time.mktime(tuple(t))
     return ts + float(micro)/(10**6)
 
 
@@ -105,7 +120,7 @@ def parse_hdr(_str):
     t.append(0)
     t.append(0)
     t.append(-1)
-    ts = time.mktime(t) + float(micro)/(10**6)
+    ts = time.mktime(tuple(t)) + float(micro)/(10**6)
     return (ts, m.group(9))
 
 
@@ -149,7 +164,7 @@ class TestPtnEntry(object):
             self.ptn_tkn[key] = 1
 
     def add_hist(self, bin_width, ts):
-        _ts = int(ts)/int(bin_width)*int(bin_width)
+        _ts = int(ts)//int(bin_width)*int(bin_width)
         key = (bin_width, _ts)
         try:
             self.hist[key] += 1
@@ -157,7 +172,7 @@ class TestPtnEntry(object):
             self.hist[key] = 1
 
     def add_comp_hist(self, bin_width, ts, comp):
-        _ts = int(ts)/int(bin_width)*int(bin_width)
+        _ts = int(ts)//int(bin_width)*int(bin_width)
         key = (bin_width, _ts, comp, self.text)
         try:
             self.comp_hist[key] += 1
@@ -227,7 +242,7 @@ def get_tkn_hist(bin_width = 3600, ts_start = 0, tkn_text = None):
     tokenizer = re.compile("\\w+|\\W")
     for line in get_messages():
         ts = parse_local_time(line)
-        ts = int(ts) / bin_width * bin_width
+        ts = int(ts) // bin_width * bin_width
         if ts_start:
             if ts < ts_start:
                 continue
@@ -439,6 +454,7 @@ class Tkn(object):
         return self.tkn_text
 
 
+@total_ordering
 class TknHist(object):
     __slots__ = ('tkn_id', 'bin_width', 'time', 'tkn_count')
 
@@ -461,28 +477,28 @@ class TknHist(object):
                self.tkn_count == other.tkn_count and \
                self.time == other.time
 
-    def __cmp__(self, other):
+    def __lt__(self, other):
         if other == None:
-            return 1
+            return False
         if self.bin_width < other.bin_width:
-            return -1
+            return True
         if self.bin_width > other.bin_width:
-            return 1
+            return False
         if self.time < other.time:
-            return -1
+            return true
         if self.time > other.time:
-            return 1
+            return False
         if self.tkn_id < other.tkn_id:
-            return -1
+            return True
         if self.tkn_id > other.tkn_id:
-            return 1
+            return False
         if self.tkn_count < other.tkn_count:
-            return -1
+            return True
         if self.tkn_count > other.tkn_count:
-            return 1
-        return 0
+            return False
+        return False
 
-
+@total_ordering
 class PtnHist(object):
     __slots__ = ('ptn_id', 'bin_width', 'time', 'msg_count')
 
@@ -505,28 +521,28 @@ class PtnHist(object):
                self.msg_count == other.msg_count and \
                self.time == other.time
 
-    def __cmp__(self, other):
+    def __lt__(self, other):
         if other == None:
-            return 1
+            return False
         if self.bin_width < other.bin_width:
-            return -1
+            return True
         if self.bin_width > other.bin_width:
-            return 1
+            return False
         if self.time < other.time:
-            return -1
+            return True
         if self.time > other.time:
-            return 1
+            return False
         if self.ptn_id < other.ptn_id:
-            return -1
+            return True
         if self.ptn_id > other.ptn_id:
-            return 1
+            return False
         if self.msg_count < other.msg_count:
-            return -1
+            return True
         if self.msg_count > other.msg_count:
-            return 1
-        return 0
+            return False
+        return False
 
-
+@total_ordering
 class CompHist(object):
     __slots__ = ('bin_width', 'time', 'comp_id', 'ptn_id', 'msg_count')
 
@@ -556,30 +572,30 @@ class CompHist(object):
                 self.ptn_id == other.ptn_id and \
                 self.msg_count == other.msg_count
 
-    def __cmp__(self, other):
+    def __lt__(self, other):
         if other == None:
-            return 1
+            return False
         if self.bin_width < other.bin_width:
-            return -1
+            return True
         if self.bin_width > other.bin_width:
-            return 1
+            return False
         if self.time < other.time:
-            return -1
+            return True
         if self.time > other.time:
-            return 1
+            return False
         if self.comp_id < other.comp_id:
-            return -1
+            return True
         if self.comp_id > other.comp_id:
-            return 1
+            return False
         if self.ptn_id < other.ptn_id:
-            return -1
+            return True
         if self.ptn_id > other.ptn_id:
-            return 1
+            return False
         if self.msg_count < other.msg_count:
-            return -1
+            return True
         if self.msg_count > other.msg_count:
-            return 1
-        return 0
+            return False
+        return False
 
 
 class Ptn(object):
@@ -679,7 +695,7 @@ class Msg(object):
         nano = int(round((self.timestamp % 1) * 10**6))
         tm = time.localtime(self.timestamp)
         tz = 3600*tm.tm_isdst - (time.timezone)
-        tzh = tz/3600
+        tzh = tz//3600
         tzm = tz%3600
         tstr = time.strftime("%FT%T", tm)
         tstr += (".%06d%+.02d:%02d" % (nano, tzh, tzm))

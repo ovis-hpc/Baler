@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 # Copyright (c) 2017 Open Grid Computing, Inc. All rights reserved.
 # Copyright (c) 2017 Sandia Corporation. All rights reserved.
@@ -59,9 +59,10 @@ import datetime
 import sys
 import curses
 import collections
+import functools
 from baler import Bq
 from baler import util
-from StringIO import StringIO
+from io import StringIO
 
 logger = logging.getLogger(__name__)
 
@@ -602,7 +603,7 @@ class ServiceCmd(cmd.Cmd):
                 p = pf()
                 self.parsers[cmd] = p
                 return p
-            except Exception, e:
+            except Exception as e:
                 logger.debug(e)
 
     def is_tty(self):
@@ -730,7 +731,7 @@ class ServiceCmd(cmd.Cmd):
             _cmp = util.get_ptn_cmp_by_name(order)
             if not _cmp:
                 raise CmdException("Comparator not found: \"%s\"" % order)
-            result.sort(_cmp)
+            result.sort(key = functools.cmp_to_key(_cmp))
         if self.is_tty():
             # use paging
             formatter = PtnFormatter(fmt, True)
@@ -739,7 +740,7 @@ class ServiceCmd(cmd.Cmd):
         else:
             formatter = PtnFormatter(fmt, False)
             for ptn in result:
-                print >>self.cmdout, formatter(ptn)
+                print(formatter(ptn), file=self.cmdout)
 
     def parser_ptn_attr_add(self):
         return CmdArgumentParser(
@@ -861,7 +862,7 @@ class ServiceCmd(cmd.Cmd):
         else:
             formatter = PtnAttrListFormatter(color = False)
             for obj in itr:
-                print >>self.cmdout, formatter(obj)
+                print(formatter(obj), file=self.cmdout)
 
     def parser_comp_query(self):
         return CmdArgumentParser(
@@ -904,7 +905,7 @@ class ServiceCmd(cmd.Cmd):
             result.append((h.tkn_id(), h.tkn_str()))
         result.sort()
         for h in result:
-            print >>self.cmdout, h[0], h[1]
+            print(h[0], h[1], file=self.cmdout)
 
     def do_test_paging(self, arg):
         """Test Paging"""
@@ -987,7 +988,7 @@ class ServiceCmd(cmd.Cmd):
             for msg in itr:
                 if limit and n == limit:
                     break
-                print >>self.cmdout, fmt(msg)
+                print(fmt(msg), file=self.cmdout)
                 n += 1
 
     def parser_hist_query(self):
@@ -1088,7 +1089,7 @@ class ServiceCmd(cmd.Cmd):
             raise CmdException("Unknown histogram type: %s" % _type)
         itr.set_filter(**_fltr)
         for hist in itr:
-            print >>self.cmdout, str(hist)
+            print(str(hist), file=self.cmdout)
 
     def do_EOF(self, arg):
         """Stop the command intepreter."""
@@ -1144,18 +1145,18 @@ class ServiceCmd(cmd.Cmd):
         elif store:
             plugin = store.get_plugin()
             path = store.get_path()
-        print "bclient"
-        print "  version: %s" % Bq.bversion()
-        print "  gitsha:  %s" % Bq.bgitsha()
+        print("bclient")
+        print("  version: %s" % Bq.bversion())
+        print("  gitsha:  %s" % Bq.bgitsha())
         if plugin:
             inf = Bq.version_get(plugin, path)
-            print "plugin: %s" % plugin
-            print "  version: %s" % inf["plugin"]["version"]
-            print "  gitsha:  %s" % inf["plugin"]["gitsha"]
+            print("plugin: %s" % plugin)
+            print("  version: %s" % inf["plugin"]["version"])
+            print("  gitsha:  %s" % inf["plugin"]["gitsha"])
         if path:
-            print "store: %s" % path
-            print "  version: %s" % inf["store"]["version"]
-            print "  gitsha:  %s" % inf["store"]["gitsha"]
+            print("store: %s" % path)
+            print("  version: %s" % inf["store"]["version"])
+            print("  gitsha:  %s" % inf["store"]["gitsha"])
 
     def emptyline(self):
         """Do nothing on empty line."""
@@ -1192,7 +1193,7 @@ class ServiceCmd(cmd.Cmd):
                         out = open(out_name, "a")
                     else:
                         out = open(out_name, "w")
-                except Exception, e:
+                except Exception as e:
                     raise CmdException(str(e))
             else:
                 out = sys.stdout
@@ -1223,8 +1224,8 @@ if __name__ == "__main__":
     logging.basicConfig(format=LOGFMT)
 
     # Disable stdout/stderr buffering
-    sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', 0)
-    sys.stderr = os.fdopen(sys.stderr.fileno(), 'w', 0)
+    #sys.stdout = os.fdopen(sys.stdout.fileno(), 'wb', 0)
+    #sys.stderr = os.fdopen(sys.stderr.fileno(), 'wb', 0)
 
     import argparse
     ap = argparse.ArgumentParser(description="Baler Service Client.")
@@ -1246,9 +1247,9 @@ if __name__ == "__main__":
     logger.setLevel(logging.getLevelName(args.verbose.upper()))
 
     if args.version:
-        print "bclient"
-        print "  version: %s" % Bq.bversion()
-        print "  gitsha:  %s" % Bq.bgitsha()
+        print("bclient")
+        print("  version: %s" % Bq.bversion())
+        print("  gitsha:  %s" % Bq.bgitsha())
         sys.exit(0)
 
     if args.path:
@@ -1258,9 +1259,9 @@ if __name__ == "__main__":
     while True:
         try:
             svc_cmd.cmdloop()
-        except CmdException, e:
+        except CmdException as e:
             # in case of exception, print it and continue the loop
-            print >>sys.stderr, "Error:", e
+            print("Error:", e, file=sys.stderr)
         else:
             # cmdloop exit cleanly, exit the program.
             break

@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import os
 import re
@@ -13,7 +13,7 @@ import logging
 import unittest
 import subprocess
 
-from StringIO import StringIO
+from io import StringIO
 from test_util.test_util import make_store
 
 from baler import Bq as bq
@@ -82,10 +82,11 @@ class icmd(object):
     def comm(self, text):
         sio = StringIO()
         text = text.rstrip()
-        self.proc.stdin.write(text + '\n')
+        self.proc.stdin.write((text + '\n').encode())
+        self.proc.stdin.flush()
         while self.poll.poll(1000):
             data = self.proc.stdout.read(4096)
-            sio.write(data)
+            sio.write(data.decode())
         sio.seek(0)
         return [l.rstrip() for l in sio.readlines()]
 
@@ -192,7 +193,7 @@ class TestAttr(unittest.TestCase):
 
     def test_001_bq_cmd_ptn_attr_list(self):
         lines = bq_cmd("--ptn", "--ptn_attr_list")
-        sio = StringIO(lines)
+        sio = StringIO(lines.decode())
         hdr0 = sio.readline()
         hdr1 = sio.readline()
         attrs = []
@@ -201,7 +202,7 @@ class TestAttr(unittest.TestCase):
             l1 = sio.readline()
             if l0[0] == '-':
                 # expecting footer
-                self.assertRegexpMatches(l1, r'Messages\(s\)')
+                self.assertRegex(l1, r'Messages\(s\)')
                 break
             tmp = parse_attrs(l0, l1)
             attrs.extend(tmp)
@@ -212,7 +213,7 @@ class TestAttr(unittest.TestCase):
 
     def test_002_bq_cmd_query_ptn_attr(self):
         lines = bq_cmd("--ptn", "--match", "--ptn_attr", "TAG=odd")
-        sio = StringIO(lines)
+        sio = StringIO(lines.decode())
         hdr0 = sio.readline()
         hdr1 = sio.readline()
         ptn_ids = set()
@@ -232,7 +233,7 @@ class TestAttr(unittest.TestCase):
     def test_003_bq_cmd_query_ptn_attr_tkn(self):
         lines = bq_cmd("--ptn", "--match", "--ptn_attr", "TAG=odd",
                        "--tkn_str", "node00001")
-        sio = StringIO(lines)
+        sio = StringIO(lines.decode())
         hdr0 = sio.readline()
         hdr1 = sio.readline()
         ptn_ids = set()
@@ -362,11 +363,11 @@ class TestAttr(unittest.TestCase):
     def test_013_bq_ptn_attr_list(self):
         """bq -p STORE --ptn_attr_list"""
         lines = bq_cmd("--ptn_attr_list")
-        attrs = set(lines.splitlines())
+        attrs = set(b.decode() for b in lines.splitlines())
         bs = bq.Bstore()
         bs.open(STORE_PATH)
         itr = bq.Battr_iter(bs)
-        comp = set(str(x) for x in itr)
+        comp = set(x for x in itr)
         del itr
         bs.close()
         self.assertEqual(attrs, comp)
@@ -374,7 +375,7 @@ class TestAttr(unittest.TestCase):
     def test_014_bq_ptn_attr_list_v(self):
         """bq -p STORE --ptn_attr_list -v"""
         lines = bq_cmd("--ptn_attr_list", "-v")
-        sio = StringIO(lines)
+        sio = StringIO(lines.decode())
         ents = []
         attr = None
         for l in sio.readlines():
@@ -397,7 +398,7 @@ class TestAttr(unittest.TestCase):
     def test_015_bq_ptn_attr_list_attr(self):
         """bq -p STORE --ptn_attr_list --ptn_attr TYPE"""
         lines = bq_cmd("--ptn_attr_list", "--ptn_attr", "TAG")
-        sio = StringIO(lines)
+        sio = StringIO(lines.decode())
         ents = []
         attr = None
         for l in sio.readlines():
@@ -426,4 +427,4 @@ if __name__ == "__main__":
     log.setLevel(logging.INFO)
     # unittest.TestLoader.testMethodPrefix = "test_"
     MAKE_STORE = True
-    unittest.main()
+    unittest.main(failfast=True, verbosity=2)

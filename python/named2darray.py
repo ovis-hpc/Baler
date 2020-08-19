@@ -1,4 +1,6 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
+
+from __future__ import print_function
 
 import struct
 import mmap
@@ -232,12 +234,12 @@ class Named2DArray(object):
 
     def dump(self, f=sys.stdout):
         """Dump Named2DArray information to the given file `f`"""
-        print >>f, "Name:", self.get_name()
-        print >>f, "  X-Bin Width:", self.get_x_bin_width()
-        print >>f, "  Y-Bin Width:", self.get_y_bin_width()
-        print >>f, "  Total Count:", self.get_total_count()
+        print("Name:", self.get_name(), file=f)
+        print("  X-Bin Width:", self.get_x_bin_width(), file=f)
+        print("  Y-Bin Width:", self.get_y_bin_width(), file=f)
+        print("  Total Count:", self.get_total_count(), file=f)
         for p in self:
-            print p
+            print(p, file=f)
 
     def get(self, i):
         """Get the i-th entry"""

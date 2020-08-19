@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 from __future__ import print_function
 import datetime as dt
 import argparse
@@ -25,9 +25,9 @@ def xlate_bin_width(args):
     raise ValueError("{0} is an invalid bin width specification".format(bw))
 
 def default_bin_width(dur):
-    if dur  / 3600 > 60:
+    if dur  // 3600 > 60:
         bin_width = 86400
-    elif dur / 60 > 60:
+    elif dur // 60 > 60:
         bin_width = 3600
     else:
         bin_width = 60
@@ -109,7 +109,7 @@ def autolabel(ax, rects, max_y, args):
         else:
             y = height + offset
 
-        ax.text(rect.get_x() + rect.get_width()/2., y,
+        ax.text(rect.get_x() + rect.get_width()//2., y,
                 '%d' % int(height),
                 rotation='vertical',
                 ha='center', va='bottom',
@@ -117,7 +117,7 @@ def autolabel(ax, rects, max_y, args):
             )
 
 def plot_xy(x, y, title_str, bin_width, args):
-    min_x = min(x) - (bin_width / 2)
+    min_x = min(x) - (bin_width // 2)
     max_x = max(x) + bin_width
     max_y = max(y)
     if args.y_scale == 'log':
@@ -131,7 +131,7 @@ def plot_xy(x, y, title_str, bin_width, args):
     axis.xaxis.set_major_formatter(MyXFormatter())
     figure.autofmt_xdate()
 
-    rects = plt.bar(x, y, bin_width / 2, color='y')
+    rects = plt.bar(x, y, bin_width // 2, color='y')
     autolabel(axis, rects, max_y, args)
 
     axis.xaxis.set_major_formatter(MyXFormatter())
@@ -168,7 +168,7 @@ def multi_bar(x, y, title_str, bin_width, args):
     max_x = 0.0
     min_x = 99999999999
     for X in x:
-        mx = min(X) - (bin_width / 2)
+        mx = min(X) - (bin_width // 2)
         if min_x > mx:
             min_x = mx
         mx = max(X) + bin_width
@@ -194,16 +194,16 @@ def multi_bar(x, y, title_str, bin_width, args):
     W = width - left - right
     H = height - top - bottom
     figure = plt.figure(figsize=(width, height))
-    axis = figure.add_axes([left / width, bottom / height,
-                            W / width, H / height], axisbg='w')
+    axis = figure.add_axes([left // width, bottom // height,
+                            W // width, H // height], axisbg='w')
     axis.tick_params(labelsize=10, direction='out')
     figure.autofmt_xdate()
 
     ind = 0
     offset = 0
-    width = bin_width / len(x)
+    width = bin_width // len(x)
     l = float(len(x))
-    colors = cm.Set1(np.arange(l) / l)
+    colors = cm.Set1(np.arange(l) // l)
     rects = []
     for X in x:
         Y = y[ind]
@@ -377,7 +377,7 @@ def show_summary(bs, args):
         del pi
     print("Pattern Count        : {0}".format(ptn_count))
     print("Message Count        : {0}".format(msg_count))
-    print("Messages per Pattern : {0}".format(msg_count / ptn_count))
+    print("Messages per Pattern : {0}".format(msg_count // ptn_count))
 
     mi = Bq.Bmsg_iter(bs)
     mi.set_filter(**fargs)
@@ -549,7 +549,7 @@ def plot_ptn_dist(bs, args):
         labels.append(tkn.tkn_str())
     figure = plt.figure(figsize=(8,8))
     l = float(len(comps))
-    cs=cm.Set1(np.arange(l) / l)
+    cs=cm.Set1(np.arange(l) // l)
     title_str = '{0}[{1}]: {2}'.format(ptn.ptn_id(), bin_name(bin_width), str(ptn))
     plt.title(textwrap.fill(title_str, 60))
     plt.pie(counts, labels=labels, colors=cs, autopct='%1.1f%%', shadow=True)
@@ -827,8 +827,8 @@ def show_matching_ptns(bs, args):
             _len = len(fmt_tkn_str(tkn, None))
             if pos in matching_cols[p.ptn_id()]:
                 tkn_str = UNDERLINE + fmt_tkn_str(tkn, args) + RESET
-                matches.append(cpos+(_len+1)/2)
-                cpos = _len - ((_len+1)/2)
+                matches.append(cpos+(_len+1)//2)
+                cpos = _len - ((_len+1)//2)
             else:
                 tkn_str = fmt_tkn_str(tkn, args)
                 cpos += _len
@@ -1380,7 +1380,7 @@ if __name__ == "__main__":
         print("Error: `-p,--path STORE_PATH` option is required")
         sys.exit(-1)
 
-    bs = Bq.Bstore()
+    bs = Bq.Bstore(plugin=args.plugin)
     bs.open(args.path)
 
     if args.summary:

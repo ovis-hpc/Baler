@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import os
 import re
@@ -8,6 +8,8 @@ import shutil
 import socket
 import logging
 import unittest
+
+from functools import total_ordering
 
 from dateutil import parser as ts_parser
 from test_util.test_util import ts_text, BalerDaemon
@@ -67,6 +69,7 @@ def parse_ts(s):
         return dt.total_seconds()
     return time.mktime(ts.timetuple())
 
+@total_ordering
 class Msg(object):
     __slots__ = ["ts", "text"]
 
@@ -86,6 +89,12 @@ class Msg(object):
         if self.text > other.text:
             return 1
         return 0
+
+    def __eq__(self, other):
+        return self.__cmp__(other) == 0
+
+    def __lt__(self, other):
+        return self.__cmp__(other) < 0
 
     def __str__(self):
         return "%.06f %s" % (self.ts, self.text)
@@ -131,7 +140,7 @@ class TestSyslogParser(unittest.TestCase):
             with open(name, "r") as f:
                 sock = socket.create_connection(("localhost", PORT))
                 for l in f:
-                    sock.send(l)
+                    sock.send(l.encode())
                 sock.close()
         balerd.wait_idle()
         balerd.stop()

@@ -51,7 +51,7 @@
 import logging
 import collections
 import copy
-import StringIO
+from io import StringIO
 import time
 import calendar
 import re
@@ -59,6 +59,7 @@ import json
 import curses
 import pkgutil
 from datetime import datetime
+import time
 from dateutil import tz
 
 
@@ -152,7 +153,7 @@ class IDSet(set):
             x1 = x0
             if len(t) > 1:
                 x1 = int(t[1])
-            for i in xrange(x0, x1+1):
+            for i in range(x0, x1+1):
                 self.add(i)
 
     def add_smart(self, obj):

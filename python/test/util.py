@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 # Copyright (c) 2016 Open Grid Computing, Inc. All rights reserved.
 # Copyright (c) 2016 Sandia Corporation. All rights reserved.

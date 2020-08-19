@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import os
 import sys
@@ -57,7 +57,7 @@ class TestRerun(unittest.TestCase):
         shutil.rmtree(STORE_PATH, True)
         with open(HOST_FILE, 'w') as f:
             for h in HOST_LIST1:
-                print >>f, h
+                print(h, file=f)
         with open(CONFIG_FILE, 'w') as f:
             f.write(CONFIG_TEXT)
 
@@ -72,7 +72,7 @@ class TestRerun(unittest.TestCase):
         balerd.start()
         sock = socket.create_connection(("localhost", PORT))
         for msg in msg_iter1():
-            sock.send(msg)
+            sock.send(msg.encode())
         sock.close()
         balerd.wait_idle()
         balerd.stop()
@@ -92,7 +92,7 @@ class TestRerun(unittest.TestCase):
         balerd.start()
         sock = socket.create_connection(("localhost", PORT))
         for msg in msg_iter2():
-            sock.send(msg)
+            sock.send(msg.encode())
         sock.close()
         balerd.wait_idle()
         balerd.stop()
@@ -122,4 +122,4 @@ if __name__ == "__main__":
     log.setLevel(logging.INFO)
     # unittest.TestLoader.testMethodPrefix = "test_"
     MAKE_STORE = True
-    unittest.main()
+    unittest.main(failfast=True, verbosity=2)

@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import os
 import re
@@ -32,10 +32,10 @@ def HOST_ENTRIES():
 
 def RAW_MESSAGES():
     ts0 = time.strptime('2016-12-31 01:02:03', '%Y-%m-%d %H:%M:%S')
-    ts0 = time.mktime(ts0)
+    ts0 = time.mktime(tuple(ts0))
     ts1 = list(time.strptime('Dec 31 01:02:03', '%b %d %H:%M:%S'))
     ts1[0] = time.localtime().tm_year
-    ts1 = time.mktime(ts1)
+    ts1 = time.mktime(tuple(ts1))
     msgs = [
             "<1>1 2016-12-31T01:02:03.456789-06:00 node00001 1483167723\n",
             "<1>1 2016-12-31 01:02:03 node00002 %d\n" % ts0,
