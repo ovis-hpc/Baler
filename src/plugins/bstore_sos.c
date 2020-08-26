@@ -1,5 +1,6 @@
-#undef _GNU_SOURCE
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -2014,14 +2015,12 @@ static int
 __bs_ptn_iter_find(bptn_iter_t iter, int fwd, const struct timeval *tv, bptn_id_t ptn_id)
 {
 	int rc;
-	sos_obj_t obj = NULL;
 	SOS_KEY(key);
-	uint64_t usecs;
 	union sos_timestamp_u ts;
 
 	bsos_iter_t i = (bsos_iter_t)iter;
 	bstore_sos_t bss = (bstore_sos_t)i->bs;
-	
+
 	if (!i->iter) {
 		i->iter_type = PTN_ITER_LAST_SEEN;
 		i->iter = sos_attr_iter_new(bss->last_seen_attr);

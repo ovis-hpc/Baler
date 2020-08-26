@@ -525,7 +525,6 @@ void ntoh_bzmsg(struct bzmsg *m)
 
 struct bwq *get_least_busy_boutq()
 {
-	struct bwq *q;
 	int i, mini;
 	mini = 0;
 	for (i = 1; i < boutqwkrN; i++) {
@@ -852,7 +851,6 @@ static
 int __process_cmd_tokens_line_cb(char *line, void *_ctxt)
 {
 	struct __process_cmd_tokens_line_ctxt *ctxt = _ctxt;
-	char *id_str;
 	int n;
 	int rc;
 	int spc_idx;
@@ -936,7 +934,6 @@ int process_cmd_tokens(struct bconfig_list *cfg)
 	int rc = bprocess_file_by_line_w_comment(path,
 					__process_cmd_tokens_line_cb, ctxt);
 
-cleanup:
 	if (ctxt)
 		free(ctxt);
 	return rc;
@@ -1123,7 +1120,6 @@ void handle_set_log_file(const char *path)
 void args_handling(int argc, char **argv)
 {
 	int c;
-	int len;
 	int rc;
 
 	bset_store_path("./store");
@@ -1407,7 +1403,6 @@ void* boutqwkr_routine(void *arg)
 	int rc;
 	struct bout_wkr_ctxt *octxt= arg;
 	struct bwq_entry *ent;
-	struct boutq_data *d;
 	sigset_t sigset;
 	sigfillset(&sigset);
 	pthread_sigmask(SIG_SETMASK, &sigset, NULL); /* block all signals */
@@ -1506,8 +1501,6 @@ int core_signals[] = {
 int main(int argc, char **argv)
 {
 	struct sigaction cleanup_act, logrotate_act;
-	siginfo_t siginfo;
-	int sig;
 	int i;
 	sigset_t sigset;
 

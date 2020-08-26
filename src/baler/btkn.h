@@ -176,7 +176,6 @@ static inline
 uint32_t btkn_store_insert(struct btkn_store *store, struct bstr *str)
 {
 	uint32_t id;
-	bmap_ins_ret_t ret_flag;
 	id = bmap_insert(store->map, str);
 	if (id == BMAP_ID_ERR)
 		/* errno should be set in bmap_insert() */
@@ -197,7 +196,6 @@ static inline
 uint32_t btkn_store_insert_with_id(struct btkn_store *store, struct bstr *str, uint32_t id)
 {
 	uint32_t _id;
-	bmap_ins_ret_t ret_flag;
 	_id = bmap_insert_with_id(store->map, str, id);
 	if (_id == BMAP_ID_ERR)
 		/* errno should be set in bmap_insert() */
