@@ -5,7 +5,6 @@ import datetime as dt
 from libc.stdint cimport *
 from libc.stdlib cimport *
 from libc.errno cimport *
-from sosdb import Array
 import os
 
 from . import util
@@ -1259,10 +1258,10 @@ cdef class Bptn_hist_iter(Biter):
         return end - start
 
     def as_xy_arrays(self, ptn_id, bin_width, start_time=None, end_time=None):
+        from sosdb import Array
         cdef int rec_no
         cdef int rc
         cdef void *c_obj
-
         x = Array.Array()
         y = Array.Array()
         rc = Bs.bstore_ptn_hist_iter_first(self.c_iter)
@@ -1389,6 +1388,7 @@ cdef class Bcomp_hist_iter(Biter):
         return end - start
 
     def as_xy_arrays(self):
+        from sosdb import Array
         cdef int rec_no
         cdef int rc
         cdef void *c_obj
@@ -1515,6 +1515,7 @@ cdef class Btkn_hist_iter(Biter):
         return end - start
 
     def as_xy_arrays(self, **kwargs):
+        from sosdb import Array
         cdef int rec_no
         cdef int rc
         cdef void *c_obj
