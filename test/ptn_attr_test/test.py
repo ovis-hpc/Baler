@@ -172,4 +172,4 @@ if __name__ == "__main__":
     logging.basicConfig(format=LOGFMT, datefmt=DATEFMT)
     log.setLevel(logging.INFO)
     # unittest.TestLoader.testMethodPrefix = "test_"
-    unittest.main()
+    unittest.main(failfast=True)

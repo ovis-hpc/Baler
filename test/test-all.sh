@@ -50,7 +50,7 @@ for X in ${LIST[*]}; do
 	header "BEGIN $X"
 	if [[ -e test.py ]]; then
 		if [[ -z $XMLRUNNER ]]; then
-			./test.py -f -v
+			./test.py -v
 		else
 			echo "xmlrunner"
 			rm -fr *.xml
