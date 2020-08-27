@@ -70,6 +70,19 @@
 #include "btkn_types.h"
 
 /**
+ * Generic version union that can access the values as major/minor/patch or u32.
+ */
+typedef union bver {
+	struct {  /* favor little endian */
+		uint8_t pad;
+		uint8_t patch;
+		uint8_t minor;
+		uint8_t major;
+	};
+	uint32_t u32;
+} *bver_t;
+
+/**
  * Pair of strings (s0, s1).
  */
 struct bpair_str {

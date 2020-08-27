@@ -4984,6 +4984,7 @@ static struct bstore_plugin_s plugin = {
 	.version_get = bsa_version_get,
 	.version_get_by_path = bsa_version_get_by_path,
 
+	.interface_version = BSTORE_INTERFACE_VERSION_INITIALIZER,
 };
 
 bstore_plugin_t get_plugin(void)

@@ -85,6 +85,9 @@ typedef struct bstore_iter_filter_s *bstore_iter_filter_t;
 typedef int (*bmsg_cmp_fn_t)(bptn_id_t ptn_id, time_t ts,
 			     bcomp_id_t comp_id, void *ctxt);
 
+#define BSTORE_INTERFACE_VERSION_U32 0x03010000
+#define BSTORE_INTERFACE_VERSION_INITIALIZER { .u32 = BSTORE_INTERFACE_VERSION_U32 }
+
 /**
  * \brief bstore plugin interface.
  *
@@ -876,6 +879,8 @@ typedef struct bstore_plugin_s {
 	int (*version_get)(bstore_t bs, struct bstore_version_s *ver);
 	int (*version_get_by_path)(const char *path,
 				   struct bstore_version_s *ver);
+
+	union bver interface_version; /**< the version of bstore plugin interface */
 
 } *bstore_plugin_t;
 

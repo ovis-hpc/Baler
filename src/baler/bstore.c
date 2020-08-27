@@ -81,6 +81,17 @@ static bstore_plugin_t __get_plugin(const char *name)
 	plugin = get_plugin();
 	if (!plugin)
 		goto err_4;
+	if (plugin->interface_version.u32 != BSTORE_INTERFACE_VERSION_U32) {
+		union bver _ver = BSTORE_INTERFACE_VERSION_INITIALIZER;
+		union bver *ver = &plugin->interface_version;
+		berr("loading mismatch bstore plugin, expecting interface "
+				" version %hhu.%hhu.%hhu.%hhu, but got "
+				" %hhu.%hhu.%hhu.%hhu\n",
+				_ver.major, _ver.minor, _ver.patch, _ver.pad,
+				ver->major, ver->minor, ver->patch, ver->pad);
+		errno = EINVAL;
+		goto err_4;
+	}
 	pe->plugin = plugin;
 	rbn_init(&pe->rbn, pe->key);
 	rbt_ins(&plugin_tree, &pe->rbn);
