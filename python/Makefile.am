@@ -19,9 +19,9 @@ Bq_la_LIBADD = $(top_builddir)/src/baler/libbaler.la
 pkgpyexecdir = $(pkgpythondir)
 
 Bq.c: Bq.pyx Bs.pxd
-	$(CYTHON) -3 --gdb -I $(srcdir) $< -o $@
+	$(CYTHON) -3 --gdb --fast-fail -I $(srcdir) $< -o $@
 
-dist_bin_SCRIPTS = bq bclient n2daplot
+dist_bin_SCRIPTS = bq bclient n2daplot btkn_add breprocess
 
 clean-local:
 	rm -f Bq.c

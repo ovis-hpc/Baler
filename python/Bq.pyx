@@ -4,8 +4,10 @@ from cpython cimport PyObject, Py_INCREF
 import datetime as dt
 from libc.stdint cimport *
 from libc.stdlib cimport *
+from libc.string cimport *
 from libc.errno cimport *
 import os
+import re
 
 from . import util
 from io import StringIO
@@ -74,6 +76,64 @@ tkn_type_strs = {
     Bs.BTKN_TYPE_TEXT : "*",
     Bs.BTKN_TYPE_WHITESPACE : " "
 }
+
+# Maps TYPE symbol to btkn_type_t
+BTKN_TYPE_TABLE = {
+
+    "BTKN_TYPE_TYPE": Bs.BTKN_TYPE_TYPE,
+    "BTKN_TYPE_PRIORITY": Bs.BTKN_TYPE_PRIORITY,
+    "BTKN_TYPE_VERSION": Bs.BTKN_TYPE_VERSION,
+    "BTKN_TYPE_TIMESTAMP": Bs.BTKN_TYPE_TIMESTAMP,
+    "BTKN_TYPE_HOSTNAME": Bs.BTKN_TYPE_HOSTNAME,
+    "BTKN_TYPE_SERVICE": Bs.BTKN_TYPE_SERVICE,
+    "BTKN_TYPE_PID": Bs.BTKN_TYPE_PID,
+    "BTKN_TYPE_IP4_ADDR": Bs.BTKN_TYPE_IP4_ADDR,
+    "BTKN_TYPE_IP6_ADDR": Bs.BTKN_TYPE_IP6_ADDR,
+    "BTKN_TYPE_ETH_ADDR": Bs.BTKN_TYPE_ETH_ADDR,
+    "BTKN_TYPE_HEX_INT": Bs.BTKN_TYPE_HEX_INT,
+    "BTKN_TYPE_DEC_INT": Bs.BTKN_TYPE_DEC_INT,
+    "BTKN_TYPE_NUMBER": Bs.BTKN_TYPE_NUMBER,
+    "BTKN_TYPE_SEPARATOR": Bs.BTKN_TYPE_SEPARATOR,
+    "BTKN_TYPE_FLOAT": Bs.BTKN_TYPE_FLOAT,
+    "BTKN_TYPE_PATH": Bs.BTKN_TYPE_PATH,
+    "BTKN_TYPE_URL": Bs.BTKN_TYPE_URL,
+    "BTKN_TYPE_WORD": Bs.BTKN_TYPE_WORD,
+    "BTKN_TYPE_TEXT": Bs.BTKN_TYPE_TEXT,
+    "BTKN_TYPE_WHITESPACE": Bs.BTKN_TYPE_WHITESPACE,
+
+    # short symbols
+    "TYPE": Bs.BTKN_TYPE_TYPE,
+    "PRIORITY": Bs.BTKN_TYPE_PRIORITY,
+    "VERSION": Bs.BTKN_TYPE_VERSION,
+    "TIMESTAMP": Bs.BTKN_TYPE_TIMESTAMP,
+    "HOSTNAME": Bs.BTKN_TYPE_HOSTNAME,
+    "SERVICE": Bs.BTKN_TYPE_SERVICE,
+    "PID": Bs.BTKN_TYPE_PID,
+    "IP4_ADDR": Bs.BTKN_TYPE_IP4_ADDR,
+    "IP6_ADDR": Bs.BTKN_TYPE_IP6_ADDR,
+    "ETH_ADDR": Bs.BTKN_TYPE_ETH_ADDR,
+    "HEX_INT": Bs.BTKN_TYPE_HEX_INT,
+    "DEC_INT": Bs.BTKN_TYPE_DEC_INT,
+    "NUMBER": Bs.BTKN_TYPE_NUMBER,
+    "SEPARATOR": Bs.BTKN_TYPE_SEPARATOR,
+    "FLOAT": Bs.BTKN_TYPE_FLOAT,
+    "PATH": Bs.BTKN_TYPE_PATH,
+    "URL": Bs.BTKN_TYPE_URL,
+    "WORD": Bs.BTKN_TYPE_WORD,
+    "TEXT": Bs.BTKN_TYPE_TEXT,
+    "WHITESPACE": Bs.BTKN_TYPE_WHITESPACE,
+}
+
+def parse_types(str types):
+    """Parse `,` or `|` separated type symbols to OR of the types"""
+    type_int = 0
+    _types = re.split(r',|\|', types)
+    for txt in _types:
+        t = BTKN_TYPE_TABLE.get(txt, None)
+        if t == None:
+            raise LookupError("Unknown token type: {}".format(txt))
+        type_int |= (1<<(t-1))
+    return type_int
 
 cdef class Bstore:
 
@@ -265,6 +325,43 @@ cdef class Bstore:
 
     cpdef comp_id_max(self):
         return Bs.bstore_comp_id_max(self.c_store)
+
+    def tkn_add(self, str text, int tkn_types):
+        """Add token `text` with token type `tkn_types`
+
+        If the token exist, add the tkn_types to the type mask of the token.
+
+        Parameters:
+        text (str)      -- token text
+        tkn_types (int) -- the bitwise OR of BTKN_TYPE_*
+
+        Returns:
+        Btkn object
+        """
+        cdef Bs.btkn_t c_tkn
+        cdef Bs.btkn_id_t tkn_id
+        cdef bytes text_b = text.encode()
+        c_tkn = Bs.btkn_alloc(0, tkn_types, <char*>text_b, len(text_b))
+        tkn_id = Bs.bstore_tkn_add(self.c_store, c_tkn)
+        if not tkn_id:
+            Bs.btkn_free(c_tkn)
+            raise RuntimeError("bstore_tkn_add() error, errno: {}".format(errno))
+        tkn = Btkn()
+        tkn.c_tkn = c_tkn
+        return tkn
+
+    def ptn_add(self, long tv_sec, long tv_usec, Bptn ptn):
+        """Add pattern, returns ptn_id"""
+        cdef Bs.timeval tv
+        cdef Bs.bptn_id_t ptn_id
+        if not ptn.c_ptn:
+            raise ValueError("ptn.c_ptn is invalid")
+        tv.tv_sec = tv_sec
+        tv.tv_usec = tv_usec
+        ptn_id = Bs.bstore_ptn_add(self.c_store, &tv, ptn.c_ptn.str)
+        if not ptn_id:
+            raise RuntimeError("bstore_ptn_add() error, errno: {}".format(errno))
+        return ptn_id
 
 
 cdef class Bmc:
@@ -704,6 +801,15 @@ cdef class Bptn:
             ptn_str += tkn.ptn_tkn_str()
         return ptn_str
 
+    def __eq__(self, Bptn other):
+        cdef rc
+        if other == None:
+            return False
+        if self.c_ptn.str.blen != other.c_ptn.str.blen:
+            return False
+        rc = memcmp(self.c_ptn.str, other.c_ptn.str, self.c_ptn.str.blen)
+        return rc == 0
+
     def attr_values(self):
         itr = Bptn_attr_iter(self.store)
         itr.set_filter(ptn_id = self.c_ptn.ptn_id)
@@ -965,6 +1071,11 @@ cdef class Bmsg:
             raise ValueError
         return self.c_msg.ptn_id
 
+    cpdef set_ptn_id(self, Bs.bptn_id_t ptn_id):
+        if self.c_msg is NULL:
+            raise ValueError
+        self.c_msg.ptn_id = ptn_id
+
     cpdef comp_id(self):
         if self.c_msg is NULL:
             raise ValueError
@@ -1000,6 +1111,33 @@ cdef class Bmsg:
             tkn = self.store.tkn_by_id(tkn_id)
             sio.write(str(tkn))
         return sio.getvalue()
+
+    def reprocess(self):
+        """Return a new reprocessed (in-memory, NOT in-store) Bmsg"""
+        cdef int rc
+        cdef Bs.bmsg_t c_msg
+        c_msg = Bs.bmsg_dup(self.c_msg)
+        if not c_msg:
+            raise RuntimeError("bmsg_dup() error, errno: {}".format(errno))
+        rc = Bs.bmsg_reprocess_tkn(c_msg, self.store.c_store)
+        if rc:
+            free(c_msg)
+            raise RuntimeError("bmsg_reprocess_tkn() error, rc: {}".format(rc))
+        msg = Bmsg()
+        msg.c_msg = c_msg
+        msg.store = self.store
+        return msg
+
+    def ptn_extract(self):
+        """Extract a pattern from the message"""
+        cdef Bs.bptn_t c_ptn
+        c_ptn = Bs.bmsg_ptn_extract(self.c_msg)
+        if not c_ptn:
+            raise RuntimeError("bmsg_ptn_extract() error, errno: {}".format(errno))
+        ptn = Bptn()
+        ptn.c_ptn = c_ptn
+        ptn.store = self.store
+        return ptn
 
 
 cdef class Bmsg_iter(Biter):
@@ -1170,6 +1308,17 @@ cdef class Bmsg_iter(Biter):
         Bs.bstore_ptn_hist_iter_free(it)
 
         return msg_count
+
+    def update_msg(self, Bmsg new_msg):
+        """Update the current message pointed by pos with new_msg
+
+        Note that the position of the iterator will move forward as the old
+        message at the position becomes invalid.
+        """
+        cdef int rc
+        rc = Bs.bstore_msg_iter_update(self.c_iter, new_msg.c_msg)
+        if rc:
+            raise RuntimeError("bstore_msg_iter_update() error, rc: {}".format(rc))
 
 
 cdef class Bptn_hist:

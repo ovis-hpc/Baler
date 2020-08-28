@@ -882,6 +882,18 @@ typedef struct bstore_plugin_s {
 
 	union bver interface_version; /**< the version of bstore plugin interface */
 
+	/**
+	 * Update the message pointed by iterator \c i  with \c new_msg.
+	 *
+	 * The iterator also advances to the next position if \c msg_update
+	 * succeeds. The store plugin should also update affected data and
+	 * statistics, e.g. ptn_hist.
+	 *
+	 * \retval 0     If success, or
+	 * \retval errno If error.
+	 */
+	int (*msg_iter_update)(bmsg_iter_t i, bmsg_t new_msg);
+
 } *bstore_plugin_t;
 
 /**
@@ -938,6 +950,7 @@ int bstore_msg_iter_next(bmsg_iter_t i);
 int bstore_msg_iter_prev(bmsg_iter_t i);
 int bstore_msg_iter_last(bmsg_iter_t i);
 int bstore_msg_iter_filter_set(bmsg_iter_t iter, bstore_iter_filter_t filter);
+int bstore_msg_iter_update(bmsg_iter_t i, bmsg_t new_msg);
 
 bptn_id_t bstore_ptn_add(bstore_t bs, struct timeval *tv, bstr_t ptn);
 bptn_t bstore_ptn_find(bstore_t bs, bptn_id_t ptn_id);

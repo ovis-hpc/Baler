@@ -66,7 +66,7 @@ cdef extern from "baler/btypes.h":
     ctypedef btkn *btkn_t
 
     ctypedef uint64_t bptn_id_t
-    ctypedef struct bptn:
+    cdef struct bptn:
         bptn_id_t ptn_id
         timeval first_seen
         timeval last_seen
@@ -76,7 +76,7 @@ cdef extern from "baler/btypes.h":
     ctypedef bptn *bptn_t
 
     ctypedef uint64_t bcomp_id_t
-    ctypedef struct bmsg:
+    cdef struct bmsg:
         bptn_id_t ptn_id
         bcomp_id_t comp_id
         timeval timestamp
@@ -122,6 +122,8 @@ cdef extern from "baler/bstore.h":
     int btkn_has_type(btkn_t tkn, btkn_type_t typ)
     btkn_type_t btkn_first_type(btkn_t tkn)
 
+    btkn_id_t bstore_tkn_add(bstore_t bs, btkn_t tkn)
+
     btkn_t bstore_tkn_find_by_id(bstore_t bs, btkn_id_t tkn_id)
     btkn_t bstore_tkn_find_by_name(bstore_t bs, const char *name, size_t name_len)
 
@@ -140,6 +142,7 @@ cdef extern from "baler/bstore.h":
     int bstore_tkn_iter_prev(btkn_iter_t iter)
     int bstore_tkn_iter_last(btkn_iter_t iter)
 
+    bptn_id_t bstore_ptn_add(bstore_t bs, timeval_t tv, bstr_t ptn)
     bptn_t bstore_ptn_find(bstore_t bs, bptn_id_t ptn_id)
     bstore_iter_t bstore_ptn_iter_new(bstore_t bs)
     void bstore_ptn_iter_free(bstore_iter_t iter)
@@ -166,6 +169,7 @@ cdef extern from "baler/bstore.h":
     int bstore_msg_iter_first(bstore_iter_t i)
     int bstore_msg_iter_last(bstore_iter_t i)
     int bstore_msg_iter_filter_set(bstore_iter_t i, bstore_iter_filter_t f)
+    int bstore_msg_iter_update(bstore_iter_t i, bmsg_t new_msg)
 
     cdef struct bptn_hist_s:
         bptn_id_t ptn_id
@@ -345,3 +349,5 @@ cdef extern from "baler/bmeta.h":
 cdef extern from "baler/butils.h":
     const char *bgitsha()
     const char *bversion()
+    bptn_t bmsg_ptn_extract(bmsg_t msg)
+    int bmsg_reprocess_tkn(bmsg_t msg, bstore_t store)

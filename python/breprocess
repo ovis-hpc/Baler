@@ -1,0 +1,32 @@
+#!/usr/bin/python3
+import os
+import sys
+import argparse as ap
+
+from baler import Bq as bq
+
+if __name__ != "__main__":
+    raise ImportError("This is not a module")
+
+p = ap.ArgumentParser(description="Reprocess messages in bstore.")
+p.add_argument("--path", "-p", metavar="BSTORE_PATH", required=True,
+               help="Path to bstore")
+args = p.parse_args()
+
+bs = bq.Bstore()
+bs.open(args.path)
+itr = bq.Bmsg_iter(bs)
+
+itr.first()
+msg = itr.obj()
+while msg:
+    ptn = msg.ptn_extract()
+    new_msg = msg.reprocess()
+    new_ptn = new_msg.ptn_extract()
+    if ptn == new_ptn:
+        itr.next() # no need to update, just move itr pos
+    else:
+        ptn_id = bs.ptn_add(new_msg.tv_sec(), new_msg.tv_usec(), new_ptn)
+        new_msg.set_ptn_id(ptn_id)
+        itr.update_msg(new_msg) # this also moves itr pos
+    msg = itr.obj()

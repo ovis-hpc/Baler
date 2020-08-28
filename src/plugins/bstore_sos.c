@@ -1574,7 +1574,15 @@ typedef struct bsos_iter_s {
 	struct bstore_iter_filter_s filter;
 	btkn_id_t ptn_tkn_id; /* used in ptn_tkn_iter */
 	void *cmp_ctxt;
+
+	int has_hist;
 } *bsos_iter_t;
+
+#define  HAS_HIST_INIT     0x0001
+#define  HAS_HIST_PTN      0x0002
+#define  HAS_HIST_COMP     0x0004
+#define  HAS_HIST_COMP2    0x0008
+#define  HAS_HIST_PTN_TKN  0x0010
 
 static bstore_iter_pos_t __iter_pos_get(bsos_iter_t iter)
 {
@@ -2788,6 +2796,19 @@ static sos_visit_action_t hist_cb(sos_index_t index,
 		return SOS_VISIT_ADD;
 	}
 	idx_data->uint64_[1]++;
+	return SOS_VISIT_UPD;
+}
+
+static sos_visit_action_t hist_sub_cb(sos_index_t index,
+				  sos_key_t key, sos_idx_data_t *idx_data,
+				  int found,
+				  void *arg)
+{
+	if (!found)
+		return SOS_VISIT_NOP;
+	idx_data->uint64_[1]--;
+	if (!idx_data->uint64_[1])
+		return SOS_VISIT_DEL;
 	return SOS_VISIT_UPD;
 }
 
@@ -5039,6 +5060,136 @@ out:
 	return rc;
 }
 
+/* a subroutine to check hist availability in the store */
+static void __check_hist(bsos_iter_t i, sos_attr_t attr, int has_hist_flag)
+{
+	sos_iter_t itr;
+	int rc;
+	if (!attr)
+		return;
+	itr = sos_attr_iter_new(attr);
+	if (!itr)
+		return;
+	rc = sos_iter_begin(itr);
+	sos_iter_free(itr);
+	if (rc)
+		return;
+	i->has_hist |= has_hist_flag;
+}
+
+int bs_msg_iter_update(bmsg_iter_t iter, bmsg_t new_msg)
+{
+	/*
+	 * update old_msg with new_msg due to pattern change:
+	 * 1) add new_msg
+	 * 2) undo old_msg statistics:
+	 *    - ptn->count
+	 *    - ptn_hist
+	 *    - ptn_tkn_hist
+	 *    - no need to change tkn_hist (not affected)
+	 * 3) address new_msg statistics:
+	 *    - ptn_hist
+	 *    - ptn_tkn_hist
+	 *    - DO NOT do new_ptn->count, it is already done when determining
+	 *      new_msg->ptn_id
+	 * 4) remove old msg
+	 */
+	int rc = 0;
+	bsos_iter_t i = (bsos_iter_t)iter;
+	bstore_sos_t bss = (bstore_sos_t)i->bs;
+	sos_obj_t old_msg_obj = sos_iter_obj(i->iter);
+	sos_obj_t ptn_obj;
+	ptn_t sptn;
+	msg_t omsg;
+	SOS_KEY(key);
+	static const int N_bin = 3;
+	static time_t dt_bin[3] = { 60, 3600, 86400 };
+	if (!old_msg_obj)
+		return ENOENT;
+	rc = bs_msg_add(i->bs, &new_msg->timestamp, new_msg);
+	if (rc)
+		return rc;
+
+	omsg = sos_obj_ptr(old_msg_obj);
+
+	/* undo ptn->count */
+	sos_key_set(key, &omsg->ptn_id, sizeof(omsg->ptn_id));
+	ptn_obj = sos_obj_find(bss->ptn_id_attr, key);
+	sptn = sos_obj_ptr(ptn_obj);
+	sptn->count--;
+	sptn = NULL;
+	sos_obj_put(ptn_obj);
+
+	if (0 == (i->has_hist & HAS_HIST_INIT)) {
+		/* Check availability of ptn_hist and ptn_tkn_hist */
+		i->has_hist |= HAS_HIST_INIT;
+		__check_hist(i, bss->ptn_hist_key_attr,    HAS_HIST_PTN);
+		__check_hist(i, bss->comp_hist_key_attr,   HAS_HIST_COMP);
+		__check_hist(i, bss->comp_hist_key2_attr,  HAS_HIST_COMP2);
+		__check_hist(i, bss->ptn_pos_tkn_key_attr, HAS_HIST_PTN_TKN);
+	}
+	if (i->has_hist & HAS_HIST_PTN) {
+		/* retract old ptn hist & update new ptn_hist*/
+		int _i;
+		bptn_id_t ptn_id = omsg->ptn_id;
+		bcomp_id_t comp_id = omsg->comp_id;
+		time_t sec;
+		time_t bin;
+		sos_index_t ph_idx = sos_attr_index(bss->ptn_hist_key_attr);
+		sos_index_t ch_idx = sos_attr_index(bss->comp_hist_key_attr);
+		sos_index_t ch2_idx = sos_attr_index(bss->comp_hist_key2_attr);
+		for (_i = 0; _i < N_bin; _i++) {
+			/* NOTE: only ptn_id changes here */
+			bin = dt_bin[_i];
+			sec = (omsg->epoch_us / 1000000 / bin) * bin;
+			/* ptn_hist */
+			sos_key_join(key, bss->ptn_hist_key_attr, bin, sec, ptn_id);
+			sos_index_visit(ph_idx, key, hist_sub_cb, NULL);
+			sos_key_join(key, bss->ptn_hist_key_attr, bin, sec, new_msg->ptn_id);
+			sos_index_visit(ph_idx, key, hist_cb, NULL);
+			/* comp_hist */
+			sos_key_join(key, bss->comp_hist_key_attr, bin, sec, comp_id, ptn_id);
+			rc = sos_index_visit(ch_idx, key, hist_sub_cb, NULL);
+			sos_key_join(key, bss->comp_hist_key_attr, bin, sec, comp_id, new_msg->ptn_id);
+			rc = sos_index_visit(ch_idx, key, hist_cb, NULL);
+			/* comp_hist2 */
+			sos_key_join(key, bss->comp_hist_key2_attr, bin, comp_id, ptn_id, sec);
+			rc = sos_index_visit(ch2_idx, key, hist_sub_cb, NULL);
+			sos_key_join(key, bss->comp_hist_key2_attr, bin, comp_id, new_msg->ptn_id, sec);
+			rc = sos_index_visit(ch2_idx, key, hist_cb, NULL);
+		}
+	}
+	if (i->has_hist & HAS_HIST_PTN_TKN) {
+		/* retract old ptn_tkn & update new ptn_tkn */
+		bmsg_t old_msg = bs_msg_iter_obj(iter);
+		int pos;
+		sos_index_t idx = sos_attr_index(bss->ptn_pos_tkn_key_attr);
+		btkn_id_t tkn_id;
+		for (pos = 0; pos < old_msg->argc; pos++) {
+			if (!btkn_id_is_wildcard(old_msg->argv[pos] & BTKN_TYPE_ID_MASK))
+				continue;
+			tkn_id = old_msg->argv[pos] >> 8;
+			sos_key_join(key, bss->ptn_pos_tkn_key_attr, old_msg->ptn_id, pos, tkn_id);
+			sos_index_visit(idx, key, hist_sub_cb, NULL);
+		}
+		free(old_msg);
+		for (pos = 0; pos < new_msg->argc; pos++) {
+			if (!btkn_id_is_wildcard(new_msg->argv[pos] & BTKN_TYPE_ID_MASK))
+				continue;
+			tkn_id = new_msg->argv[pos] >> 8;
+			sos_key_join(key, bss->ptn_pos_tkn_key_attr, new_msg->ptn_id, pos, tkn_id);
+			sos_index_visit(idx, key, hist_cb, NULL);
+		}
+	}
+	/* advance iterator position before deleting the object */
+	sos_iter_next(i->iter);
+	/* delete old msg */
+	sos_obj_remove(old_msg_obj);
+	sos_obj_delete(old_msg_obj);
+	sos_obj_put(old_msg_obj); /* put ref from sos_iter_obj() */
+	return 0;
+}
+
 static struct bstore_plugin_s plugin = {
 	.open = bs_open,
 	.close = bs_close,
@@ -5175,6 +5326,7 @@ static struct bstore_plugin_s plugin = {
 	.version_get_by_path = bs_version_get_by_path,
 
 	.interface_version = BSTORE_INTERFACE_VERSION_INITIALIZER,
+	.msg_iter_update = bs_msg_iter_update,
 };
 
 bstore_plugin_t get_plugin(void)

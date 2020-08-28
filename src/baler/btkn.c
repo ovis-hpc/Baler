@@ -54,8 +54,8 @@
 #include "btkn.h"
 #include <ctype.h>
 
-pthread_mutex_t tkn_lock;
-struct btkn_list_head tkn_list;
+pthread_mutex_t tkn_lock = PTHREAD_MUTEX_INITIALIZER;
+struct btkn_list_head tkn_list = LIST_HEAD_INITIALIZER(tkn_list);
 
 static int store_comparator(const void *a, const void *b)
 {

@@ -853,6 +853,10 @@ btkn_id_t bstore_comp_id_max(bstore_t bs)
 	return bs->plugin->comp_id_max(bs);
 }
 
+int bstore_msg_iter_update(bmsg_iter_t i, bmsg_t new_msg)
+{
+	return i->bs->plugin->msg_iter_update(i, new_msg);
+}
 
 int bstore_version_get(const char *plugin, const char *store,
 		       struct bstore_version_s *plugin_ver,

@@ -4877,6 +4877,11 @@ int bsa_version_get_by_path(const char *path, struct bstore_version_s *ver)
 	return ENOSYS;
 }
 
+int bsa_msg_iter_update(bmsg_iter_t i, bmsg_t new_msg)
+{
+	return ENOTSUP;
+}
+
 static struct bstore_plugin_s plugin = {
 	.open = bsa_open,
 	.close = bsa_close,
@@ -4985,6 +4990,7 @@ static struct bstore_plugin_s plugin = {
 	.version_get_by_path = bsa_version_get_by_path,
 
 	.interface_version = BSTORE_INTERFACE_VERSION_INITIALIZER,
+	.msg_iter_update = bsa_msg_iter_update,
 };
 
 bstore_plugin_t get_plugin(void)

@@ -1,0 +1,37 @@
+#!/usr/bin/python3
+import os
+import sys
+import argparse as ap
+
+from baler import Bq as bq
+
+if __name__ != "__main__":
+    raise ImportError("This is not a module")
+
+p = ap.ArgumentParser(description="""\
+Add tokens in bstore. Each line of the input contains `TEXT TYPES` where TEXT is
+the token text, and TYPES is a comma-separated list of types.
+
+Example:
+    baler WORD,SERVICE
+    python SERVICE
+
+If the token has already existed, the types will be added to the token.
+""", formatter_class = ap.RawTextHelpFormatter)
+p.add_argument("--path", "-p", metavar="BSTORE_PATH", required=True, help="Path to bstore")
+p.add_argument("--file", "-f", metavar="TKN_FILE|-", default='-',
+               help="Path to token file or '-' for STDIN (default: -)")
+args = p.parse_args()
+
+bs = bq.Bstore()
+bs.open(args.path)
+
+f = sys.stdin if args.file == "-" else open(args.file)
+
+for l in f:
+    l = l.strip()
+    if not l:
+        continue # skip empty line
+    txt, types = l.split(maxsplit=1)
+    types_int = bq.parse_types(types)
+    bs.tkn_add(txt, types_int)

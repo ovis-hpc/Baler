@@ -585,5 +585,28 @@ const char *bgittag();
 const char *bgitsha();
 const char *bversion();
 
+/**
+ * Extract a pattern from a given message \c msg.
+ *
+ * Note that the extracted pattern does not have valid statistics. It merely
+ * represents the pattern text extracted from the message.
+ *
+ * \retval ptn  The pattern. The caller must free the pattern.
+ * \retval NULL If there is an error.
+ */
+bptn_t bmsg_ptn_extract(bmsg_t msg);
+
+typedef struct bstore_s *bstore_t;
+
+/**
+ * Reprocess tokens in \c msg with the new token data from \c store.
+ *
+ * \note \c msg will be modified.
+ *
+ * \retval 0     Success
+ * \retval errno Failed
+ */
+int bmsg_reprocess_tkn(bmsg_t msg, bstore_t store);
+
 #endif // _BUTILS_H
 /**\}*/

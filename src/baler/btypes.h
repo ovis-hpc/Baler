@@ -249,7 +249,7 @@ void bstr_cpy(struct bstr *dest, const struct bstr *src)
  * Convenient allocation function for ::bstr.
  * \param blen The byte length of the string.
  */
-#define bstr_alloc(blen) ((struct bstr*) malloc(sizeof(struct bstr)+blen+1))
+#define bstr_alloc(blen) ((struct bstr*) malloc(sizeof(struct bstr)+(blen)+1))
 
 static inline
 struct bstr* bstr_alloc_init_cstr(const char *cstr)

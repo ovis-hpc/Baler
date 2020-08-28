@@ -72,6 +72,7 @@
 #include <ctype.h>
 #include <assert.h>
 #include <signal.h>
+#include "bstore.h"
 
 FILE *blog_file;
 pthread_mutex_t __blog_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -1441,4 +1442,63 @@ const char *bversion()
 	return PACKAGE_VERSION;
 }
 
+bptn_t bmsg_ptn_extract(bmsg_t msg)
+{
+	bptn_t ptn;
+	int i;
+	ptn = calloc(1, sizeof(*ptn));
+	if (!ptn)
+		return NULL;
+	ptn->str = bstr_alloc(msg->argc * sizeof(btkn_id_t));
+	if (!ptn->str) {
+		free(ptn);
+		return NULL;
+	}
+	ptn->str->blen = msg->argc * sizeof(btkn_id_t);
+	ptn->tkn_count = msg->argc;
+	/* trust types in the msg tokens */
+	for (i = 0; i < msg->argc; i++) {
+		btkn_type_t tkn_type = msg->argv[i] & 0xFF;
+		btkn_id_t tkn_id = msg->argv[i] >> 8;
+		/*
+		 * Pattern 'wildcards' are everyting except WORDs, WHITESPACEs
+		 * or SEPARATORs, see `btkn_type_is_wildcard()` in btkn_types.h
+		 */
+		switch (tkn_type) {
+		case BTKN_TYPE_SEPARATOR:
+		case BTKN_TYPE_WORD:
+			ptn->str->u64str[i] = (tkn_id << 8) | tkn_type;
+			break;
+		default:
+			ptn->str->u64str[i] = (tkn_type << 8) | tkn_type;
+		}
+	}
+	return ptn;
+}
+
+int bmsg_reprocess_tkn(bmsg_t msg, bstore_t store)
+{
+	btkn_t tkn;
+	btkn_id_t tkn_id;
+	btkn_type_t tkn_type;
+	int i;
+	for (i = 0; i < msg->argc; i++) {
+		tkn_id = msg->argv[i] >> 8;
+		tkn = bstore_tkn_find_by_id(store, tkn_id);
+		if (!tkn)
+			return ENOENT;
+		tkn_type = btkn_first_type(tkn);
+		if (btkn_has_type(tkn, BTKN_TYPE_SERVICE))
+			/* Service names may be dictionary words */
+			tkn_type = BTKN_TYPE_SERVICE;
+		if (btkn_has_type(tkn, BTKN_TYPE_HOSTNAME))
+			tkn_type = BTKN_TYPE_HOSTNAME;
+		else if (btkn_has_type(tkn, BTKN_TYPE_WORD))
+			tkn_type = BTKN_TYPE_WORD;
+		msg->argv[i] = (tkn_id << 8)|tkn_type;
+		btkn_free(tkn);
+	}
+
+	return 0;
+}
 /* END OF FILE */

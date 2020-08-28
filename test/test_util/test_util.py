@@ -203,3 +203,10 @@ def make_store(store_path, hosts, msgs):
     finally:
         if host_path:
             os.unlink(host_path)
+
+def send_log_messages(msgs, port=10514):
+    """Send log messages to balerd"""
+    sock = socket.create_connection(("localhost", port))
+    for m in msgs:
+        sock.send(m.encode())
+    sock.close()
