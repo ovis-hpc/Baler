@@ -124,11 +124,19 @@ class BalerDaemon(object):
             return
         if self.gdb_port:
             cmd = "exec gdbserver :%d balerd -F" % self.gdb_port
+            for k, v in self.opts.items():
+                cmd += (' ' + k + ' ' + v)
+            cmd += ' -C ' + self.config_file
         else:
-            cmd = "exec balerd -F"
-        for k, v in self.opts.items():
-            cmd += (' ' + k + ' ' + v)
-        cmd += ' -C ' + self.config_file
+            cmd_args = ["balerd", "balerd", "-F"]
+            for k, v in self.opts.items():
+                cmd_args.extend((k, v))
+            cmd_args.extend(['-C', self.config_file])
+            # Call `prctl(PR_SET_PDEATHSIG, SIGTERM)` before exec balerd
+            # so that balerd is terminated when the parent (python test script)
+            # is terminated.
+            cmd = """python3 -c "import ctypes; libc=ctypes.cdll.LoadLibrary('libc.so.6'); libc.prctl(1, 15); import os; os.execlp{0}" """\
+                  .format(tuple(cmd_args))
         self.proc = subprocess.Popen(cmd, shell=True, close_fds = True)
         if self.gdb_port:
             raw_input("gdb port: %s ... please attach and press ENTER to continue" % str(self.gdb_port))
