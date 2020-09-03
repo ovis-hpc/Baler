@@ -1193,6 +1193,13 @@ cdef class Bptn_hist:
                                  self.c_hist.ptn_id,
                                  self.c_hist.msg_count)
 
+    def __iter__(self):
+        yield(self.c_hist.bin_width)
+        yield(self.c_hist.time)
+        yield(self.c_hist.ptn_id)
+        yield(self.c_hist.msg_count)
+
+
 cdef int __bin_width__(s):
     bw = s.upper()
     if bw == 'D':
@@ -1299,6 +1306,13 @@ cdef class Bcomp_hist:
                                  self.c_hist.comp_id,
                                  self.c_hist.ptn_id,
                                  self.c_hist.msg_count)
+
+    def __iter__(self):
+        yield(self.c_hist.bin_width)
+        yield(self.c_hist.time)
+        yield(self.c_hist.comp_id)
+        yield(self.c_hist.ptn_id)
+        yield(self.c_hist.msg_count)
 
 cdef class Bcomp_hist_iter(Biter):
     """Component History Iterator"""
@@ -1427,6 +1441,12 @@ cdef class Btkn_hist:
                                  self.c_hist.time,
                                  self.c_hist.tkn_id,
                                  self.c_hist.tkn_count)
+
+    def __iter__(self):
+        yield(self.c_hist.bin_width)
+        yield(self.c_hist.time)
+        yield(self.c_hist.tkn_id)
+        yield(self.c_hist.tkn_count)
 
 cdef class Btkn_hist_iter(Biter):
     """Btkn History Iterator"""
