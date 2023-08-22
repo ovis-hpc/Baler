@@ -20,6 +20,8 @@ typedef struct syslog_parser {
 	struct yy_buffer_state *buffer_state;
 } *syslog_parser_t;
 
+#define __SYSLOG__STYPE btkn_t
+#ifndef YYSTYPE
 #define YYSTYPE btkn_t
-
+#endif
 #endif

@@ -1,3 +1,4 @@
+%define api.prefix {__syslog__}
 %{
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
@@ -246,7 +247,7 @@ static int parse_timestamp(char *time_str, struct timeval *tv)
 	return 1;
 }
 
-int yyparse(syslog_parser_t parser, struct bstr *input, bwq_entry_t *pwqe);
+int __syslog__parse(syslog_parser_t parser, struct bstr *input, bwq_entry_t *pwqe);
 void yy_delete_buffer(struct yy_buffer_state *);
 int yylex(void*, syslog_parser_t, struct bstr *);
 
@@ -262,7 +263,7 @@ syslog_parse(binp_parser_t p, struct bstr *s, struct bwq_entry **pent)
 		sp->cpos = 0;
 		sp->buffer_state = NULL;
 	}
-	rc = yyparse(sp, s, pent);
+	rc = __syslog__parse(sp, s, pent);
 	if (rc)
 	    return BINP_ERR_SYNTAX;
 	return BINP_OK;

@@ -51,12 +51,12 @@
 import logging
 import collections
 import copy
-import StringIO
+from io import StringIO
 import time
 import calendar
 import re
 import json
-import Bq
+from baler import Bq
 import curses
 import pkgutil
 from datetime import datetime

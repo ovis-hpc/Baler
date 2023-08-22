@@ -237,7 +237,7 @@ class Named2DArray(object):
         print >>f, "  Y-Bin Width:", self.get_y_bin_width()
         print >>f, "  Total Count:", self.get_total_count()
         for p in self:
-            print p
+            print(p)
 
     def get(self, i):
         """Get the i-th entry"""

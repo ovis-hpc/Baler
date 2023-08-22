@@ -1,5 +1,4 @@
-#!/usr/bin/env python
-from __future__ import print_function
+#!/usr/bin/env python3
 import datetime as dt
 import argparse
 from matplotlib.ticker import Formatter
@@ -346,18 +345,21 @@ def show_summary(bs, args):
 
     mi = Bq.Bmsg_iter(bs)
     pi = Bq.Bptn_iter(bs)
+    pi.first()
     ptn_count = pi.count()
     print("Pattern Count        : {0}".format(ptn_count))
-    msg_count = mi.count(1)
+    msg_count = mi.count(1, start, end)
     print("Message Count        : {0}".format(msg_count))
-    print("Messages per Pattern : 1/{0}".format(msg_count / ptn_count))
-    if mi.start(comp_id, ptn_id, start):
-        m = mi.next()
+    print("Messages per Pattern : {0}".format(msg_count / ptn_count))
+    mi.set_filter(comp_id=comp_id, ptn_id=ptn_id,
+                  tv_begin=(start, 0), tv_end=(end, 0))
+    if mi.first():
+        m = mi.obj()
         print("First Message        : {0}".format(fmt_tstamp(m.tv_sec(), args)))
         if args.verbose:
             print_msg(bs, m, args)
-        mi.end()
-        m = mi.next()
+        mi.last()
+        m = mi.obj()
         print("Last Message         : {0}".format(fmt_tstamp(m.tv_sec(), args)))
         if args.verbose:
             print_msg(bs, m, args)
@@ -1166,10 +1168,16 @@ if __name__ == "__main__":
         args = parser.parse_args(new_argv)
 
     bs = Bq.Bstore()
-    bs.open(args.path)
+    try:
+        bs.open(args.path)
+    except Exception as e:
+        print(e)
 
     if args.summary:
-        show_summary(bs, args)
+        try:
+            show_summary(bs, args)
+        except Exception as e:
+            print(e)
 
     if args.plot:
         import matplotlib.pyplot as plt
@@ -1177,40 +1185,55 @@ if __name__ == "__main__":
         import matplotlib.dates as mdates
 
     if args.tkn:
-        if args.hist:
-            if args.plot:
-                plot_tkn_hist(bs, args)
+        try:
+            if args.hist:
+                if args.plot:
+                    plot_tkn_hist(bs, args)
+                else:
+                    show_tkn_hist(bs, args)
             else:
-                show_tkn_hist(bs, args)
-        else:
-            show_tkns(bs, args)
+                show_tkns(bs, args)
+        except Exception as e:
+            print(e)
 
     if args.match and not args.ptn:
         print("The --match option is ignored without the --ptn option")
 
     if args.ptn:
-        if args.hist:
-            if args.plot:
-                plot_ptn_hist(bs, args)
+        try:
+            if args.hist:
+                if args.plot:
+                    plot_ptn_hist(bs, args)
+                else:
+                    show_ptn_hist(bs, args)
+            elif args.dist:
+                plot_ptn_dist(bs, args)
+            elif args.match:
+                show_matching_ptns(bs, args)
             else:
-                show_ptn_hist(bs, args)
-        elif args.dist:
-            plot_ptn_dist(bs, args)
-        elif args.match:
-            show_matching_ptns(bs, args)
-        else:
-            show_ptns(bs, args)
+                show_ptns(bs, args)
+        except Exception as e:
+            print(e)
 
     if args.comp:
-        if args.named_2d_array:
-            generate_named_2d_array(bs, args)
-        elif not args.plot:
-            show_comp_hist(bs, args)
-        else:
-            plot_comp_hist(bs, args)
+        try:
+            if args.named_2d_array:
+                generate_named_2d_array(bs, args)
+            elif not args.plot:
+                show_comp_hist(bs, args)
+            else:
+                plot_comp_hist(bs, args)
+        except Exception as e:
+            print(e)
 
     if args.ptn_tkn:
-        show_ptn_tkns(bs, args)
+        try:
+            show_ptn_tkns(bs, args)
+        except Exception as e:
+            print(e)
 
     if args.msg:
-        show_msgs(bs, args)
+        try:
+            show_msgs(bs, args)
+        except Exception as e:
+            print(e)

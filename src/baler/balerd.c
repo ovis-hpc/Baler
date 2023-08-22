@@ -680,7 +680,7 @@ int load_plugin(struct bconfig_list *pcl, struct bplugin_head *inst_head)
 		goto out;
 	}
 	sprintf(plibso, "lib%s.so", bname->s1);
-	void *h = dlopen(plibso, RTLD_NOW);
+	void *h = dlopen(plibso, RTLD_NOW | RTLD_LOCAL | RTLD_DEEPBIND);
 	if (!h) {
 		rc = ELIBACC;
 		berr("dlopen: %s\n", dlerror());
@@ -1484,7 +1484,6 @@ int core_signals[] = {
 	SIGXCPU,
 	SIGXFSZ,
 	SIGIOT,
-	SIGUNUSED,
 	0
 };
 

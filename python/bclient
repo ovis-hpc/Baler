@@ -61,7 +61,7 @@ import curses
 import collections
 from baler import Bq
 from baler import util
-from StringIO import StringIO
+from io import StringIO
 
 logger = logging.getLogger(__name__)
 
@@ -489,7 +489,7 @@ class ServiceCmd(cmd.Cmd):
                 p = pf()
                 self.parsers[cmd] = p
                 return p
-            except Exception, e:
+            except Exception as e:
                 logger.debug(e)
 
     def parser_open(self):
@@ -872,7 +872,7 @@ class ServiceCmd(cmd.Cmd):
                         out = open(out_name, "a")
                     else:
                         out = open(out_name, "w")
-                except Exception, e:
+                except Exception as e:
                     raise CmdException(str(e))
             else:
                 out = sys.stdout
@@ -926,7 +926,7 @@ if __name__ == "__main__":
     while True:
         try:
             svc_cmd.cmdloop()
-        except CmdException, e:
+        except CmdException as e:
             # in case of exception, print it and continue the loop
             print >>sys.stderr, "Error:", e
         else:

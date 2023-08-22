@@ -5,11 +5,11 @@ import datetime as dt
 from libc.stdint cimport *
 from libc.stdlib cimport *
 from libc.errno cimport *
-from sosdb import Array
+# from sosdb import Array
 import os
 cimport Bs
 
-cpdef uint64_t btkn_type_mask_from_str(const char *_str):
+cdef uint64_t btkn_type_mask_from_str(const char *_str):
     return Bs.btkn_type_mask_from_str(_str)
 
 BTKN_TYPE_TYPE = Bs.BTKN_TYPE_TYPE
@@ -68,7 +68,7 @@ cdef class Bstore:
     def open(self, path, int flags=Bs.O_RDWR, int mode=0660):
         self.iters = []
         self.path = path
-        self.c_store = Bs.bstore_open(self.plugin, self.path, flags, mode)
+        self.c_store = Bs.bstore_open(self.plugin.encode(), self.path.encode(), flags, mode)
         if self.c_store is NULL:
             raise ValueError("Error {0} opening the baler database at '{1}'."
                              .format(errno, self.path))
@@ -89,7 +89,7 @@ cdef class Bstore:
         # has not already closed the store.
         self.close()
 
-    cpdef tkn_by_id(self, tkn_id):
+    def tkn_by_id(self, tkn_id):
         cdef Bs.btkn_id_t id_ = <Bs.btkn_id_t>tkn_id
         cdef Bs.btkn_t btkn
         cdef Btkn tkn
@@ -100,17 +100,17 @@ cdef class Bstore:
             return tkn
         return None
 
-    cpdef tkn_by_name(self, tkn_name):
+    def tkn_by_name(self, tkn_name):
         cdef Bs.btkn_t btkn
         cdef Btkn tkn
-        btkn = Bs.bstore_tkn_find_by_name(self.c_store, tkn_name, len(tkn_name))
+        btkn = Bs.bstore_tkn_find_by_name(self.c_store, tkn_name.encode(), len(tkn_name))
         if btkn != NULL:
             tkn = Btkn()
             tkn.c_tkn = btkn
             return tkn
         return None
 
-    cpdef ptn_by_id(self, ptn_id):
+    def ptn_by_id(self, ptn_id):
         cdef Bs.bptn_id_t id_ = <Bs.bptn_id_t>ptn_id
         cdef Bs.bptn_t c_ptn
         cdef Bptn ptn
@@ -134,10 +134,10 @@ cdef class Bstore:
         del tkn
         return typ_str
 
-    cpdef meta_cluster(self, float diff_ratio=0.30,
+    cdef meta_cluster(self, float diff_ratio=0.30,
                              float refinement_speed=2.0,
                              float looseness=0.20):
-        cpdef list _list = list()
+        cdef list _list = list()
         cdef Bs.bmc_params_s params
         params.diff_ratio = diff_ratio
         params.refinement_speed = refinement_speed
@@ -155,7 +155,7 @@ cdef class Bstore:
         Bs.bmc_list_free(bmc_list)
         return _list
 
-    cpdef attr_new(self, const char *attr_type):
+    cdef attr_new(self, const char *attr_type):
         cdef int rc
         rc = Bs.bstore_attr_new(self.c_store, attr_type)
         if rc == EEXIST:
@@ -163,14 +163,14 @@ cdef class Bstore:
         if rc:
             raise RuntimeError("bstore_attr_new() return code: %d" % rc)
 
-    cpdef attr_find(self, const char *attr_type):
+    cdef attr_find(self, const char *attr_type):
         cdef int rc
         rc = Bs.bstore_attr_find(self.c_store, attr_type)
         if rc:
             return False
         return True
 
-    cpdef ptn_attr_value_set(self, int ptn_id,
+    cdef ptn_attr_value_set(self, int ptn_id,
                                    const char *attr_type,
                                    const char *attr_value):
         cdef int rc
@@ -180,7 +180,7 @@ cdef class Bstore:
         if rc:
             raise RuntimeError("bstore_ptn_attr_value_set() rc: %d" % rc)
 
-    cpdef ptn_attr_get(self, int ptn_id, const char *attr_type):
+    cdef ptn_attr_get(self, int ptn_id, const char *attr_type):
         cdef char *attr_value
         attr_value = Bs.bstore_ptn_attr_get(self.c_store, ptn_id, attr_type)
         if not attr_value:
@@ -189,7 +189,7 @@ cdef class Bstore:
             raise RuntimeError("bstore_ptn_attr_get() errno: %d" % errno)
         return attr_value
 
-    cpdef ptn_attr_value_add(self, int ptn_id,
+    cdef ptn_attr_value_add(self, int ptn_id,
                                    const char *attr_type,
                                    const char *attr_value):
         cdef int rc
@@ -202,7 +202,7 @@ cdef class Bstore:
         if rc:
             raise RuntimeError("bstore_ptn_attr_value_add() rc: %d" % rc)
 
-    cpdef ptn_attr_value_rm(self, int ptn_id,
+    cdef ptn_attr_value_rm(self, int ptn_id,
                                   const char *attr_type,
                                   const char *attr_value):
         cdef int rc
@@ -246,10 +246,10 @@ cdef class Bmc:
             c_ptn = Bs.bmc_iter_next(c_iter)
         Bs.bmc_iter_free(c_iter)
 
-    cpdef Bs.bmc_id_t meta_id(self):
+    cdef Bs.bmc_id_t meta_id(self):
         return self._meta_id
 
-    cpdef Bptn meta_ptn(self):
+    cdef Bptn meta_ptn(self):
         return self._meta_ptn
 
     def __iter__(self):
@@ -258,7 +258,7 @@ cdef class Bmc:
                 yield x
 
 cdef class Btkn:
-    cpdef Bs.btkn_t c_tkn
+    cdef Bs.btkn_t c_tkn
     cdef Bs.btkn_type_t c_typ
 
     def __cinit__(self):
@@ -269,29 +269,32 @@ cdef class Btkn:
             Bs.btkn_free(self.c_tkn)
             self.c_tkn = NULL
 
-    cpdef tkn_id(self):
+    def tkn_id(self):
         return self.c_tkn.tkn_id
 
-    cpdef tkn_count(self):
+    def tkn_count(self):
         return self.c_tkn.tkn_count
 
-    cpdef tkn_str(self):
-        return self.c_tkn.tkn_str.cstr
+    def tkn_str(self):
+        s = self.c_tkn.tkn_str.cstr
+        return s.decode()
 
-    cpdef ptn_tkn_str(self):
+    def ptn_tkn_str(self):
         if self.c_tkn.tkn_id in tkn_type_strs:
-            return tkn_type_strs[self.c_tkn.tkn_id]
-        return self.c_tkn.tkn_str.cstr
+            s = tkn_type_strs[self.c_tkn.tkn_id]
+            return s
+        s = self.c_tkn.tkn_str.cstr
+        return s.decode()
 
-    cpdef has_type(self, Bs.btkn_type_t tkn_type):
+    def has_type(self, Bs.btkn_type_t tkn_type):
         if Bs.btkn_has_type(self.c_tkn, tkn_type) != 0:
             return True
         return False
 
-    cpdef Bs.btkn_type_mask_t type_mask(self):
+    def type_mask(self):
         return self.c_tkn.tkn_type_mask
 
-    cpdef Bs.btkn_type_t first_type(self):
+    def first_type(self):
         return Bs.btkn_first_type(self.c_tkn)
 
     cdef Bs.btkn_t alloc(self):
@@ -399,7 +402,7 @@ cdef class Biter:
     cdef object obj_wrap(self, void *c_obj):
         raise NotImplementedError
 
-    cpdef unsigned long card(self):
+    cdef unsigned long card(self):
         raise NotImplementedError
 
     def obj(self):
@@ -543,7 +546,7 @@ cdef class Btkn_iter(Biter):
     cdef void *iterObj(self):
         return Bs.bstore_tkn_iter_obj(self.c_iter)
 
-    cpdef unsigned long card(self):
+    cdef unsigned long card(self):
         return Bs.bstore_tkn_iter_card(self.c_iter)
 
     cdef int iterFirst(self):
@@ -559,8 +562,8 @@ cdef class Btkn_iter(Biter):
         return Bs.bstore_tkn_iter_last(self.c_iter)
 
 cdef class Bptn:
-    cpdef Bstore store
-    cpdef Bs.bptn_t c_ptn
+    cdef Bstore store
+    cdef Bs.bptn_t c_ptn
     cdef int c_arg
     def __cinit__(self):
         self.c_ptn = NULL
@@ -571,35 +574,35 @@ cdef class Bptn:
             Bs.bptn_free(self.c_ptn)
             self.c_ptn = NULL
 
-    cpdef ptn_id(self):
+    def ptn_id(self):
         """Returns the unique Pattern Identifier"""
         return self.c_ptn.ptn_id
 
-    cpdef first_seen(self):
+    def first_seen(self):
         """Returns the first time this pattern was seen"""
         return self.c_ptn.first_seen.tv_sec
 
-    cpdef first_seen2(self):
+    def first_seen2(self):
         """Returns the first time tuple (unix_ts,usec) this pattern was seen"""
         return (self.c_ptn.first_seen.tv_sec, self.c_ptn.first_seen.tv_usec)
 
-    cpdef last_seen(self):
+    def last_seen(self):
         """Returns the last time this pattern was seen"""
         return self.c_ptn.last_seen.tv_sec
 
-    cpdef last_seen2(self):
+    def last_seen2(self):
         """Returns the last time tuple (unix_ts,usec) this pattern was seen"""
         return (self.c_ptn.last_seen.tv_sec, self.c_ptn.last_seen.tv_usec)
 
-    cpdef tkn_count(self):
+    def tkn_count(self):
         """Returns the number of token postions in the pattern"""
         return self.c_ptn.tkn_count
 
-    cpdef msg_count(self):
+    def msg_count(self):
         """Returns the number of messages matching this pattern"""
         return self.c_ptn.count
 
-    cpdef find_tkn(self, size_t pos, Bs.btkn_id_t tkn_id):
+    def find_tkn(self, size_t pos, Bs.btkn_id_t tkn_id):
         """Search the pattern history at the specified position for a token"""
         cdef Bs.btkn_t c_tkn
         c_tkn = Bs.bstore_ptn_tkn_find(self.store.c_store,
@@ -669,7 +672,6 @@ cdef class Bptn_attr:
         return self.c_ptn_attr.attr_value
 
 
-
 cdef class Bptn_iter(Biter):
     """Create an iterator for Patterns
 
@@ -691,7 +693,7 @@ cdef class Bptn_iter(Biter):
     cdef void iterDel(self):
         Bs.bstore_ptn_iter_free(self.c_iter)
 
-    cpdef unsigned long card(self):
+    cdef unsigned long card(self):
         return Bs.bstore_ptn_iter_card(self.c_iter)
 
     cdef object obj_wrap(self, void *c_obj):
@@ -741,7 +743,7 @@ cdef class Bptn_attr_iter(Biter):
     cdef void iterDel(self):
         Bs.bstore_ptn_attr_iter_free(self.c_iter)
 
-    cpdef unsigned long card(self):
+    cdef unsigned long card(self):
         return -1
 
     cdef object obj_wrap(self, void *c_obj):
@@ -793,7 +795,7 @@ cdef class Bptn_tkn_iter(Biter):
     cdef void iterDel(self):
         Bs.bstore_ptn_tkn_iter_free(self.c_iter)
 
-    cpdef unsigned long card(self):
+    cdef unsigned long card(self):
         return Bs.bstore_ptn_tkn_iter_card(self.c_iter)
 
     cdef object obj_wrap(self, void *c_obj):
@@ -821,8 +823,8 @@ cdef class Bptn_tkn_iter(Biter):
 
 
 cdef class Bmsg:
-    cpdef Bstore store
-    cpdef Bs.bmsg_t c_msg
+    cdef Bstore store
+    cdef Bs.bmsg_t c_msg
     cdef int c_arg
     def __cinit__(self):
         self.c_msg = NULL
@@ -833,27 +835,27 @@ cdef class Bmsg:
             Bs.bmsg_free(self.c_msg)
             self.c_msg = NULL
 
-    cpdef tv_sec(self):
+    def tv_sec(self):
         if self.c_msg is NULL:
             raise ValueError
         return self.c_msg.timestamp.tv_sec
 
-    cpdef tv_usec(self):
+    def tv_usec(self):
         if self.c_msg is NULL:
             raise ValueError
         return self.c_msg.timestamp.tv_usec
 
-    cpdef ptn_id(self):
+    def ptn_id(self):
         if self.c_msg is NULL:
             raise ValueError
         return self.c_msg.ptn_id
 
-    cpdef comp_id(self):
+    def comp_id(self):
         if self.c_msg is NULL:
             raise ValueError
         return self.c_msg.comp_id
 
-    cpdef tkn_count(self):
+    def tkn_count(self):
         if self.c_msg is NULL:
             raise ValueError
         return self.c_msg.argc
@@ -882,7 +884,7 @@ cdef class Bmsg_iter(Biter):
     cdef void iterDel(self):
         Bs.bstore_msg_iter_free(self.c_iter)
 
-    cpdef unsigned long card(self):
+    cdef unsigned long card(self):
         return Bs.bstore_msg_iter_card(self.c_iter)
 
     cdef object obj_wrap(self, void *c_obj):
@@ -1045,16 +1047,16 @@ cdef class Bmsg_iter(Biter):
 cdef class Bptn_hist:
     cdef Bs.bptn_hist_s c_hist
 
-    cpdef ptn_id(self):
+    def ptn_id(self):
         return self.c_hist.ptn_id
 
-    cpdef bin_width(self):
+    def bin_width(self):
         return self.c_hist.bin_width
 
-    cpdef time(self):
+    def time(self):
         return self.c_hist.time
 
-    cpdef msg_count(self):
+    def msg_count(self):
         return self.c_hist.msg_count
 
     def __str__(self):
@@ -1128,25 +1130,26 @@ cdef class Bptn_hist_iter(Biter):
         return end - start
 
     def as_xy_arrays(self, ptn_id, bin_width, start_time=None, end_time=None):
-        cdef int rec_no
-        cdef int rc
-        cdef void *c_obj
+        # cdef int rec_no
+        # cdef int rc
+        # cdef void *c_obj
 
-        x = Array.Array()
-        y = Array.Array()
-        rc = Bs.bstore_ptn_hist_iter_first(self.c_iter)
-        rec_no = 0
-        while rc == 0:
-            c_obj = Bs.bstore_ptn_hist_iter_obj(self.c_iter, &self.c_ptn_h)
-            assert(c_obj)
-            x.append(self.c_ptn_h.time)
-            y.append(self.c_ptn_h.msg_count)
-            rec_no += 1
-            rc = Bs.bstore_ptn_hist_iter_next(self.c_iter)
-        return (rec_no, x.as_ndarray(), y.as_ndarray())
+        # x = Array.Array()
+        # y = Array.Array()
+        # rc = Bs.bstore_ptn_hist_iter_first(self.c_iter)
+        # rec_no = 0
+        # while rc == 0:
+        #     c_obj = Bs.bstore_ptn_hist_iter_obj(self.c_iter, &self.c_ptn_h)
+        #     assert(c_obj)
+        #     x.append(self.c_ptn_h.time)
+        #     y.append(self.c_ptn_h.msg_count)
+        #     rec_no += 1
+        #     rc = Bs.bstore_ptn_hist_iter_next(self.c_iter)
+        # return (rec_no, x.as_ndarray(), y.as_ndarray())
+        return None
 
 cdef class Bcomp_hist:
-    cpdef Bs.bcomp_hist_s c_hist
+    cdef Bs.bcomp_hist_s c_hist
 
     def comp_id(self):
         return self.c_hist.comp_id
@@ -1258,26 +1261,27 @@ cdef class Bcomp_hist_iter(Biter):
         return end - start
 
     def as_xy_arrays(self):
-        cdef int rec_no
-        cdef int rc
-        cdef void *c_obj
+        # cdef int rec_no
+        # cdef int rc
+        # cdef void *c_obj
 
-        rec_no = 0
-        x = Array.Array()
-        y = Array.Array()
+        # rec_no = 0
+        # x = Array.Array()
+        # y = Array.Array()
 
-        rc = Bs.bstore_comp_hist_iter_first(self.c_iter)
-        while rc == 0:
-            c_obj = Bs.bstore_comp_hist_iter_obj(self.c_iter, &self.c_comp_h)
-            assert(c_obj)
-            x.append(self.c_comp_h.time)
-            y.append(self.c_comp_h.msg_count)
-            rec_no += 1
-            rc = Bs.bstore_comp_hist_iter_next(self.c_iter)
-        return (rec_no, x.as_ndarray(), y.as_ndarray())
+        # rc = Bs.bstore_comp_hist_iter_first(self.c_iter)
+        # while rc == 0:
+        #     c_obj = Bs.bstore_comp_hist_iter_obj(self.c_iter, &self.c_comp_h)
+        #     assert(c_obj)
+        #     x.append(self.c_comp_h.time)
+        #     y.append(self.c_comp_h.msg_count)
+        #     rec_no += 1
+        #     rc = Bs.bstore_comp_hist_iter_next(self.c_iter)
+        # return (rec_no, x.as_ndarray(), y.as_ndarray())
+        return None
 
 cdef class Btkn_hist:
-    cpdef Bs.btkn_hist_s c_hist
+    cdef Bs.btkn_hist_s c_hist
 
     def tkn_id(self):
         return self.c_hist.tkn_id
@@ -1317,7 +1321,6 @@ cdef class Btkn_hist_iter(Biter):
 
     cdef void *iterObj(self):
         return Bs.bstore_tkn_hist_iter_obj(self.c_iter, &self.c_tkn_h)
-
     cdef int iterFirst(self):
         return Bs.bstore_tkn_hist_iter_first(self.c_iter)
 
@@ -1384,18 +1387,19 @@ cdef class Btkn_hist_iter(Biter):
         return end - start
 
     def as_xy_arrays(self, **kwargs):
-        cdef int rec_no
-        cdef int rc
-        cdef void *c_obj
-        x = Array.Array()
-        y = Array.Array()
-        rc = Bs.bstore_tkn_hist_iter_first(self.c_iter)
-        rec_no = 0
-        while rc == 0:
-            c_obj = Bs.bstore_tkn_hist_iter_obj(self.c_iter, &self.c_tkn_h)
-            assert(c_obj)
-            x.append(self.c_tkn_h.time)
-            y.append(self.c_tkn_h.tkn_count)
-            rec_no += 1
-            rc = Bs.bstore_tkn_hist_iter_next(self.c_iter)
-        return (rec_no, x.as_ndarray(), y.as_ndarray())
+        # cdef int rec_no
+        # cdef int rc
+        # cdef void *c_obj
+        # x = Array.Array()
+        # y = Array.Array()
+        # rc = Bs.bstore_tkn_hist_iter_first(self.c_iter)
+        # rec_no = 0
+        # while rc == 0:
+        #     c_obj = Bs.bstore_tkn_hist_iter_obj(self.c_iter, &self.c_tkn_h)
+        #     assert(c_obj)
+        #     x.append(self.c_tkn_h.time)
+        #     y.append(self.c_tkn_h.tkn_count)
+        #     rec_no += 1
+        #     rc = Bs.bstore_tkn_hist_iter_next(self.c_iter)
+        # return (rec_no, x.as_ndarray(), y.as_ndarray())
+        return None

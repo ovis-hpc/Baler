@@ -433,8 +433,8 @@ struct sos_schema_template token_value_schema = {
 
 typedef struct sptn_value_s {
 	uint64_t ptn_id;
-	struct sos_timestamp_s first_seen;
-	struct sos_timestamp_s last_seen;
+	union sos_timestamp_u first_seen;
+	union sos_timestamp_u last_seen;
 	uint64_t count;
 	uint64_t tkn_count;
 	union sos_obj_ref_s tkn_type_ids;
@@ -3306,6 +3306,7 @@ err0:
 static
 sos_obj_t __bsa_tkn_iter_pos(bsa_tkn_iter_t itr)
 {
+#if 0
 	int rc;
 	struct sos_value_s _v;
 	sos_obj_t pos_obj;
@@ -3327,11 +3328,15 @@ sos_obj_t __bsa_tkn_iter_pos(bsa_tkn_iter_t itr)
 	pos->sos_pos = sos_pos;
 	sos_value_put(&_v);
 	return pos_obj;
+#else
+	return NULL;
+#endif
 }
 
 static
 int __bsa_tkn_iter_pos_set(bsa_tkn_iter_t itr, sos_obj_t pos_obj)
 {
+#if 0
 	int rc;
 	bsa_iter_pos_t pos;
 	SOS_VALUE(v);
@@ -3350,11 +3355,15 @@ cleanup:
 	sos_value_put(v);
 out:
 	return rc;
+#else
+	return 0;
+#endif
 }
 
 static
 void __bsa_tkn_iter_pos_free(bsa_tkn_iter_t itr, sos_obj_t pos_obj)
 {
+#if 0
 	bsa_iter_pos_t pos;
 	sos_value_t v;
 	struct sos_value_s _v;
@@ -3364,6 +3373,7 @@ void __bsa_tkn_iter_pos_free(bsa_tkn_iter_t itr, sos_obj_t pos_obj)
 	pos = (void*)_v.data->array.data.byte_;
 	sos_iter_pos_put(itr->sitr, pos->sos_pos);
 	sos_value_put(&_v);
+#endif
 }
 
 static
@@ -3772,29 +3782,29 @@ ptn_exist:
 
 	/* check if the new `first_seen` is earlier than the previous one ...
 	 * if so we need an index update */
-	if (ptn->first_seen.tv_sec > ptn_val->first_seen.secs)
+	if (ptn->first_seen.tv_sec > ptn_val->first_seen.fine.secs)
 		goto no_first_seen_update;
-	if (ptn->first_seen.tv_sec == ptn_val->first_seen.secs &&
-			ptn->first_seen.tv_usec >= ptn_val->first_seen.usecs)
+	if (ptn->first_seen.tv_sec == ptn_val->first_seen.fine.secs &&
+			ptn->first_seen.tv_usec >= ptn_val->first_seen.fine.usecs)
 		goto no_first_seen_update;
 	/* remove old index */
-	sos_key_set(ts_key, &ptn_val->first_seen, sizeof(ptn_val->first_seen));
+	sos_key_set(ts_key, &ptn_val->first_seen.fine, sizeof(ptn_val->first_seen.fine));
 	rc = sos_index_remove(sos_attr_index(ctxt->bsa->ptn_first_seen_attr),
 				ts_key, ptn_obj);
 	assert(rc == 0);
 	/* add new index */
-	ptn_val->first_seen.secs = ptn->first_seen.tv_sec;
-	ptn_val->first_seen.usecs = ptn->first_seen.tv_usec;
+	ptn_val->first_seen.fine.secs = ptn->first_seen.tv_sec;
+	ptn_val->first_seen.fine.usecs = ptn->first_seen.tv_usec;
 	sos_key_set(ts_key, &ptn_val->first_seen, sizeof(ptn_val->first_seen));
 	rc = sos_index_insert(sos_attr_index(ctxt->bsa->ptn_first_seen_attr),
 				ts_key, ptn_obj);
 	assert(rc == 0);
 no_first_seen_update:
 	/* copy-out all stats */
-	ptn->first_seen.tv_sec = ptn_val->first_seen.secs;
-	ptn->first_seen.tv_usec = ptn_val->first_seen.usecs;
-	ptn->last_seen.tv_sec = ptn_val->last_seen.secs;
-	ptn->last_seen.tv_usec = ptn_val->last_seen.usecs;
+	ptn->first_seen.tv_sec = ptn_val->first_seen.fine.secs;
+	ptn->first_seen.tv_usec = ptn_val->first_seen.fine.usecs;
+	ptn->last_seen.tv_sec = ptn_val->last_seen.fine.secs;
+	ptn->last_seen.tv_usec = ptn_val->last_seen.fine.usecs;
 	ptn->count = ptn_val->count;
 	ptn->tkn_count = ptn_val->tkn_count;
 	sos_obj_put(ptn_obj);
@@ -3817,15 +3827,15 @@ new_ptn:
 
 	ptn->ptn_id = ptn_val->ptn_id = ptn_id = __bsa_alloc_ptn_id(bsa);
 	ptn_val->tkn_count = ptn->tkn_count;
-	ptn_val->first_seen.secs = ptn->first_seen.tv_sec;
-	ptn_val->first_seen.usecs = ptn->first_seen.tv_usec;
+	ptn_val->first_seen.fine.secs = ptn->first_seen.tv_sec;
+	ptn_val->first_seen.fine.usecs = ptn->first_seen.tv_usec;
 
 	sos_key_set(id_key, &ptn_id, sizeof(ptn_id));
 	rc = sos_index_insert(sos_attr_index(ctxt->bsa->ptn_id_attr), id_key, ptn_obj);
 	if (rc)
 		goto err2;
 
-	sos_key_set(ts_key, &ptn_val->first_seen, sizeof(ptn_val->first_seen));
+	sos_key_set(ts_key, &ptn_val->first_seen.fine, sizeof(ptn_val->first_seen.fine));
 	rc = sos_index_insert(sos_attr_index(ctxt->bsa->ptn_first_seen_attr), ts_key, ptn_obj);
 	if (rc)
 		goto err2;
@@ -4005,6 +4015,7 @@ int bsa_ptn_iter_reinit(bsa_ptn_iter_t itr, bsa_iter_type_t type)
 static
 sos_obj_t __bsa_ptn_iter_pos(bsa_ptn_iter_t itr)
 {
+#if 0
 	sos_obj_t pos_obj;
 	struct sos_value_s _v;
 	sos_pos_t sos_pos = 0;
@@ -4039,11 +4050,15 @@ err:
 	if (sos_pos)
 		sos_iter_pos_put(itr->sitr, sos_pos);
 	return NULL;
+#else
+	return NULL;
+#endif
 }
 
 static
 int __bsa_ptn_iter_pos_set(bsa_ptn_iter_t itr, sos_obj_t pos_obj)
 {
+#if 0
 	int rc;
 	bsa_iter_pos_t pos;
 	SOS_KEY(id_key);
@@ -4072,11 +4087,15 @@ cleanup:
 	sos_value_put(v);
 out:
 	return rc;
+#else
+	return 0;
+#endif
 }
 
 static
 void __bsa_ptn_iter_pos_free(bsa_ptn_iter_t itr, sos_obj_t pos_obj)
 {
+#if 0
 	bsa_iter_pos_t pos;
 	struct sos_value_s _v;
 	sos_value_t v;
@@ -4086,6 +4105,7 @@ void __bsa_ptn_iter_pos_free(bsa_ptn_iter_t itr, sos_obj_t pos_obj)
 	pos = (void*)_v.data->array.data.byte_;
 	sos_iter_pos_put(itr->sitr, pos->sos_pos);
 	sos_value_put(&_v);
+#endif
 }
 
 static
@@ -4159,8 +4179,8 @@ static int __matching_ptn(bsa_ptn_iter_t itr, int fwd)
 	for (;0 == rc; rc = iter_step(itr->sitr)) {
 		obj = sos_iter_obj(itr->sitr);
 		ptn = sos_obj_ptr(obj);
-		tv.tv_sec = ptn->first_seen.secs;
-		tv.tv_usec = ptn->first_seen.usecs;
+		tv.tv_sec = ptn->first_seen.fine.secs;
+		tv.tv_usec = ptn->first_seen.fine.usecs;
 		if (timercmp(&itr->filter.tv_begin, &tv, <=)) {
 			sos_obj_put(obj);
 			break;
@@ -4262,6 +4282,7 @@ int bsa_ptn_iter_last(bptn_iter_t _itr)
 static
 sos_obj_t __bsa_ptn_tkn_iter_pos(bsa_ptn_tkn_iter_t itr)
 {
+#if 0
 	sos_pos_t sos_pos;
 	bsa_iter_pos_t pos;
 	int rc;
@@ -4283,11 +4304,15 @@ sos_obj_t __bsa_ptn_tkn_iter_pos(bsa_ptn_tkn_iter_t itr)
 	pos->sos_pos = sos_pos;
 	sos_value_put(&_v);
 	return pos_obj;
+#else
+	return NULL;
+#endif
 }
 
 static
 int __bsa_ptn_tkn_iter_pos_set(bsa_ptn_tkn_iter_t itr, sos_obj_t pos_obj)
 {
+#if 0
 	int rc;
 	sos_key_t key;
 	ptn_pos_tkn_t kv;
@@ -4322,11 +4347,15 @@ cleanup:
 	sos_value_put(v);
 out:
 	return rc;
+#else
+	return 0;
+#endif
 }
 
 static
 void __bsa_ptn_tkn_iter_pos_free(bsa_ptn_tkn_iter_t itr, sos_obj_t pos_obj)
 {
+#if 0
 	bsa_iter_pos_t pos;
 	struct sos_value_s _v;
 	sos_value_t v;
@@ -4336,6 +4365,7 @@ void __bsa_ptn_tkn_iter_pos_free(bsa_ptn_tkn_iter_t itr, sos_obj_t pos_obj)
 	pos = (void*)_v.data->array.data.byte_;
 	sos_iter_pos_put(itr->sitr, pos->sos_pos);
 	sos_value_put(&_v);
+#endif
 }
 
 static

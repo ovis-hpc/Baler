@@ -19,7 +19,7 @@ Bq_la_LIBADD = $(top_builddir)/src/baler/libbaler.la
 pkgpyexecdir = $(pkgpythondir)
 
 Bq.c: Bq.pyx Bs.pxd
-	$(CYTHON) --gdb $< -o $@
+	$(CYTHON) -I../../python -3 --gdb $< -o $@
 
 dist_bin_SCRIPTS = bq bclient n2daplot
 

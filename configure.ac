@@ -16,7 +16,7 @@ AM_PROG_LIBTOOL
 
 LT_INIT
 
-AC_PROG_CC_C99()
+dnl AC_PROG_CC_C99()
 
 if test "$ac_cv_prog_cc_c99" = "no"; then
 	AC_MSG_ERROR([baler requires a compiler with C99 standard])
