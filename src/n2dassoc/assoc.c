@@ -229,8 +229,14 @@ int __ar_file_append(assoc_rule_file_t f, assoc_rule_t r)
 			}
 			/* re-check as other thread may have extended */
 			flen = lseek(f->fd, 0, SEEK_END);
-			if (moff + mlen > flen)
-				ftruncate(f->fd, moff + mlen);
+			if (moff + mlen > flen) {
+				rc = ftruncate(f->fd, moff + mlen);
+				if (rc) {
+					rc = errno;
+					flock(f->fd, LOCK_UN);
+					goto out;
+				}
+			}
 			flock(f->fd, LOCK_UN);
 		}
 		mem = mmap(NULL, mlen, PROT_READ|PROT_WRITE, MAP_SHARED,
@@ -339,7 +345,7 @@ int __rm_rf_fd(int dfd)
 {
 	DIR *d;
 	int rc;
-	struct dirent _ent, *ent;
+	struct dirent *ent;
 	struct stat st;
 	int flag;
 	d = fdopendir(dfd);
@@ -347,9 +353,10 @@ int __rm_rf_fd(int dfd)
 		rc = errno;
 		goto err1;
 	}
-	rc = readdir_r(d, &_ent, &ent);
-	if (rc) {
-		/* NOTE: `readdir_r(2)` claims that rc is errno */
+	errno = 0;
+	ent = readdir(d);
+	if (errno) {
+		rc = errno;
 		goto err2;
 	}
 	while (ent) {
@@ -368,9 +375,12 @@ int __rm_rf_fd(int dfd)
 		}
 		unlinkat(dfd, ent->d_name, flag);
 skip:
-		rc = readdir_r(d, &_ent, &ent);
-		if (rc)
+		errno = 0;
+		ent = readdir(d);
+		if (errno) {
+			rc = errno;
 			goto err2;
+		}
 	}
 	assert(rc == 0);
 	closedir(d);
@@ -402,12 +412,17 @@ int __rm_rf(const char *path)
 static
 aq_t __aq_create_at(int dirfd, const char *name, size_t sz)
 {
-	int fd;
+	int fd, rc;
 	aq_t aq;
 	fd = openat(dirfd, name, O_CREAT|O_EXCL|O_RDWR|O_TRUNC, 0600);
 	if (fd < 0)
 		goto err1;
-	ftruncate(fd, sz);
+	rc = ftruncate(fd, sz);
+	if (rc) {
+		rc = errno;
+		close(fd);
+		goto err1;
+	}
 	aq = mmap(NULL, sz, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
 	close(fd);
 	if (aq == MAP_FAILED)
