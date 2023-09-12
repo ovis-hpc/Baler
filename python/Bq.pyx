@@ -225,7 +225,7 @@ cdef class Bstore:
     cpdef meta_cluster(self, float diff_ratio=0.30,
                              float refinement_speed=2.0,
                              float looseness=0.20):
-        cpdef list _list = list()
+        cdef list _list = list()
         cdef Bs.bmc_params_s params
         params.diff_ratio = diff_ratio
         params.refinement_speed = refinement_speed
@@ -406,7 +406,7 @@ cdef class Bmc:
                 yield x
 
 cdef class Btkn:
-    cpdef Bs.btkn_t c_tkn
+    cdef Bs.btkn_t c_tkn
     cdef Bs.btkn_type_t c_typ
 
     def __cinit__(self):
@@ -610,33 +610,39 @@ cdef class Biter:
         desireable in the case where the goal is to restart the
         iterator _after_ the last object previously returned.
         """
-        cdef const char *pos_str
-        cdef Bs.bstore_iter_pos_t c_pos_h = Bs.bstore_iter_pos_get(self.c_iter)
-        if not c_pos_h:
-            return None
-        pos_str = Bs.bstore_pos_to_str(c_pos_h)
-        return pos_str
+        raise NotImplementedError("Unsupported")
+        # - old implementation for a reference -
+        #cdef const char *pos_str
+        #cdef Bs.bstore_iter_pos_t c_pos_h = Bs.bstore_iter_pos_get(self.c_iter)
+        #if not c_pos_h:
+        #    return None
+        #pos_str = Bs.bstore_pos_to_str(c_pos_h)
+        #return pos_str
 
     def set_pos(self, pos):
         """Set the iterator position to \c pos"""
-        cdef int rc
-        cdef const char *pos_str = <const char *>pos
-        cdef Bs.bstore_iter_pos_t c_pos_h = Bs.bstore_pos_from_str(pos_str)
-        if not c_pos_h:
-            raise ValueError("The input position string is invalid for this iterator.")
-        rc = Bs.bstore_iter_pos_set(self.c_iter, c_pos_h)
-        if rc != 0:
-            raise StopIteration("return code: %d" % rc)
-        return 0
+        raise NotImplementedError("Unsupported")
+        # - old implementation for a reference -
+        #cdef int rc
+        #cdef const char *pos_str = <const char *>pos
+        #cdef Bs.bstore_iter_pos_t c_pos_h = Bs.bstore_pos_from_str(pos_str)
+        #if not c_pos_h:
+        #    raise ValueError("The input position string is invalid for this iterator.")
+        #rc = Bs.bstore_iter_pos_set(self.c_iter, c_pos_h)
+        #if rc != 0:
+        #    raise StopIteration("return code: %d" % rc)
+        #return 0
 
     def put_pos(self, pos):
         """Releases any resources associated with pos"""
-        cdef int rc
-        cdef const char *pos_str = <const char *>pos
-        cdef Bs.bstore_iter_pos_t c_pos_h = Bs.bstore_pos_from_str(pos_str)
-        if not c_pos_h:
-            raise ValueError("The input position string is invalid for this iterator.")
-        Bs.bstore_iter_pos_free(self.c_iter, c_pos_h)
+        raise NotImplementedError("Unsupported")
+        # - old implementation for a reference -
+        #cdef int rc
+        #cdef const char *pos_str = <const char *>pos
+        #cdef Bs.bstore_iter_pos_t c_pos_h = Bs.bstore_pos_from_str(pos_str)
+        #if not c_pos_h:
+        #    raise ValueError("The input position string is invalid for this iterator.")
+        #Bs.bstore_iter_pos_free(self.c_iter, c_pos_h)
 
     def count(self):
         """ Count the entries remaining in the iterator """
@@ -722,8 +728,8 @@ cdef class Btkn_iter(Biter):
         raise NotImplementedError()
 
 cdef class Bptn:
-    cpdef Bstore store
-    cpdef Bs.bptn_t c_ptn
+    cdef Bstore store
+    cdef Bs.bptn_t c_ptn
     cdef int c_arg
     def __cinit__(self):
         self.c_ptn = NULL
@@ -1044,9 +1050,10 @@ cdef class Bptn_tkn_iter(Biter):
 
 
 cdef class Bmsg:
-    cpdef Bstore store
-    cpdef Bs.bmsg_t c_msg
+    cdef Bstore store
+    cdef Bs.bmsg_t c_msg
     cdef int c_arg
+
     def __cinit__(self):
         self.c_msg = NULL
         self.c_arg = 0
@@ -1432,7 +1439,7 @@ cdef class Bptn_hist_iter(Biter):
         return (rec_no, x.as_ndarray(), y.as_ndarray())
 
 cdef class Bcomp_hist:
-    cpdef Bs.bcomp_hist_s c_hist
+    cdef Bs.bcomp_hist_s c_hist
 
     def comp_id(self):
         return self.c_hist.comp_id
@@ -1571,7 +1578,7 @@ cdef class Bcomp_hist_iter(Biter):
         return (rec_no, x.as_ndarray(), y.as_ndarray())
 
 cdef class Btkn_hist:
-    cpdef Bs.btkn_hist_s c_hist
+    cdef Bs.btkn_hist_s c_hist
 
     def tkn_id(self):
         return self.c_hist.tkn_id

@@ -252,8 +252,6 @@ cdef extern from "baler/bstore.h":
     bstore_iter_pos_t bstore_iter_pos_get(bstore_iter_t iter)
     int bstore_iter_pos_set(bstore_iter_t iter, bstore_iter_pos_t pos_h)
     void bstore_iter_pos_free(bstore_iter_t iter, bstore_iter_pos_t pos_h)
-    char *bstore_pos_to_str(bstore_iter_pos_t pos)
-    bstore_iter_pos_t bstore_pos_from_str(const char *pos)
 
     int bstore_attr_new(bstore_t bs, const char *attr_type)
     int bstore_attr_find(bstore_t bs, const char *attr_type)
