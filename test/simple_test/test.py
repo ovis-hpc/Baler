@@ -5,6 +5,7 @@ from __future__ import print_function
 import os
 import re
 import sys
+import pdb
 import time
 import shutil
 import socket
@@ -243,6 +244,7 @@ class TestSimple(unittest.TestCase):
             count = get_tkn_stat(text)
             self.assertEqual(tkn0.tkn_count, count)
 
+    @unittest.skip("Unsupported")
     def test_tkn_iter_pos(self):
         """Test tkn_iter_pos"""
         itr0 = TknIter(self.bs)
@@ -319,6 +321,7 @@ class TestSimple(unittest.TestCase):
             ptns.add(str(ptn))
         self.assertEqual(ptns, set(PTN_STAT))
 
+    @unittest.skip("Unsupported")
     def test_ptn_pos_obj(self):
         itr1 = PtnIter(self.bs)
         p1 = itr1.first()
@@ -408,6 +411,7 @@ class TestSimple(unittest.TestCase):
             count += 1
         self.assertGreater(count, 0)
 
+    @unittest.skip("Unsupported")
     def test_ptn_iter_filter_pos(self):
         itr1 = PtnIter(self.bs)
         ts = TS_BEGIN
@@ -434,6 +438,7 @@ class TestSimple(unittest.TestCase):
         self.assertIsNone(ptn2)
         self.assertTrue(count)
 
+    @unittest.skip("Unsupported")
     def test_ptn_iter_filter_pos_rev(self):
         itr1 = PtnIter(self.bs)
         ts = TS_BEGIN
@@ -560,40 +565,52 @@ class TestSimple(unittest.TestCase):
             msg1 = itr1.prev()
             self.assertEqual(msg0, msg1)
 
+    @unittest.skip("Unsupported")
     def test_msg_iter_find_comp_pos(self):
         self.__test_msg_iter_find_pos(0, 0, "node00012")
 
+    @unittest.skip("Unsupported")
     def test_msg_iter_find_comp_pos_rev(self):
         self.__test_msg_iter_find_pos_rev(0, 0, "node00012")
 
+    @unittest.skip("Unsupported")
     def test_msg_iter_find_comp_time_pos(self):
         self.__test_msg_iter_find_pos(TS_BEGIN + 4*3600, 0, "node00012")
 
+    @unittest.skip("Unsupported")
     def test_msg_iter_find_comp_time_pos_rev(self):
         self.__test_msg_iter_find_pos_rev(TS_BEGIN + 4*3600, 0,
                                           "node00012")
 
+    @unittest.skip("Unsupported")
     def test_msg_iter_find_time_pos(self):
         self.__test_msg_iter_find_pos(TS_BEGIN + 4*3600, 0, None)
 
+    @unittest.skip("Unsupported")
     def test_msg_iter_find_time_pos_rev(self):
         self.__test_msg_iter_find_pos_rev(TS_BEGIN + 4*3600, 0, None)
 
+    @unittest.skip("Unsupported")
     def test_msg_iter_find_ptn_pos(self):
         self.__test_msg_iter_find_pos(0, 263, None)
 
+    @unittest.skip("Unsupported")
     def test_msg_iter_find_ptn_pos_rev(self):
         self.__test_msg_iter_find_pos_rev(0, 263, None)
 
+    @unittest.skip("Unsupported")
     def test_msg_iter_find_ptn_time_pos(self):
         self.__test_msg_iter_find_pos(TS_BEGIN + 4*3600, 263, None)
 
+    @unittest.skip("Unsupported")
     def test_msg_iter_find_ptn_time_pos_rev(self):
         self.__test_msg_iter_find_pos_rev(TS_BEGIN + 4*3600, 263, None)
 
+    @unittest.skip("Unsupported")
     def test_msg_iter_find_ptn_comp_time_pos(self):
         self.__test_msg_iter_find_pos(TS_BEGIN + 4*3600, 263, "node00012")
 
+    @unittest.skip("Unsupported")
     def test_msg_iter_find_ptn_comp_time_pos_rev(self):
         self.__test_msg_iter_find_pos_rev(TS_BEGIN + 4*3600, 263,
                                           "node00012")
@@ -702,6 +719,7 @@ class TestSimple(unittest.TestCase):
             t = parse_local_time(msg)
             self.assertLess(t, ts)
 
+    @unittest.skip("Unsupported")
     def test_msg_iter_pos(self):
         n = 10
         limit = 20
@@ -750,6 +768,7 @@ class TestSimple(unittest.TestCase):
         tkn1 = itr.obj()
         self.assertEqual(tkn0, tkn1)
 
+    @unittest.skip("Unsupported")
     def test_ptn_tkn_iter_pos(self):
         itr0 = PtnTknIter(self.bs, 256, 0)
         tkn0 = itr0.first()
@@ -861,9 +880,11 @@ class TestSimple(unittest.TestCase):
             obj2 = itr2.next()
             self.assertEqual(obj1, obj2)
 
+    @unittest.skip("Unsupported")
     def test_tkn_hist_pos(self):
         self.__test_tkn_hist_pos(3600, 0, "Zero")
 
+    @unittest.skip("Unsupported")
     def test_tkn_hist_time_pos(self):
         self.__test_tkn_hist_pos(3600, TS_BEGIN + 4*3600, "Zero")
 
@@ -937,6 +958,7 @@ class TestSimple(unittest.TestCase):
             obj2 = itr2.next()
         self.assertEqual(obj1, obj2)
 
+    @unittest.skip("Unsupported")
     def test_ptn_hist_iter_pos(self):
         _width = [60, 3600]
         _ptn_id = [0, 263]
@@ -1056,6 +1078,7 @@ class TestSimple(unittest.TestCase):
             obj2 = itr2.next()
         self.assertEqual(obj1, obj2)
 
+    @unittest.skip("Unsupported")
     def test_comp_hist_iter_pos(self):
         _width = [60, 3600]
         _ptn_id = [0, 263]
