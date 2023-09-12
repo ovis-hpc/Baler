@@ -7,7 +7,12 @@
 #include "syslog.h"
 #include "syslog_parser.h"
 
-#define YY_DECL int yylex(YYSTYPE *lvalp, syslog_parser_t parser, struct bstr *msg_buf)
+int __syslog__wrap (void )
+{
+	return 1;
+}
+
+#define YY_DECL int __syslog__lex(YYSTYPE *lvalp, syslog_parser_t parser, struct bstr *msg_buf)
 #define YY_USER_ACTION parser->cpos += yyleng;
 
 int token_alloc(int type_id, const char *yytext, size_t yyleng, YYSTYPE *lvalp)
