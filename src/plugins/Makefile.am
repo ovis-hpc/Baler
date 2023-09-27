@@ -21,6 +21,12 @@ libbstore_sos_la_LIBADD = ../baler/libbaler.la -lsos @SOS_LIBDIR_FLAG@ @SOS_LIB6
 # libbstore_sos_la_LDFLAGS = -pg -g
 lib_LTLIBRARIES += libbstore_sos.la
 
+libbstore_dsos_la_SOURCES = bstore_dsos.c
+libbstore_dsos_la_CFLAGS = $(AM_CFLAGS) @SOS_INCDIR_FLAG@
+libbstore_dsos_la_LIBADD = ../baler/libbaler.la -ldsos @SOS_LIBDIR_FLAG@ @SOS_LIB64DIR_FLAG@
+# libbstore_dsos_la_LDFLAGS = -pg -g
+lib_LTLIBRARIES += libbstore_dsos.la
+
 libbstore_agg_la_SOURCES = bstore_agg.c
 libbstore_agg_la_CFLAGS = $(AM_CFLAGS) @SOS_INCDIR_FLAG@
 libbstore_agg_la_LIBADD = ../baler/libbaler.la -lsos -lpthread \

@@ -466,6 +466,7 @@ cdef class Bstore:
         c_msg.timestamp.tv_sec  = int(ts.timestamp() // 1)
         c_msg.timestamp.tv_usec = ts.microsecond
         c_msg.argc = len(btkns)
+        D.btkn_types = btkn_types = list()
         idx = 0
         for t in btkns:
             tkn_id = t.tkn_id()
@@ -477,14 +478,33 @@ cdef class Bstore:
                 tkn_type = Bs.BTKN_TYPE_SERVICE
             else:
                 tkn_type = t.first_type()
+            btkn_types.append(tkn_type)
             c_msg.argv[idx] = (tkn_id << 8) | (tkn_type)
             idx += 1
         c_ptn = Bs.bmsg_ptn_extract(c_msg)
         c_msg.ptn_id  = c_ptn_id = Bs.bstore_ptn_add(self.c_store, &c_msg.timestamp, c_ptn.str)
+        # ptn_tkn
+        idx = 0
+        for t, _typ in zip(btkns, btkn_types):
+            if Bs.btkn_id_is_wildcard(_typ):
+                self.ptn_tkn_add(c_ptn_id, idx, t.tkn_id())
+            idx += 1
         bmsg = Bmsg()
         bmsg.store = self
         bmsg.c_msg = c_msg
         return bmsg
+
+    def tkn_hist_update(self, ts, bin_width, tkn_id):
+        cdef int rc
+        rc = Bs.bstore_tkn_hist_update(self.c_store, ts, bin_width, tkn_id)
+        if rc:
+            raise RuntimeError(f"bstore_tkn_hist_update() error: {rc}")
+
+    def ptn_hist_update(self, ptn_id, comp_id, ts, bin_width):
+        cdef int rc
+        rc = Bs.bstore_ptn_hist_update(self.c_store, ptn_id, comp_id, ts, bin_width)
+        if rc:
+            raise RuntimeError(f"bstore_ptn_hist_update() error: {rc}")
 
 
 cdef class Bmc:

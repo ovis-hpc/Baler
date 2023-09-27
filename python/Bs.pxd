@@ -46,6 +46,8 @@ cdef extern from "baler/btkn_types.h":
     cdef int BTKN_TYPE_FIRST_USER
     cdef int BTKN_TYPE_LAST
 
+    int btkn_id_is_wildcard(uint64_t id)
+
 cdef extern from "baler/btypes.h":
 
     ctypedef struct bstr:
@@ -224,6 +226,8 @@ cdef extern from "baler/bstore.h":
         uint64_t tkn_count
     ctypedef btkn_hist_s *btkn_hist_t
 
+    int bstore_tkn_hist_update(bstore_t bs, time_t secs, time_t bin_width,
+                               btkn_id_t tkn_id)
     ctypedef bstore_iter_t btkn_hist_iter_t
     btkn_hist_iter_t bstore_tkn_hist_iter_new(bstore_t bs)
     void bstore_tkn_hist_iter_free(btkn_hist_iter_t iter)
