@@ -56,6 +56,8 @@ cdef extern from "baler/btypes.h":
 
     ctypedef bstr *bstr_t
 
+    cdef int BTKN_TYPE_MASK(int _type)
+
     ctypedef uint64_t btkn_id_t
     ctypedef uint64_t btkn_type_mask_t
     cdef struct btkn:
@@ -92,6 +94,7 @@ cdef extern from "baler/btypes.h":
         char _data[0]
     ctypedef bptn_attr_s *bptn_attr_t
     void bptn_attr_free(bptn_attr_t)
+    bmsg_t bmsg_alloc(int argc)
 
 cdef extern from "baler/bstore.h":
     cdef struct bstore_s
@@ -123,6 +126,7 @@ cdef extern from "baler/bstore.h":
     btkn_type_t btkn_first_type(btkn_t tkn)
 
     btkn_id_t bstore_tkn_add(bstore_t bs, btkn_t tkn)
+    int bstore_tkn_add_with_id(bstore_t bs, btkn_t tkn)
 
     btkn_t bstore_tkn_find_by_id(bstore_t bs, btkn_id_t tkn_id)
     btkn_t bstore_tkn_find_by_name(bstore_t bs, const char *name, size_t name_len)
@@ -156,6 +160,7 @@ cdef extern from "baler/bstore.h":
     int bstore_ptn_iter_last(bstore_iter_t iter)
     int bstore_ptn_iter_filter_set(bstore_iter_t i, bstore_iter_filter_t f)
 
+    int bstore_msg_add(bstore_t bs, timeval *tv, bmsg_t msg)
     bstore_iter_t bstore_msg_iter_new(bstore_t bs)
     void bstore_msg_iter_free(bstore_iter_t i)
     uint64_t bstore_msg_iter_card(bstore_iter_t i)
@@ -194,6 +199,10 @@ cdef extern from "baler/bstore.h":
     cdef int bstore_ptn_hist_iter_last(bptn_hist_iter_t it)
 
     ctypedef bstore_iter_t bptn_tkn_iter_t
+    int bstore_ptn_hist_update(bstore_t bs, bptn_id_t ptn_id, bcomp_id_t comp_id,
+                               time_t secs, time_t bin_width)
+    int bstore_ptn_tkn_add(bstore_t bs, bptn_id_t ptn_id, uint64_t tkn_pos,
+                           btkn_id_t tkn_id)
     cdef btkn_t bstore_ptn_tkn_find(bstore_t bs,
                                     bptn_id_t ptn_id, uint64_t tkn_pos,
                                     btkn_id_t tkn_id)

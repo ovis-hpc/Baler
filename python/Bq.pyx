@@ -14,6 +14,12 @@ from io import StringIO
 
 cimport Bs
 
+class Debug(object):
+    """A container for debug objects"""
+    pass
+
+D = Debug()
+
 cdef str STR(obj):
     if type(obj) == bytes:
         return obj.decode()
@@ -30,8 +36,15 @@ cdef char * BYTES(obj):
         return obj
     return bytes(obj)
 
+def BTKN_TYPE_MASK(_type):
+    """Convert a type enum to a bit mask"""
+    return Bs.BTKN_TYPE_MASK(_type)
+
 cpdef uint64_t btkn_type_mask_from_str(_str):
     return Bs.btkn_type_mask_from_str(BYTES(_str))
+
+O_RDWR = Bs.O_RDWR
+O_CREAT = Bs.O_CREAT
 
 BTKN_TYPE_TYPE = Bs.BTKN_TYPE_TYPE
 BTKN_TYPE_PRIORITY = Bs.BTKN_TYPE_PRIORITY
@@ -134,6 +147,42 @@ def parse_types(str types):
             raise LookupError("Unknown token type: {}".format(txt))
         type_int |= (1<<(t-1))
     return type_int
+
+FULL_MSG_RE = re.compile( r"""
+        ^
+            (?:
+                (?P<iso_ts>
+                \d\d\d\d-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d\d\d\d\d\d)?(?:[+-]\d\d:\d\d)?
+                ) |
+                (?P<sys_ts>
+                \w+[ ]\d+[ ]\d\d:\d\d:\d\d
+                )
+            )
+            [ ]
+            (?P<msg>.*)
+        $
+        """,
+        re.VERBOSE
+    )
+# TKN_RE.find_all(msg) to tokenize the message
+TKN_RE = re.compile(r"""
+        \w+ | .
+        """, re.VERBOSE)
+
+def parse_msg(str full_msg):
+    # TS HOST MSG
+    m = FULL_MSG_RE.match(full_msg)
+    if not m:
+        raise ValueError(f"Failed to parse full_msg")
+    iso_ts = m.group('iso_ts')
+    sys_ts = m.group('sys_ts')
+    msg    = m.group('msg')
+    if iso_ts:
+        ts = dt.datetime.fromisoformat(iso_ts)
+    else:
+        ts = dt.datetime.strptime(sys_ts, '%b %d %T')
+    tkns = TKN_RE.findall(msg)
+    return (ts, tkns)
 
 cdef class Bstore:
 
@@ -326,7 +375,7 @@ cdef class Bstore:
     cpdef comp_id_max(self):
         return Bs.bstore_comp_id_max(self.c_store)
 
-    def tkn_add(self, str text, int tkn_types):
+    def tkn_add(self, str text, int tkn_types, tkn_id = None):
         """Add token `text` with token type `tkn_types`
 
         If the token exist, add the tkn_types to the type mask of the token.
@@ -334,18 +383,26 @@ cdef class Bstore:
         Parameters:
         text (str)      -- token text
         tkn_types (int) -- the bitwise OR of BTKN_TYPE_*
+        tkn_id (int)    -- an optional token ID
 
         Returns:
         Btkn object
         """
         cdef Bs.btkn_t c_tkn
-        cdef Bs.btkn_id_t tkn_id
         cdef bytes text_b = text.encode()
+        cdef int rc
         c_tkn = Bs.btkn_alloc(0, tkn_types, <char*>text_b, len(text_b))
-        tkn_id = Bs.bstore_tkn_add(self.c_store, c_tkn)
-        if not tkn_id:
-            Bs.btkn_free(c_tkn)
-            raise RuntimeError("bstore_tkn_add() error, errno: {}".format(errno))
+        if tkn_id is not None:
+            c_tkn.tkn_id = tkn_id
+            rc = Bs.bstore_tkn_add_with_id(self.c_store, c_tkn)
+            if rc != 0:
+                Bs.btkn_free(c_tkn)
+                raise RuntimeError(f"bstore_tkn_add_with_id() error, rc: {rc}")
+        else:
+            c_tkn.tkn_id = Bs.bstore_tkn_add(self.c_store, c_tkn)
+            if not c_tkn.tkn_id:
+                Bs.btkn_free(c_tkn)
+                raise RuntimeError(f"bstore_tkn_add() error, errno: {errno}")
         tkn = Btkn()
         tkn.c_tkn = c_tkn
         return tkn
@@ -361,7 +418,73 @@ cdef class Bstore:
         ptn_id = Bs.bstore_ptn_add(self.c_store, &tv, ptn.c_ptn.str)
         if not ptn_id:
             raise RuntimeError("bstore_ptn_add() error, errno: {}".format(errno))
+        ptn.c_ptn.ptn_id = ptn_id
         return ptn_id
+
+    def msg_add(self, Bmsg msg):
+        cdef int rc
+        cdef Bs.timeval tv
+        tv.tv_sec = msg.tv_sec()
+        tv.tv_usec = msg.tv_usec()
+        rc = Bs.bstore_msg_add(self.c_store, &tv, msg.c_msg)
+        if rc:
+            raise RuntimeError(f"bstore_msg_add() error, rc: {rc}")
+
+    def ptn_tkn_add(self, long ptn_id, long tkn_pos, long tkn_id):
+        cdef int rc
+        rc = Bs.bstore_ptn_tkn_add(self.c_store, ptn_id, tkn_pos, tkn_id)
+        if rc:
+            raise RuntimeError(f"bstore_msg_add() error, rc: {rc}")
+
+    def process_msg(self, str full_msg):
+        """Mimic balerd msg processing, converting `full_msg` to Bmsg
+
+        This function also add new tokens and new pattern found in the
+        `full_msg` to Bstore.
+        """
+        cdef int rc
+        cdef uint64_t tkn_id, tkn_type
+        cdef Bs.bmsg_t c_msg
+        cdef Bs.bptn_t c_ptn
+        cdef Bs.bptn_id_t c_ptn_id
+        global D
+        ts, tkns = parse_msg(full_msg)
+        D.btkns = btkns = list()
+        for t in tkns:
+            if t.isspace():
+                _typ = BTKN_TYPE_MASK(BTKN_TYPE_WHITESPACE)
+            elif t.isdigit():
+                _typ = BTKN_TYPE_MASK(BTKN_TYPE_DEC_INT)
+            else:
+                _typ = BTKN_TYPE_MASK(BTKN_TYPE_TEXT)
+            btkn = self.tkn_add(t, _typ)
+            btkns.append(btkn)
+        c_msg = Bs.bmsg_alloc(len(btkns))
+        if not c_msg:
+            raise RuntimeError(f"bmsg_alloc() error: {errno}")
+        c_msg.comp_id = btkns[0].tkn_id() # first token is the host
+        c_msg.timestamp.tv_sec  = int(ts.timestamp() // 1)
+        c_msg.timestamp.tv_usec = ts.microsecond
+        c_msg.argc = len(btkns)
+        idx = 0
+        for t in btkns:
+            tkn_id = t.tkn_id()
+            if t.has_type(Bs.BTKN_TYPE_HOSTNAME):
+                tkn_type = Bs.BTKN_TYPE_HOSTNAME
+            elif t.has_type(Bs.BTKN_TYPE_WORD):
+                tkn_type = Bs.BTKN_TYPE_WORD
+            elif t.has_type(Bs.BTKN_TYPE_SERVICE):
+                tkn_type = Bs.BTKN_TYPE_SERVICE
+            else:
+                tkn_type = t.first_type()
+            c_msg.argv[idx] = (tkn_id << 8) | (tkn_type)
+            idx += 1
+        c_ptn = Bs.bmsg_ptn_extract(c_msg)
+        c_msg.ptn_id  = c_ptn_id = Bs.bstore_ptn_add(self.c_store, &c_msg.timestamp, c_ptn.str)
+        bmsg = Bmsg()
+        bmsg.store = self
+        bmsg.c_msg = c_msg
+        return bmsg
 
 
 cdef class Bmc:
@@ -1144,6 +1267,7 @@ cdef class Bmsg:
         ptn = Bptn()
         ptn.c_ptn = c_ptn
         ptn.store = self.store
+        ptn.c_ptn.ptn_id = self.store.ptn_add(self.tv_sec(), self.tv_usec(), ptn)
         return ptn
 
 
