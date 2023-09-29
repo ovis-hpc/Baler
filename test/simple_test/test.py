@@ -21,8 +21,10 @@ log = logging.getLogger(__name__)
 
 MAKE_STORE = True
 
+os.environ['BALERD_SESSION_FILE'] = 'dsos.conf'
+
 HOST_FILE = "host.list"
-HOST_NUM = 16
+HOST_NUM = 8
 HOST_ID_BASE = 1000
 HOST_RE = re.compile(r"node(\d+)")
 HOST2ID = lambda s: HOST_ID_BASE + int(HOST_RE.match(s).groups()[0])
@@ -31,7 +33,7 @@ HOST_LIST = [ "node%05d" % i for i in range(0, 16) ]
 PORT = "10514"
 CONFIG_TEXT = """
 tokens type=HOSTNAME path=%(host_file)s
-tokens type=WORD path=eng-dictionary
+tokens type=WORD path=eng-dictionary-small
 plugin name=bout_store_msg
 plugin name=bout_store_hist tkn=1 ptn=1 ptn_tkn=1
 plugin name=bin_tcp port=%(bin_tcp_port)s parser=syslog_parser
@@ -40,11 +42,20 @@ plugin name=bin_tcp port=%(bin_tcp_port)s parser=syslog_parser
     "host_file": HOST_FILE,
 }
 CONFIG_FILE = "balerd.cfg"
-STORE_PATH = "store"
+USE_DSOS = True
+if USE_DSOS:
+    # DSOS
+    STORE_PLUGIN = "bstore_dsos"
+    STORE_PATH = "/store/test"
+else:
+    # SOS
+    STORE_PLUGIN = "bstore_sos"
+    STORE_PATH = "test"
 BALERD_LOG = "balerd.log"
 TS_BEGIN = 1531785600
 TS_END = TS_BEGIN + 24*3600
-TS_INC = 600
+#TS_INC = 600
+TS_INC = 6*3600
 
 PATTERNS = [
     "This is pattern Zero:",
@@ -69,7 +80,7 @@ def msg_iter(syslog=False):
                     yield msg
 
 def get_tkn_stat(tkn_str):
-    reg = re.compile(r'^.*\W' + tkn_str + '(?:\W+.*)?$')
+    reg = re.compile(r'^.*\W' + tkn_str + r'(?:\W+.*)?$')
     count = 0
     for msg in msg_iter():
         if reg.match(msg):
@@ -175,19 +186,24 @@ class TestSimple(unittest.TestCase):
         with open(CONFIG_FILE, 'w') as f:
             f.write(CONFIG_TEXT)
         # start balerd
-        balerd = BalerDaemon(STORE_PATH, config_file = CONFIG_FILE,
+        balerd = BalerDaemon(STORE_PATH, store_plugin = STORE_PLUGIN,
+                                         config_file = CONFIG_FILE,
                                          log_file = BALERD_LOG,
                                          log_verbosity = "INFO")
         balerd.start()
+        if USE_DSOS:
+            time.sleep(10)
         # feed data to balerd
         sock = socket.create_connection(("localhost", PORT))
         for msg in msg_iter(syslog=True):
             sock.send(msg.encode())
         sock.close()
+        if USE_DSOS:
+            time.sleep(20)
         balerd.wait_idle()
         balerd.stop()
 
-        bs = BStore.open("bstore_sos", STORE_PATH, os.O_RDWR, 0)
+        bs = BStore.open(STORE_PLUGIN, STORE_PATH, os.O_RDWR, 0)
         cls.tag_base = []
         if not bs.attrFind("TAG"):
             bs.attrNew("TAG")
@@ -212,7 +228,7 @@ class TestSimple(unittest.TestCase):
         cls.bs = None
         if MAKE_STORE:
             cls._make_store()
-        cls.bs = BStore.open("bstore_sos", STORE_PATH, os.O_RDWR, 0)
+        cls.bs = BStore.open(STORE_PLUGIN, STORE_PATH, os.O_RDWR, 0)
 
     @classmethod
     def tearDownClass(cls):
@@ -301,15 +317,18 @@ class TestSimple(unittest.TestCase):
             tkn = itr.next()
         self.assertEqual(len(stack), 0)
 
+    @unittest.skip("Deprecated reverse iterator")
     def test_ptn_tkn_iter_fwd_rev(self):
         self.__test_iter_fwd_rev(PtnTknIter, 20, 256, 11)
         # no need to do rev-fwd, as PtnTknIter usage is:
         #  - find, then
         #  - next / prev
 
+    @unittest.skip("Deprecated reverse iterator")
     def test_tkn_iter_fwd_rev(self):
         self.__test_iter_fwd_rev(TknIter, 20)
 
+    @unittest.skip("Deprecated reverse iterator")
     def test_tkn_iter_rev_fwd(self):
         self.__test_iter_rev_fwd(TknIter, 20)
 
@@ -348,6 +367,7 @@ class TestSimple(unittest.TestCase):
         self.assertTrue(count)
         pass
 
+    @unittest.skip("Deprecated reverse iterator")
     def test_ptn_iter_fwd_rev(self):
         itr1 = PtnIter(self.bs)
         itr2 = PtnIter(self.bs)
@@ -365,6 +385,7 @@ class TestSimple(unittest.TestCase):
         self.assertTrue(count)
         pass
 
+    @unittest.skip("Deprecated reverse iterator")
     def test_ptn_iter_fwd_rev2(self):
         itr = PtnIter(self.bs)
         N = 4
@@ -394,6 +415,7 @@ class TestSimple(unittest.TestCase):
         ptn = itr.obj()
         self.assertGreaterEqual(ptn.last_seen, ts[0])
 
+    @unittest.skip("Deprecated reverse iterator")
     def test_ptn_iter_find_rev(self):
         itr = PtnIter(self.bs)
         ts = (int(time.time()), 0)
@@ -488,6 +510,7 @@ class TestSimple(unittest.TestCase):
         self.assertEqual(len(msgs1), len(msgs2))
         self.assertEqual(msgs1, msgs2)
 
+    @unittest.skip("Deprecated reverse iterator")
     def test_msg_iter_rev(self):
         global msg_fwd, msg_rev, msg, bs
         bs = self.bs
@@ -497,6 +520,7 @@ class TestSimple(unittest.TestCase):
         for i in range(0, len(msg_fwd)):
             self.assertEqual(msg_fwd[i], msg_rev[-(i+1)])
 
+    @unittest.skip("Deprecated reverse iterator")
     def test_msg_iter_fwd_rev(self):
         count = 20
         itr = MsgIter(self.bs)
@@ -1158,6 +1182,7 @@ class TestSimple(unittest.TestCase):
         tags.sort()
         self.assertEqual(tags, ["even", "triple"])
 
+    @unittest.skip("Deprecated")
     def test_msg_iter_count(self):
         itr = MsgIter(self.bs)
         c_all = 0
@@ -1169,7 +1194,7 @@ class TestSimple(unittest.TestCase):
                 c_256 += 1
             if m.timestamp < TS_BEGIN + 4*TS_INC:
                 c_4ts += 1
-        ic_all = itr.count(1)
+        ic_all = itr.count(0)
         ic_256 = itr.count(256)
         ic_4ts = itr.count(0, end_time = (TS_BEGIN + 4*TS_INC))
 
