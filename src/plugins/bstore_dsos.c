@@ -1439,14 +1439,8 @@ struct bsos_iter_s {
 
 static bstore_iter_pos_t __iter_pos_get(bsos_iter_t iter)
 {
-	int rc;
-	sos_pos_t sos_pos = 0;
-#if 0
-	rc = sos_iter_pos_get(iter->iter, &sos_pos);
-	if (rc)
-		return 0;
-#endif
-	return ((uint64_t)iter->iter_type << 32) | sos_pos;
+	errno = ENOSYS;
+	return 0;
 }
 
 static bstore_iter_pos_t bs_iter_pos_get(bstore_iter_t iter)
@@ -1546,15 +1540,7 @@ static int __iter_init(bsos_iter_t iter, int type)
 
 static int __iter_pos_set(bsos_iter_t iter, bstore_iter_pos_t pos)
 {
-	int rc;
-	int type = pos >> 32;
-	sos_pos_t sos_pos = pos & 0xFFFFFFFF;
-	if (!iter->iter) {
-		rc = __iter_init(iter, type);
-		if (rc)
-			return rc;
-	}
-	return 0; // sos_iter_pos_set(iter->iter, sos_pos);
+	return ENOSYS;
 }
 
 static int bs_iter_pos_set(bstore_iter_t iter, bstore_iter_pos_t pos)
@@ -1564,16 +1550,7 @@ static int bs_iter_pos_set(bstore_iter_t iter, bstore_iter_pos_t pos)
 
 static void __iter_pos_free(bsos_iter_t iter, bstore_iter_pos_t pos)
 {
-	int rc;
-	int type = pos >> 32;
-	if (!iter->iter) {
-		rc = __iter_init(iter, type);
-		if (rc)
-			return;
-	}
-#if 0
-	sos_iter_pos_put(iter->iter, pos);
-#endif
+	/* ENOSYS */
 }
 
 static void bs_iter_pos_free(bstore_iter_t iter, bstore_iter_pos_t pos)

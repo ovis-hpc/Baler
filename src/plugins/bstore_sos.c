@@ -1586,14 +1586,6 @@ static bstore_iter_pos_t __iter_pos_get(bsos_iter_t iter)
 {
 	errno = ENOSYS;
 	return 0;
-#if 0
-	int rc;
-	sos_pos_t sos_pos = 0;
-	rc = sos_iter_pos_get(iter->iter, &sos_pos);
-	if (rc)
-		return 0;
-	return ((uint64_t)iter->iter_type << 32) | sos_pos;
-#endif
 }
 
 static bstore_iter_pos_t bs_iter_pos_get(bstore_iter_t iter)
@@ -1680,17 +1672,6 @@ static int __iter_init(bsos_iter_t iter, int type)
 static int __iter_pos_set(bsos_iter_t iter, bstore_iter_pos_t pos)
 {
 	return ENOSYS;
-#if 0
-	int rc;
-	int type = pos >> 32;
-	sos_pos_t sos_pos = pos & 0xFFFFFFFF;
-	if (!iter->iter) {
-		rc = __iter_init(iter, type);
-		if (rc)
-			return rc;
-	}
-	return sos_iter_pos_set(iter->iter, sos_pos);
-#endif
 }
 
 static int bs_iter_pos_set(bstore_iter_t iter, bstore_iter_pos_t pos)
@@ -1701,16 +1682,6 @@ static int bs_iter_pos_set(bstore_iter_t iter, bstore_iter_pos_t pos)
 static void __iter_pos_free(bsos_iter_t iter, bstore_iter_pos_t pos)
 {
 	/* ENOSYS */
-#if 0
-	int rc;
-	int type = pos >> 32;
-	if (!iter->iter) {
-		rc = __iter_init(iter, type);
-		if (rc)
-			return;
-	}
-	sos_iter_pos_put(iter->iter, pos);
-#endif
 }
 
 static void bs_iter_pos_free(bstore_iter_t iter, bstore_iter_pos_t pos)

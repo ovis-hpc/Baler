@@ -3306,74 +3306,20 @@ err0:
 static
 sos_obj_t __bsa_tkn_iter_pos(bsa_tkn_iter_t itr)
 {
-#if 0
-	int rc;
-	struct sos_value_s _v;
-	sos_obj_t pos_obj;
-	sos_pos_t sos_pos;
-	bsa_iter_pos_t pos;
-	size_t sz;
-
-	rc = sos_iter_pos_get(itr->sitr, &sos_pos);
-	if (rc) {
-		return NULL;
-	}
-	pos_obj = __bsa_iter_pos_alloc(BSA(itr->base.bs), &_v, sizeof(*pos));
-	if (!pos_obj) {
-		sos_iter_pos_put(itr->sitr, sos_pos);
-		return NULL;
-	}
-	pos = (void*)_v.data->array.data.byte_;
-	pos->type = BSA_ITER_TYPE_TKN;
-	pos->sos_pos = sos_pos;
-	sos_value_put(&_v);
-	return pos_obj;
-#else
+	errno = ENOSYS;
 	return NULL;
-#endif
 }
 
 static
 int __bsa_tkn_iter_pos_set(bsa_tkn_iter_t itr, sos_obj_t pos_obj)
 {
-#if 0
-	int rc;
-	bsa_iter_pos_t pos;
-	SOS_VALUE(v);
-	v = sos_value_init(v, pos_obj, BSA(itr->base.bs)->iter_pos_data_attr);
-	if (!v) {
-		rc = ENOENT;
-		goto out;
-	}
-	pos = (void*)v->data->array.data.byte_;
-	if (pos->type != BSA_ITER_TYPE_TKN) {
-		rc = EINVAL;
-		goto cleanup;
-	}
-	rc = sos_iter_pos_set(itr->sitr, pos->sos_pos);
-cleanup:
-	sos_value_put(v);
-out:
-	return rc;
-#else
-	return 0;
-#endif
+	return ENOSYS;
 }
 
 static
 void __bsa_tkn_iter_pos_free(bsa_tkn_iter_t itr, sos_obj_t pos_obj)
 {
-#if 0
-	bsa_iter_pos_t pos;
-	sos_value_t v;
-	struct sos_value_s _v;
-	v = sos_value_init(&_v, pos_obj, BSA(itr->base.bs)->iter_pos_data_attr);
-	if (!v)
-		return;
-	pos = (void*)_v.data->array.data.byte_;
-	sos_iter_pos_put(itr->sitr, pos->sos_pos);
-	sos_value_put(&_v);
-#endif
+	/* ENOSYS */
 }
 
 static
@@ -4015,97 +3961,20 @@ int bsa_ptn_iter_reinit(bsa_ptn_iter_t itr, bsa_iter_type_t type)
 static
 sos_obj_t __bsa_ptn_iter_pos(bsa_ptn_iter_t itr)
 {
-#if 0
-	sos_obj_t pos_obj;
-	struct sos_value_s _v;
-	sos_pos_t sos_pos = 0;
-	bsa_iter_pos_t pos = NULL;
-	int rc;
-
-	switch (itr->type) {
-	case BSA_ITER_TYPE_PTN_ID:
-	case BSA_ITER_TYPE_PTN_FIRST_SEEN:
-		break;
-	default:
-		assert(0 == "Invalid bsa_iter_type");
-		errno = EINVAL;
-		goto err;
-	}
-	rc = sos_iter_pos_get(itr->sitr, &sos_pos);
-	if (rc)
-		goto err;
-	pos_obj = __bsa_iter_pos_alloc(BSA(itr->base.bs), &_v, sizeof(*pos));
-	if (!pos_obj)
-		goto err;
-	pos = (void*)_v.data->array.data.byte_;
-	BSA_POS(pos)->type = itr->type;
-	/* position setting */
-	pos->sos_pos = sos_pos;
-	sos_value_put(&_v);
-	return pos_obj;
-
-err:
-	if (pos_obj)
-		sos_value_put(&_v);
-	if (sos_pos)
-		sos_iter_pos_put(itr->sitr, sos_pos);
+	errno = ENOSYS;
 	return NULL;
-#else
-	return NULL;
-#endif
 }
 
 static
 int __bsa_ptn_iter_pos_set(bsa_ptn_iter_t itr, sos_obj_t pos_obj)
 {
-#if 0
-	int rc;
-	bsa_iter_pos_t pos;
-	SOS_KEY(id_key);
-	bsa_t bsa = (void*)itr->base.bs;
-	SOS_VALUE(v);
-	v = sos_value_init(v, pos_obj, bsa->iter_pos_data_attr);
-	if (!v) {
-		rc = ENOENT;
-		goto out;
-	}
-	pos = (void*)v->data->array.data.byte_;
-	switch (pos->type) {
-	case BSA_ITER_TYPE_PTN_ID:
-	case BSA_ITER_TYPE_PTN_FIRST_SEEN:
-		break;
-	default:
-		assert(0 == "Position type mismatch.");
-		rc = EINVAL;
-		goto cleanup;
-	}
-	rc = bsa_ptn_iter_reinit(itr, pos->type);
-	if (rc)
-		goto out;
-	rc = sos_iter_pos_set(itr->sitr, pos->sos_pos);
-cleanup:
-	sos_value_put(v);
-out:
-	return rc;
-#else
-	return 0;
-#endif
+	return ENOSYS;
 }
 
 static
 void __bsa_ptn_iter_pos_free(bsa_ptn_iter_t itr, sos_obj_t pos_obj)
 {
-#if 0
-	bsa_iter_pos_t pos;
-	struct sos_value_s _v;
-	sos_value_t v;
-	v = sos_value_init(&_v, pos_obj, BSA(itr->base.bs)->iter_pos_data_attr);
-	if (!v)
-		return;
-	pos = (void*)_v.data->array.data.byte_;
-	sos_iter_pos_put(itr->sitr, pos->sos_pos);
-	sos_value_put(&_v);
-#endif
+	/* ENOSYS */
 }
 
 static
@@ -4282,90 +4151,20 @@ int bsa_ptn_iter_last(bptn_iter_t _itr)
 static
 sos_obj_t __bsa_ptn_tkn_iter_pos(bsa_ptn_tkn_iter_t itr)
 {
-#if 0
-	sos_pos_t sos_pos;
-	bsa_iter_pos_t pos;
-	int rc;
-	size_t sz;
-	sos_obj_t pos_obj;
-	struct sos_value_s _v;
-
-	rc = sos_iter_pos_get(itr->sitr, &sos_pos);
-	if (rc)
-		return NULL;
-	sz = sizeof(*pos);
-	pos_obj = __bsa_iter_pos_alloc(BSA(itr->base.bs), &_v, sz);
-	if (!pos_obj) {
-		sos_iter_pos_put(itr->sitr, sos_pos);
-		return NULL;
-	}
-	pos = (void*)_v.data->array.data.byte_;
-	pos->type = BSA_ITER_TYPE_PTN_TKN;
-	pos->sos_pos = sos_pos;
-	sos_value_put(&_v);
-	return pos_obj;
-#else
+	errno = ENOSYS;
 	return NULL;
-#endif
 }
 
 static
 int __bsa_ptn_tkn_iter_pos_set(bsa_ptn_tkn_iter_t itr, sos_obj_t pos_obj)
 {
-#if 0
-	int rc;
-	sos_key_t key;
-	ptn_pos_tkn_t kv;
-	bsa_iter_pos_t pos;
-	SOS_VALUE(v);
-	v = sos_value_init(v, pos_obj, BSA(itr->base.bs)->iter_pos_data_attr);
-	if (!v) {
-		rc = EINVAL;
-		goto out;
-	}
-	pos = (void*)v->data->array.data.byte_;
-	if (pos->type != BSA_ITER_TYPE_PTN_TKN) {
-		assert(0 == "position - iterator type mismatch");
-		rc = EINVAL;
-		goto cleanup;
-	}
-	rc = sos_iter_pos_set(itr->sitr, pos->sos_pos);
-	if (rc) {
-		goto cleanup;
-	}
-	pos->sos_pos = 0;
-	key = sos_iter_key(itr->sitr);
-	if (!key) {
-		rc = errno;
-		goto cleanup;
-	}
-	kv = (void*)sos_key_value(key);
-	itr->kv = *kv;
-	sos_key_put(key);
-	rc = 0;
-cleanup:
-	sos_value_put(v);
-out:
-	return rc;
-#else
-	return 0;
-#endif
+	return ENOSYS;
 }
 
 static
 void __bsa_ptn_tkn_iter_pos_free(bsa_ptn_tkn_iter_t itr, sos_obj_t pos_obj)
 {
-#if 0
-	bsa_iter_pos_t pos;
-	struct sos_value_s _v;
-	sos_value_t v;
-	v = sos_value_init(&_v, pos_obj, BSA(itr->base.bs)->iter_pos_data_attr);
-	if (!v)
-		return;
-	pos = (void*)_v.data->array.data.byte_;
-	sos_iter_pos_put(itr->sitr, pos->sos_pos);
-	sos_value_put(&_v);
-#endif
+	/* ENOSYS */
 }
 
 static
