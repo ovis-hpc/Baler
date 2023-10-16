@@ -37,8 +37,7 @@ struct rbt plugin_tree = RBT_INITIALIZER(plugin_cmp);
 static bstore_plugin_t __get_plugin(const char *name)
 {
 	struct plugin_entry *pe;
-	char *plugin_path;
-	char *plugin_dir;
+	char plugin_path[PATH_MAX];
 	bstore_plugin_t plugin;
 	struct rbn *rbn;
 	void *dl;
@@ -51,16 +50,7 @@ static bstore_plugin_t __get_plugin(const char *name)
 		plugin = pe->plugin;
 		goto out;
 	}
-	plugin_dir = getenv("BSTORE_PLUGIN_PATH");
-	if (!plugin_dir) {
-		berror("The BSTORE_PLUGIN_PATH environment variable must be set.");
-		errno = EINVAL;
-		goto err_0;
-	}
-	plugin_path = malloc(PATH_MAX);
-	if (!plugin_path)
-		goto err_0;
-	sprintf(plugin_path, "%s/lib%s.so", plugin_dir, name);
+	sprintf(plugin_path, "lib%s.so", name);
 	dl = dlopen(plugin_path, RTLD_NOW);
 	if (!dl) {
 		char *err_str = dlerror();
@@ -95,7 +85,6 @@ static bstore_plugin_t __get_plugin(const char *name)
 	pe->plugin = plugin;
 	rbn_init(&pe->rbn, pe->key);
 	rbt_ins(&plugin_tree, &pe->rbn);
-	free(plugin_path);
  out:
 	pthread_mutex_unlock(&plugin_lock);
 	return plugin;
@@ -106,8 +95,6 @@ static bstore_plugin_t __get_plugin(const char *name)
  err_2:
 	dlclose(dl);
  err_1:
-	free(plugin_path);
- err_0:
 	pthread_mutex_unlock(&plugin_lock);
 	return NULL;
 }
