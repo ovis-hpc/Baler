@@ -46,7 +46,7 @@ Welcome To OVIS-HPC Documentation!
    deployment/index
    ASF <https://ovis-hpc.readthedocs.io/projects/ldms/en/latest/asf/deployment/index.html>
 
-   
+
 Other Projects
 ====================================
 
@@ -56,7 +56,7 @@ Other Projects
 `sos <https://github.com/ovis-hpc/sos>`_
 `baler <https://github.com/ovis-hpc/baler>`_
 
-   
+
 
 
 

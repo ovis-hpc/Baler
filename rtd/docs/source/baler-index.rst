@@ -1,4 +1,4 @@
-Baler 
+Baler
 ======
 .. toctree::
    :maxdepth: 2
